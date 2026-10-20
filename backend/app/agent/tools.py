@@ -15,7 +15,6 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -394,10 +393,52 @@ def call_tool(ctx: ToolContext, name: str, raw_args: dict[str, Any], *, node: st
             raise
         ms = int((time.perf_counter() - started) * 1000)
         emit(ctx.db, ctx.run, "TOOL_RESULT", node=node, tool_name=name, status="OK", duration_ms=ms,
-             message=f"{name} completed", payload={"output": out})
+             message=summarize(name, out), payload={"output": out})
         ctx.db.commit()
         return out
 
 
-def local_now() -> datetime:
-    return utcnow()
+def summarize(name: str, out: dict[str, Any]) -> str:
+    """One-line, human-readable digest of a tool result for the timeline."""
+    try:
+        if name == "list_drives":
+            return f"{len(out['drives'])} active drive(s) found"
+        if name == "get_student_roster":
+            return (f"{out['total_students']} students; {out['consent_granted']} consented; "
+                    f"{out['missing_cgpa']} missing CGPA, {out['missing_backlogs']} missing backlogs")
+        if name == "validate_roster":
+            shared = len(out["shared_names_resolved_by_roll_number"])
+            return (f"{out['total']} records, {len(out['duplicate_roll_numbers'])} duplicate IDs, "
+                    f"{shared} shared name(s) disambiguated by roll number, {out['records_with_data_issues']} with data issues")
+        if name == "get_drive_requirements":
+            src = out.get("retrieved_source")
+            crit = out.get("configured_criteria") or {}
+            base = f"Configured criteria v{crit.get('version')}" if crit else "No configured criteria"
+            if not src:
+                return base + "; no destination form retrieved"
+            return (f"{base}; employer form retrieved ({src['sha256'][:10]}…), "
+                    f"{len(src['discrepancies_vs_configured'])} discrepancy(ies)")
+        if name == "evaluate_eligibility":
+            c = out["counts"]
+            return (f"{c['included']} included, {c['excluded']} excluded, {c['held']} held — "
+                    f"{c['eligible']} eligible, {c['ineligible']} ineligible, {c['unknown']} unknown, "
+                    f"{c['consent_missing']} eligible without consent")
+        if name == "detect_drive_conflicts":
+            return (f"{len(out['overlapping_drives'])} overlapping drive(s); "
+                    f"{len(out['held_for_resolution'])} student(s) held for clash resolution")
+        if name == "simulate_roster_changes":
+            return (f"Roster {out['baseline_counts']['included']} → {out['proposed_counts']['included']} "
+                    f"(+{len(out['added_to_roster'])} / -{len(out['removed_from_roster'])}); nothing saved")
+        if name == "create_approval_request":
+            return (f"Approval #{out['approval_id']} requested for {out['included_count']} students "
+                    f"(hash {out['proposal_hash'][:10]}…)")
+        if name == "execute_approved_upload":
+            receipt = out.get("destination_receipt") or {}
+            return f"Upload {out['status']} after {out['attempts']} attempt(s); receipt {receipt.get('receipt_no', '—')}"
+        if name == "verify_uploaded_roster":
+            return f"{out['status']}: observed {out['observed_count']} / approved {out['expected_count']}"
+        if name == "generate_attendance_sheet":
+            return f"Attendance sheet #{out['attendance_sheet_id']} with {out['rows']} rows"
+    except (KeyError, TypeError):
+        pass
+    return f"{name} completed"

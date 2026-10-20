@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* PlacementOS design tokens — light-first, warm neutral surfaces, deep navy text,
+   restrained indigo accent. Status colours are reserved for meaning. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-canvas: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-subtle: #faf9f6;
+  --color-line: #e5e2d9;
+  --color-line-strong: #d4d0c4;
+  --color-ink: #0f1b3d;
+  --color-ink-2: #2b3653;
+  --color-muted: #5d667a;
+  --color-faint: #8a91a1;
+
+  --color-accent: #3d47b8;
+  --color-accent-strong: #2f3896;
+  --color-accent-soft: #eceefb;
+
+  --color-ok: #17734a;
+  --color-ok-soft: #e7f4ec;
+  --color-warn: #9a5b00;
+  --color-warn-soft: #fdf3e1;
+  --color-bad: #b42318;
+  --color-bad-soft: #fdecea;
+  --color-info: #1d4ed8;
+  --color-info-soft: #e8effd;
+  --color-hold: #6d3fb5;
+  --color-hold-soft: #f1ebfb;
+
+  --radius-card: 10px;
+  --shadow-card: 0 1px 2px rgba(15, 27, 61, 0.04), 0 1px 1px rgba(15, 27, 61, 0.03);
+  --shadow-pop: 0 10px 30px -10px rgba(15, 27, 61, 0.25), 0 2px 6px rgba(15, 27, 61, 0.06);
+}
+
+html, body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01", "tnum";
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Compact data tables */
+.data-table th { @apply text-left text-[11px] font-semibold uppercase tracking-wide text-muted px-3 py-2 bg-subtle border-b border-line whitespace-nowrap; }
+.data-table td { @apply px-3 py-2 text-[13px] border-b border-line align-top; }
+.data-table tbody tr:hover td { @apply bg-subtle; }
+.data-table tbody tr:last-child td { @apply border-b-0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
