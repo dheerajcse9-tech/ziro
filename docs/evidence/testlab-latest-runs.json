@@ -1,0 +1,886 @@
+[
+    {
+        "id": 4,
+        "test_id": "TC4",
+        "title": "Conflicting drives",
+        "description": "Overlapping drive slots are detected (with timezone conversion and half-open boundaries) and the clash is flagged before assignment.",
+        "input_fixture": {
+            "drives": {
+                "A": "10:00-13:00 IST (CSE)",
+                "B": "11:30-14:00 IST (all branches)",
+                "C": "13:00-15:00 IST",
+                "D": "05:00-06:00 UTC"
+            },
+            "sequence": "Agent prepares A (reserves TC4-BOTH), then prepares B",
+            "students": [
+                "TC4-BOTH (CSE, eligible A+B)",
+                "TC4-BONLY (ME, eligible B)"
+            ]
+        },
+        "expected": {
+            "flagged_before_approval": true,
+            "held_on_B": [
+                "TC4-BOTH"
+            ],
+            "overlapping_pairs": [
+                "A-B",
+                "A-D",
+                "B-C"
+            ],
+            "uploaded_to_B": [
+                "TC4-BONLY"
+            ]
+        },
+        "actual": {
+            "conflict_exception": "TC4-BOTH: 'TC4 Drive B (11:30-14:00 IST)' clashes with 'TC4 Drive A (10:00-13:00 IST)'",
+            "destination_B": [
+                "TC4-BONLY"
+            ],
+            "drive_b_statuses": {
+                "TC4-BONLY": "INCLUDED",
+                "TC4-BOTH": "HELD"
+            },
+            "overlapping_pairs": [
+                "A-B",
+                "A-D",
+                "B-C"
+            ],
+            "uploaded_to_B": [
+                "TC4-BONLY"
+            ]
+        },
+        "passed": true,
+        "checks": [
+            {
+                "actual": "AWAITING_APPROVAL",
+                "expected": "AWAITING_APPROVAL",
+                "name": "Drive A proposal includes TC4-BOTH",
+                "passed": true
+            },
+            {
+                "actual": "HELD",
+                "expected": "HELD",
+                "name": "TC4-BOTH held on drive B (clash)",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": "TC4-BOTH: 'TC4 Drive B (11:30-14:00 IST)' clashes with 'TC4 Drive A (10:00-13:00 IST)'",
+                "expected": true,
+                "name": "Clash flagged as an exception before approval",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": [
+                    {
+                        "buffer_minutes": 0,
+                        "other_assignment_status": "PROPOSED",
+                        "other_drive_id": 1,
+                        "other_drive_title": "TC4 Drive A (10:00-13:00 IST)",
+                        "other_ends_at": "2026-12-05T13:00:00+05:30",
+                        "other_starts_at": "2026-12-05T10:00:00+05:30",
+                        "overlap_end": "2026-12-05T13:00:00+05:30",
+                        "overlap_start": "2026-12-05T11:30:00+05:30",
+                        "preferred_drive_id": null,
+                        "resolution": null
+                    }
+                ],
+                "expected": true,
+                "name": "Clash evidence includes overlap window",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": null,
+                "expected": true,
+                "name": "A and B overlap",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": null,
+                "expected": true,
+                "name": "A and C touch at 13:00 but do not overlap (half-open)",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": null,
+                "expected": true,
+                "name": "A (IST) and D (UTC) overlap after timezone conversion",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "A-B",
+                    "A-D",
+                    "B-C"
+                ],
+                "expected": [
+                    "A-B",
+                    "A-D",
+                    "B-C"
+                ],
+                "name": "Exact set of overlapping drive pairs",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "TC4-BONLY"
+                ],
+                "expected": [
+                    "TC4-BONLY"
+                ],
+                "name": "Drive B upload excludes held student",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "TC4-BONLY"
+                ],
+                "expected": [
+                    "TC4-BONLY"
+                ],
+                "name": "Drive B destination read-back",
+                "passed": true
+            }
+        ],
+        "evidence": {
+            "agent_run": {
+                "id": 2,
+                "planner_mode": "DETERMINISTIC_FALLBACK",
+                "status": "VERIFIED",
+                "summary": "1 included, 0 excluded, 1 held (2 eligible, 0 ineligible, 0 unknown, 0 eligible without consent); approval #2; verification VERIFIED (1/1)",
+                "tool_calls": [
+                    "get_student_roster",
+                    "get_drive_requirements",
+                    "validate_roster",
+                    "evaluate_eligibility",
+                    "detect_drive_conflicts",
+                    "create_approval_request",
+                    "execute_approved_upload",
+                    "verify_uploaded_roster",
+                    "generate_attendance_sheet"
+                ]
+            },
+            "attendance_rows": [
+                "TC4-BONLY"
+            ],
+            "drive_a_run": 1,
+            "proposal_hash": "89e5e220fc3ea78d0e6cb5c191ec9b11a8b0e4002ebf5ae251f54d177b9c9765",
+            "upload": {
+                "operation_key": "ea6fa97b4947587e64936373537d2dca55146f9c",
+                "receipt": {
+                    "candidate_count": 1,
+                    "client_reference": "ea6fa97b4947587e64936373537d2dca55146f9c",
+                    "duplicate": false,
+                    "http_status": 201,
+                    "payload_sha256": "2e1feb008f5c3494738ed25681888f014a51a5bff0b0243f222c5d2ba93d0d73",
+                    "receipt_no": "MP-E62C8BD7",
+                    "received_at": "2026-10-20T20:40:13.427165+00:00",
+                    "reconciled": false
+                },
+                "status": "SUBMITTED",
+                "submitted": [
+                    "TC4-BONLY"
+                ]
+            },
+            "verification": {
+                "duplicates": [],
+                "expected_count": 1,
+                "missing": [],
+                "observed_count": 1,
+                "status": "VERIFIED",
+                "unexpected": [],
+                "verification_id": 1
+            }
+        },
+        "failure_details": null,
+        "environment": "Isolated sandbox: in-memory SQLite + in-process LOCAL MOCK portal over the HTTP form adapter; deterministic planner; no external service contacted",
+        "executed_at": "2026-10-20T20:40:13.499692+00:00",
+        "executed_by_id": 2,
+        "duration_ms": 768
+    },
+    {
+        "id": 3,
+        "test_id": "TC3",
+        "title": "Missing consent",
+        "description": "Eligible students without consent are excluded from payload, destination and attendance; revocation after approval blocks upload.",
+        "input_fixture": {
+            "criteria": "CGPA >= 7, no backlogs",
+            "students": [
+                "TC3-OK (granted)",
+                "TC3-NONE (no record)",
+                "TC3-REV (revoked)",
+                "TC3-LATE (granted, revoked after approval in phase B)"
+            ]
+        },
+        "expected": {
+            "excluded_for_consent": [
+                "TC3-NONE",
+                "TC3-REV"
+            ],
+            "phase_b": "upload blocked, approval invalidated, destination empty",
+            "uploaded": [
+                "TC3-LATE",
+                "TC3-OK"
+            ]
+        },
+        "actual": {
+            "attendance": [
+                "TC3-LATE",
+                "TC3-OK"
+            ],
+            "decisions": {
+                "TC3-LATE": {
+                    "decision": "ELIGIBLE",
+                    "reasons": [],
+                    "roster_status": "INCLUDED"
+                },
+                "TC3-NONE": {
+                    "decision": "ELIGIBLE",
+                    "reasons": [
+                        "Consent to share with employers not recorded"
+                    ],
+                    "roster_status": "EXCLUDED"
+                },
+                "TC3-OK": {
+                    "decision": "ELIGIBLE",
+                    "reasons": [],
+                    "roster_status": "INCLUDED"
+                },
+                "TC3-REV": {
+                    "decision": "ELIGIBLE",
+                    "reasons": [
+                        "Consent to share with employers revoked"
+                    ],
+                    "roster_status": "EXCLUDED"
+                }
+            },
+            "destination": [
+                "TC3-LATE",
+                "TC3-OK"
+            ],
+            "phase_b": {
+                "approval_status": "INVALIDATED",
+                "blocked": "Upload blocked: the roster or its inputs changed after approval. Re-approval required.",
+                "destination": []
+            },
+            "uploaded": [
+                "TC3-LATE",
+                "TC3-OK"
+            ]
+        },
+        "passed": true,
+        "checks": [
+            {
+                "actual": "EXCLUDED",
+                "expected": "EXCLUDED",
+                "name": "Eligible without consent record -> excluded",
+                "passed": true
+            },
+            {
+                "actual": "EXCLUDED",
+                "expected": "EXCLUDED",
+                "name": "Eligible with revoked consent -> excluded",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": [
+                    "Consent to share with employers not recorded"
+                ],
+                "expected": true,
+                "name": "Exclusion reason states consent",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": [
+                    "TC3-LATE",
+                    "TC3-OK"
+                ],
+                "expected": true,
+                "name": "Not in submission payload",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": [
+                    "TC3-LATE",
+                    "TC3-OK"
+                ],
+                "expected": true,
+                "name": "Not in destination roster",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": [
+                    "TC3-LATE",
+                    "TC3-OK"
+                ],
+                "expected": true,
+                "name": "Not in attendance sheet",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "TC3-LATE",
+                    "TC3-OK"
+                ],
+                "expected": [
+                    "TC3-LATE",
+                    "TC3-OK"
+                ],
+                "name": "Consented students uploaded",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": "Upload blocked: the roster or its inputs changed after approval. Re-approval required.",
+                "expected": true,
+                "name": "Phase B: consent revoked after approval blocks the upload",
+                "passed": true
+            },
+            {
+                "actual": "INVALIDATED",
+                "expected": "INVALIDATED",
+                "name": "Phase B: approval invalidated",
+                "passed": true
+            },
+            {
+                "actual": [],
+                "expected": [],
+                "name": "Phase B: nothing reached the destination",
+                "passed": true
+            }
+        ],
+        "evidence": {
+            "agent_run": {
+                "id": 1,
+                "planner_mode": "DETERMINISTIC_FALLBACK",
+                "status": "VERIFIED",
+                "summary": "2 included, 2 excluded, 0 held (4 eligible, 0 ineligible, 0 unknown, 2 eligible without consent); approval #1; verification VERIFIED (2/2)",
+                "tool_calls": [
+                    "get_student_roster",
+                    "get_drive_requirements",
+                    "validate_roster",
+                    "evaluate_eligibility",
+                    "detect_drive_conflicts",
+                    "create_approval_request",
+                    "execute_approved_upload",
+                    "verify_uploaded_roster",
+                    "generate_attendance_sheet"
+                ]
+            },
+            "attendance_rows": [
+                "TC3-LATE",
+                "TC3-OK"
+            ],
+            "proposal_hash": "c4c6a2549e0eb90da324a0a09482d71e1a074557cf8beb23899dc4b34d3058ea",
+            "upload": {
+                "operation_key": "719290d133c1e0a9ba2b5f68f0a576831e765ebd",
+                "receipt": {
+                    "candidate_count": 2,
+                    "client_reference": "719290d133c1e0a9ba2b5f68f0a576831e765ebd",
+                    "duplicate": false,
+                    "http_status": 201,
+                    "payload_sha256": "05f2dbf7f170e88a2f7933e541c641c051c535ae69e9c5c131a063f7044f21a3",
+                    "receipt_no": "MP-82F03959",
+                    "received_at": "2026-10-20T20:40:12.511127+00:00",
+                    "reconciled": false
+                },
+                "status": "SUBMITTED",
+                "submitted": [
+                    "TC3-LATE",
+                    "TC3-OK"
+                ]
+            },
+            "verification": {
+                "duplicates": [],
+                "expected_count": 2,
+                "missing": [],
+                "observed_count": 2,
+                "status": "VERIFIED",
+                "unexpected": [],
+                "verification_id": 1
+            }
+        },
+        "failure_details": null,
+        "environment": "Isolated sandbox: in-memory SQLite + in-process LOCAL MOCK portal over the HTTP form adapter; deterministic planner; no external service contacted",
+        "executed_at": "2026-10-20T20:40:12.727342+00:00",
+        "executed_by_id": 2,
+        "duration_ms": 827
+    },
+    {
+        "id": 2,
+        "test_id": "TC2",
+        "title": "Duplicate names",
+        "description": "Two (here three) students named Rahul Kumar are matched by roll number through import, evaluation, upload and attendance.",
+        "input_fixture": {
+            "criteria": "CSE only, CGPA >= 7, no backlogs",
+            "import_v1": "Roll No,Name,Branch,CGPA,Backlogs,Consent\n21CS102,Rahul Kumar,CSE,8.20,0,yes\n21ME102,Rahul Kumar,Mechanical,6.50,2,yes\n21CS103,Rahul Kumar ,CSE,,0,yes\n",
+            "import_v2_correction": "Roll No,Name,Branch,CGPA,Backlogs,Consent\n21CS103,Rahul Kumar,CSE,7.10,1,yes\n"
+        },
+        "expected": {
+            "eligible_ids": [
+                "21CS102"
+            ],
+            "excluded": [
+                "21ME102",
+                "21CS103"
+            ],
+            "matching": "by roll number"
+        },
+        "actual": {
+            "decisions": {
+                "21CS102": "ELIGIBLE",
+                "21CS103": "INELIGIBLE",
+                "21ME102": "INELIGIBLE"
+            },
+            "destination": [
+                "21CS102"
+            ],
+            "students_named_rahul": {
+                "21CS102": {
+                    "backlogs": 0,
+                    "branch": "CSE",
+                    "cgpa": 8.2,
+                    "record_version": 1
+                },
+                "21CS103": {
+                    "backlogs": 1,
+                    "branch": "CSE",
+                    "cgpa": 7.1,
+                    "record_version": 2
+                },
+                "21ME102": {
+                    "backlogs": 2,
+                    "branch": "ME",
+                    "cgpa": 6.5,
+                    "record_version": 1
+                }
+            },
+            "uploaded": [
+                "21CS102"
+            ]
+        },
+        "passed": true,
+        "checks": [
+            {
+                "actual": [
+                    "21CS102",
+                    "21CS103",
+                    "21ME102"
+                ],
+                "expected": [
+                    "21CS102",
+                    "21CS103",
+                    "21ME102"
+                ],
+                "name": "Three distinct Rahul Kumar records keyed by roll number",
+                "passed": true
+            },
+            {
+                "actual": 7.1,
+                "expected": 7.1,
+                "name": "Correction re-import updated only 21CS103 (CGPA)",
+                "passed": true
+            },
+            {
+                "actual": 8.2,
+                "expected": 8.2,
+                "name": "Correction did not touch 21CS102",
+                "passed": true
+            },
+            {
+                "actual": "ELIGIBLE",
+                "expected": "ELIGIBLE",
+                "name": "21CS102 decision",
+                "passed": true
+            },
+            {
+                "actual": "INELIGIBLE",
+                "expected": "INELIGIBLE",
+                "name": "21ME102 decision",
+                "passed": true
+            },
+            {
+                "actual": "INELIGIBLE",
+                "expected": "INELIGIBLE",
+                "name": "21CS103 decision (1 backlog after correction)",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "21CS102"
+                ],
+                "expected": [
+                    "21CS102"
+                ],
+                "name": "Uploaded IDs contain only the intended Rahul",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "21CS102"
+                ],
+                "expected": [
+                    "21CS102"
+                ],
+                "name": "Destination read-back",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "21CS102"
+                ],
+                "expected": [
+                    "21CS102"
+                ],
+                "name": "Attendance sheet rows",
+                "passed": true
+            },
+            {
+                "actual": "VERIFIED",
+                "expected": "VERIFIED",
+                "name": "Run outcome",
+                "passed": true
+            }
+        ],
+        "evidence": {
+            "agent_run": {
+                "id": 1,
+                "planner_mode": "DETERMINISTIC_FALLBACK",
+                "status": "VERIFIED",
+                "summary": "1 included, 2 excluded, 0 held (1 eligible, 2 ineligible, 0 unknown, 0 eligible without consent); approval #1; verification VERIFIED (1/1)",
+                "tool_calls": [
+                    "get_student_roster",
+                    "get_drive_requirements",
+                    "validate_roster",
+                    "evaluate_eligibility",
+                    "detect_drive_conflicts",
+                    "create_approval_request",
+                    "execute_approved_upload",
+                    "verify_uploaded_roster",
+                    "generate_attendance_sheet"
+                ]
+            },
+            "attendance_rows": [
+                "21CS102"
+            ],
+            "imports": [
+                1,
+                2
+            ],
+            "proposal_hash": "cab171a1b87b8917530bf3be0fc5db14ec7bd639b382472ee13d7c0835d561a7",
+            "upload": {
+                "operation_key": "cfcf7c515297445e9f66285823b092c1fc2d8cdc",
+                "receipt": {
+                    "candidate_count": 1,
+                    "client_reference": "cfcf7c515297445e9f66285823b092c1fc2d8cdc",
+                    "duplicate": false,
+                    "http_status": 201,
+                    "payload_sha256": "4be2a8df068532c712272fbce2cea6b3d86cbc23fb1100348e0a3562566bb97e",
+                    "receipt_no": "MP-F9CEE916",
+                    "received_at": "2026-10-20T20:40:11.819923+00:00",
+                    "reconciled": false
+                },
+                "status": "SUBMITTED",
+                "submitted": [
+                    "21CS102"
+                ]
+            },
+            "verification": {
+                "duplicates": [],
+                "expected_count": 1,
+                "missing": [],
+                "observed_count": 1,
+                "status": "VERIFIED",
+                "unexpected": [],
+                "verification_id": 1
+            }
+        },
+        "failure_details": null,
+        "environment": "Isolated sandbox: in-memory SQLite + in-process LOCAL MOCK portal over the HTTP form adapter; deterministic planner; no external service contacted",
+        "executed_at": "2026-10-20T20:40:11.896455+00:00",
+        "executed_by_id": 2,
+        "duration_ms": 670
+    },
+    {
+        "id": 1,
+        "test_id": "TC1",
+        "title": "CGPA threshold and backlogs",
+        "description": "CGPA >= 7 (inclusive) and no backlogs produce the correct eligible list; missing data yields UNKNOWN.",
+        "input_fixture": {
+            "criteria": "CGPA >= 7.0 (inclusive), 0 active backlogs, all branches",
+            "students": [
+                {
+                    "backlogs": 0,
+                    "branch": "CSE",
+                    "cgpa": 6.99,
+                    "name": "Asha Below",
+                    "roll": "TC1-A"
+                },
+                {
+                    "backlogs": 0,
+                    "branch": "CSE",
+                    "cgpa": 7.0,
+                    "name": "Bala Boundary",
+                    "roll": "TC1-B"
+                },
+                {
+                    "backlogs": 0,
+                    "branch": "IT",
+                    "cgpa": 8.5,
+                    "name": "Chitra Above",
+                    "roll": "TC1-C"
+                },
+                {
+                    "backlogs": 1,
+                    "branch": "CSE",
+                    "cgpa": 8.1,
+                    "name": "Dev OneBacklog",
+                    "roll": "TC1-D"
+                },
+                {
+                    "backlogs": 3,
+                    "branch": "ECE",
+                    "cgpa": 9.0,
+                    "name": "Esha ThreeBacklogs",
+                    "roll": "TC1-E"
+                },
+                {
+                    "backlogs": 0,
+                    "branch": "CSE",
+                    "cgpa": null,
+                    "name": "Faiz NoCgpa",
+                    "roll": "TC1-F"
+                },
+                {
+                    "backlogs": null,
+                    "branch": "IT",
+                    "cgpa": 7.5,
+                    "name": "Gita NoBacklogData",
+                    "roll": "TC1-G"
+                },
+                {
+                    "backlogs": 2,
+                    "branch": "ME",
+                    "cgpa": 6.5,
+                    "name": "Hari Both",
+                    "roll": "TC1-H"
+                }
+            ]
+        },
+        "expected": {
+            "decisions": {
+                "TC1-A": "INELIGIBLE",
+                "TC1-B": "ELIGIBLE",
+                "TC1-C": "ELIGIBLE",
+                "TC1-D": "INELIGIBLE",
+                "TC1-E": "INELIGIBLE",
+                "TC1-F": "UNKNOWN",
+                "TC1-G": "UNKNOWN",
+                "TC1-H": "INELIGIBLE"
+            },
+            "eligible_ids": [
+                "TC1-B",
+                "TC1-C"
+            ]
+        },
+        "actual": {
+            "decisions": {
+                "TC1-A": "INELIGIBLE",
+                "TC1-B": "ELIGIBLE",
+                "TC1-C": "ELIGIBLE",
+                "TC1-D": "INELIGIBLE",
+                "TC1-E": "INELIGIBLE",
+                "TC1-F": "UNKNOWN",
+                "TC1-G": "UNKNOWN",
+                "TC1-H": "INELIGIBLE"
+            },
+            "eligible_ids": [
+                "TC1-B",
+                "TC1-C"
+            ],
+            "reasons": {
+                "TC1-A": [
+                    "CGPA 6.99 below minimum 7.00"
+                ],
+                "TC1-D": [
+                    "1 active backlog(s) exceeds limit of 0"
+                ],
+                "TC1-E": [
+                    "3 active backlog(s) exceeds limit of 0"
+                ],
+                "TC1-F": [
+                    "CGPA missing from roster"
+                ],
+                "TC1-G": [
+                    "Active backlog count missing from roster"
+                ],
+                "TC1-H": [
+                    "CGPA 6.50 below minimum 7.00",
+                    "2 active backlog(s) exceeds limit of 0"
+                ]
+            }
+        },
+        "passed": true,
+        "checks": [
+            {
+                "actual": {
+                    "TC1-A": "INELIGIBLE",
+                    "TC1-B": "ELIGIBLE",
+                    "TC1-C": "ELIGIBLE",
+                    "TC1-D": "INELIGIBLE",
+                    "TC1-E": "INELIGIBLE",
+                    "TC1-F": "UNKNOWN",
+                    "TC1-G": "UNKNOWN",
+                    "TC1-H": "INELIGIBLE"
+                },
+                "expected": {
+                    "TC1-A": "INELIGIBLE",
+                    "TC1-B": "ELIGIBLE",
+                    "TC1-C": "ELIGIBLE",
+                    "TC1-D": "INELIGIBLE",
+                    "TC1-E": "INELIGIBLE",
+                    "TC1-F": "UNKNOWN",
+                    "TC1-G": "UNKNOWN",
+                    "TC1-H": "INELIGIBLE"
+                },
+                "name": "Per-student decisions",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "TC1-B",
+                    "TC1-C"
+                ],
+                "expected": [
+                    "TC1-B",
+                    "TC1-C"
+                ],
+                "name": "Eligible list uploaded (exact IDs)",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": null,
+                "expected": true,
+                "name": "CGPA exactly 7.00 passes (inclusive threshold)",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": null,
+                "expected": true,
+                "name": "CGPA 6.99 fails with CGPA reason",
+                "passed": true
+            },
+            {
+                "actual": true,
+                "detail": null,
+                "expected": true,
+                "name": "1 backlog fails with backlog reason",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "CGPA"
+                ],
+                "expected": [
+                    "CGPA"
+                ],
+                "name": "Missing CGPA -> UNKNOWN with missing evidence",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "BACKLOGS"
+                ],
+                "expected": [
+                    "BACKLOGS"
+                ],
+                "name": "Missing backlog data -> UNKNOWN with missing evidence",
+                "passed": true
+            },
+            {
+                "actual": [
+                    "TC1-B",
+                    "TC1-C"
+                ],
+                "expected": [
+                    "TC1-B",
+                    "TC1-C"
+                ],
+                "name": "Destination read-back equals approved IDs",
+                "passed": true
+            },
+            {
+                "actual": "VERIFIED",
+                "expected": "VERIFIED",
+                "name": "Run outcome",
+                "passed": true
+            }
+        ],
+        "evidence": {
+            "agent_run": {
+                "id": 1,
+                "planner_mode": "DETERMINISTIC_FALLBACK",
+                "status": "VERIFIED",
+                "summary": "2 included, 6 excluded, 0 held (2 eligible, 4 ineligible, 2 unknown, 0 eligible without consent); approval #1; verification VERIFIED (2/2)",
+                "tool_calls": [
+                    "get_student_roster",
+                    "get_drive_requirements",
+                    "validate_roster",
+                    "evaluate_eligibility",
+                    "detect_drive_conflicts",
+                    "create_approval_request",
+                    "execute_approved_upload",
+                    "verify_uploaded_roster",
+                    "generate_attendance_sheet"
+                ]
+            },
+            "attendance_rows": [
+                "TC1-B",
+                "TC1-C"
+            ],
+            "proposal_hash": "bfb2fedfa318f8c4165cad85c0049b5c46f6d5533750641038d95aa5227371d5",
+            "upload": {
+                "operation_key": "1be388ef813047fb4f9746695c960956ba28b3de",
+                "receipt": {
+                    "candidate_count": 2,
+                    "client_reference": "1be388ef813047fb4f9746695c960956ba28b3de",
+                    "duplicate": false,
+                    "http_status": 201,
+                    "payload_sha256": "757faa65a542bc0977af8d4dcf6538d1d9d34d3b55238eb55c5a8310650ecf6f",
+                    "receipt_no": "MP-A5255260",
+                    "received_at": "2026-10-20T20:40:11.133807+00:00",
+                    "reconciled": false
+                },
+                "status": "SUBMITTED",
+                "submitted": [
+                    "TC1-B",
+                    "TC1-C"
+                ]
+            },
+            "verification": {
+                "duplicates": [],
+                "expected_count": 2,
+                "missing": [],
+                "observed_count": 2,
+                "status": "VERIFIED",
+                "unexpected": [],
+                "verification_id": 1
+            }
+        },
+        "failure_details": null,
+        "environment": "Isolated sandbox: in-memory SQLite + in-process LOCAL MOCK portal over the HTTP form adapter; deterministic planner; no external service contacted",
+        "executed_at": "2026-10-20T20:40:11.220728+00:00",
+        "executed_by_id": 2,
+        "duration_ms": 791
+    }
+]

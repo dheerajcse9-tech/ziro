@@ -1,0 +1,20 @@
+# Full local stack: PostgreSQL + API (with mounted LOCAL MOCK portal) + web.
+services:
+  db:
+    image: postgres:16
+    environment: { POSTGRES_USER: placementos, POSTGRES_PASSWORD: localdev, POSTGRES_DB: placementos }
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U placementos"], interval: 3s, retries: 20 }
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://placementos:localdev@db:5432/placementos
+      JWT_SECRET: change-me-local-only-0123456789abcdef
+      MOCK_PORTAL_BASE_URL: http://api:8000/mock-portal
+      ALLOWED_DESTINATION_HOSTS: api,127.0.0.1,localhost
+      CORS_ORIGINS: http://localhost:3000
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["8000:8000"]
+  web:
+    build: { context: ./frontend, args: { BACKEND_URL: http://api:8000 } }
+    depends_on: [api]
+    ports: ["3000:3000"]

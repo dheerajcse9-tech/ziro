@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -22,7 +23,29 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("placementos")
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # AUTO_MIGRATE=true (used on serverless/container deploys) applies Alembic
+    # migrations and, in demo mode, seeds the synthetic dataset if empty.
+    if os.getenv("AUTO_MIGRATE", "").lower() in {"1", "true", "yes"}:
+        from alembic import command
+        from alembic.config import Config
+
+        from app.services.seed import seed
+
+        cfg = Config(os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini"))
+        cfg.set_main_option("script_location", os.path.join(os.path.dirname(os.path.dirname(__file__)), "migrations"))
+        command.upgrade(cfg, "head")
+        if settings.demo_mode:
+            with SessionLocal() as db:
+                log.info("seed: %s", seed(db))
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="PlacementOS API",
     version="1.0.0",
     description="Agentic placement drive coordinator: deterministic eligibility, consent enforcement, "

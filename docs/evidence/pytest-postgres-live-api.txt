@@ -1,0 +1,13 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: backend
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collecting ... collected 3 items
+
+tests/integration/test_api_live.py::test_auth_required_and_roles PASSED  [ 33%]
+tests/integration/test_api_live.py::test_full_workflow_over_http PASSED  [ 66%]
+tests/integration/test_api_live.py::test_test_lab_endpoint PASSED        [100%]
+
+============================== 3 passed in 4.47s ===============================
