@@ -37,7 +37,7 @@ verifies** the result at the destination.
 Requirements: Python 3.12+, Node 22+.
 
 ```bash
-# Backend (SQLite by default)
+# Backend (SQLite by default; for PostgreSQL put DATABASE_URL=postgresql://... in backend/.env)
 cd backend
 pip install -r requirements-dev.txt
 alembic upgrade head

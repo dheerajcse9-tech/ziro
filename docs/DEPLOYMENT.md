@@ -38,7 +38,9 @@ http://localhost:3000. The compose file and Dockerfiles were written but **not e
 (no Docker daemon). For a single host (Render, Fly.io, Railway, a VM) use the same two images and environment variables.
 
 ## Option C — local, no containers
-See the README quick start (SQLite) or set `DATABASE_URL` to a local PostgreSQL.
+See the README quick start (SQLite). For a local PostgreSQL, create the database and put
+`DATABASE_URL=postgresql://user:password@localhost:5432/placementos` in `backend/.env` (read automatically at
+startup; real environment variables take precedence). Then `alembic upgrade head` and `python -m app.cli seed`.
 
 ## Operations
 - Health: `GET /api/health` (database connectivity, dialect, planner mode).

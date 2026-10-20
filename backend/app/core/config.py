@@ -1,5 +1,8 @@
 """Application configuration, loaded from environment variables.
 
+Values may also come from a `backend/.env` file (KEY=VALUE lines) for local
+development. Real environment variables always take precedence over the file.
+
 Secrets (JWT signing key, LLM API key, database URL) are read server-side only
 and never returned by any API endpoint.
 """
@@ -8,7 +11,29 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlparse
+
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
+def load_env_file(path: Path = ENV_FILE) -> None:
+    """Populate os.environ from a simple KEY=VALUE file without overriding existing variables."""
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip().removeprefix("export ").strip()
+        value = value.split(" #", 1)[0].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
+load_env_file()
 
 
 def _bool(name: str, default: bool) -> bool:
