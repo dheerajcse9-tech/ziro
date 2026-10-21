@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 import app.models  # noqa: F401  (register all tables)
-from app.api import routes_core, routes_ops
+from app.api import routes_core, routes_ops, routes_outreach
 from app.audit.ledger import AuditImmutableError
 from app.core.config import get_settings
 from app.core.errors import DomainError
@@ -53,7 +53,7 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -81,6 +81,7 @@ async def unhandled(request: Request, exc: Exception):
 
 app.include_router(routes_core.router)
 app.include_router(routes_ops.router)
+app.include_router(routes_outreach.router)
 # The LOCAL MOCK employer portal is a separate ASGI app; PlacementOS reaches it only over HTTP.
 app.mount("/mock-portal", create_mock_portal_app(SessionLocal, mock_admin_token()))
 

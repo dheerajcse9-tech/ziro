@@ -33,6 +33,7 @@ from app.models.entities import (
     ExceptionItem,
     RosterImport,
     Student,
+    StudentRequest,
     UploadOperation,
     User,
     VerificationResult,
@@ -198,7 +199,11 @@ def list_students(
                   reverse=sort.startswith("-"))
     total = len(all_rows)
     rows = all_rows[(page - 1) * page_size: page * page_size]
-    return {"items": [S.student(s, consent_map.get(s.id)) for s in rows], "total": total, "page": page, "page_size": page_size,
+    from app.services.outreach import selected_employers
+
+    offers = selected_employers(db, [s.id for s in rows])
+    return {"items": [{**S.student(s, consent_map.get(s.id)), "selected_at": offers.get(s.id, [])} for s in rows],
+            "total": total, "page": page, "page_size": page_size,
             "branches": [{"code": c, "label": l} for c, l in BRANCH_LABELS.items()]}
 
 
@@ -217,7 +222,14 @@ def get_student(student_id: int, db: Session = Depends(get_db), _: User = Depend
     assignments = [{"drive_id": a.drive_id, "drive_title": a.drive.title, "status": a.status, "note": a.note,
                     "starts_at": S.iso(a.drive.starts_at), "ends_at": S.iso(a.drive.ends_at)}
                    for a in db.scalars(select(DriveAssignment).where(DriveAssignment.student_id == s.id))]
-    return {**S.student(s, consent), "consent_history": history, "decisions": decisions, "assignments": assignments}
+    from app.api.routes_outreach import email_dict
+    from app.services import outreach
+
+    requests = [outreach.request_dict(r) for r in db.scalars(select(StudentRequest).where(StudentRequest.student_id == s.id)
+                                                            .order_by(StudentRequest.id.desc()))]
+    return {**S.student(s, consent), "consent_history": history, "decisions": decisions, "assignments": assignments,
+            "placement_history": outreach.placement_history(db, s), "requests": requests,
+            "emails": [email_dict(m) for m in outreach.emails_for_student(db, s.id)]}
 
 
 class StudentPatch(BaseModel):

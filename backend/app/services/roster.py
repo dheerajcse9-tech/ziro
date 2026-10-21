@@ -27,6 +27,8 @@ from app.models.entities import (
 )
 from app.models.enums import (
     AssignmentStatus,
+    ConsentScope,
+    consent_scope_key,
     Decision,
     DriveStatus,
     ExceptionKind,
@@ -172,6 +174,8 @@ def _reason_category(reason: str) -> str:
         return "Branch not eligible" if "not in" in r else "Missing/unrecognised branch"
     if "consent" in r:
         return "Consent not granted"
+    if "invitation" in r:
+        return "Did not accept drive invitation"
     if "clash" in r or "conflict" in r:
         return "Schedule clash"
     if "batch" in r or "graduation" in r:
@@ -263,7 +267,8 @@ def evaluate_drive(
 
     students = list(db.scalars(select(Student).order_by(Student.roll_number)))
     ids = [s.id for s in students]
-    consent = current_consent(db, ids, criteria.required_consent_scope)
+    consent = current_consent(db, ids, consent_scope_key(criteria.required_consent_scope, drive.id))
+    per_drive = criteria.required_consent_scope == ConsentScope.DRIVE_REGISTRATION
     interval = interval_override or Interval(drive.id, drive.starts_at, drive.ends_at)
     buffer_minutes = int(app_settings.get(db, "schedule_buffer_minutes") or 0)
     clashes = _conflict_map(db, drive, interval, ids, buffer_minutes)
@@ -283,9 +288,12 @@ def evaluate_drive(
             status = RosterStatus.EXCLUDED
         elif not consent_ok:
             status = RosterStatus.EXCLUDED
-            reasons.append(
-                "Consent to share with employers revoked" if consent_info else "Consent to share with employers not recorded"
-            )
+            if per_drive:
+                reasons.append("Declined this drive's invitation" if consent_info else "Has not accepted this drive's invitation")
+            else:
+                reasons.append(
+                    "Consent to share with employers revoked" if consent_info else "Consent to share with employers not recorded"
+                )
         elif student_conflicts:
             status = RosterStatus.HELD
             for c in student_conflicts:

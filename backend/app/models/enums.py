@@ -10,7 +10,13 @@ class Role(StrEnum):
 
 
 class ConsentScope(StrEnum):
-    SHARE_WITH_EMPLOYERS = "SHARE_WITH_EMPLOYERS"
+    SHARE_WITH_EMPLOYERS = "SHARE_WITH_EMPLOYERS"  # blanket consent on file
+    DRIVE_REGISTRATION = "DRIVE_REGISTRATION"  # student must accept this drive's invitation
+
+
+def consent_scope_key(scope: str, drive_id: int) -> str:
+    """Scope string stored on consent records. Drive registrations are per drive."""
+    return f"DRIVE:{drive_id}" if scope == ConsentScope.DRIVE_REGISTRATION else scope
 
 
 class ConsentStatus(StrEnum):
@@ -134,6 +140,7 @@ class ExceptionKind(StrEnum):
     UPLOAD_DISCREPANCY = "UPLOAD_DISCREPANCY"
     UPLOAD_FAILED = "UPLOAD_FAILED"
     WITHDRAWAL_REQUIRED = "WITHDRAWAL_REQUIRED"  # already sent to employer, no longer eligible
+    DATA_SUBMITTED = "DATA_SUBMITTED"  # student sent missing details; officer must verify before applying
 
 
 class ExceptionStatus(StrEnum):
@@ -157,3 +164,42 @@ class ActorType(StrEnum):
 class DestinationKind(StrEnum):
     LOCAL_MOCK_FORM = "LOCAL_MOCK_FORM"
     ORGANISER_FORM = "ORGANISER_FORM"
+
+
+class RequestKind(StrEnum):
+    DRIVE_INVITATION = "DRIVE_INVITATION"
+    DATA_REQUEST = "DATA_REQUEST"
+
+
+class RequestStatus(StrEnum):
+    SENT = "SENT"
+    ACCEPTED = "ACCEPTED"  # invitation accepted
+    DECLINED = "DECLINED"  # invitation declined
+    SUBMITTED = "SUBMITTED"  # data request answered, awaiting officer review
+    APPLIED = "APPLIED"  # officer applied submitted data
+    REJECTED = "REJECTED"  # officer rejected submitted data
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class EmailCategory(StrEnum):
+    DRIVE_INVITATION = "DRIVE_INVITATION"
+    DATA_REQUEST = "DATA_REQUEST"
+    PROFILE_SUBMITTED = "PROFILE_SUBMITTED"
+    EMPLOYER_ROSTER = "EMPLOYER_ROSTER"
+    SELECTED = "SELECTED"
+    NOT_SELECTED = "NOT_SELECTED"
+
+
+class EmailStatus(StrEnum):
+    DELIVERED_LOCAL = "DELIVERED_LOCAL"  # stored in the local mailbox (no SMTP configured)
+    SENT = "SENT"  # accepted by the SMTP server
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"  # no recipient address
+
+
+class DriveOutcome(StrEnum):
+    SELECTED = "SELECTED"
+    NOT_SELECTED = "NOT_SELECTED"
+    ABSENT = "ABSENT"
+    WITHDRAWN = "WITHDRAWN"

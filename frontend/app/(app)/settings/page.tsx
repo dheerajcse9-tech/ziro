@@ -22,6 +22,7 @@ interface Integrations {
   llm: { enabled: boolean; model: string | null; mode: string };
   mock_portal_base_url: string;
   demo_mode: boolean;
+  email: { transport: string; note: string };
 }
 interface AppSettings { institution_name: string; timezone: string; schedule_buffer_minutes: number; attendance_retention_days: number; attendance_fields: string[] }
 
@@ -91,6 +92,7 @@ export default function SettingsPage() {
             {integ.data && <Banner tone="warn" title="Organiser mock drive form not configured">{integ.data.official_organiser_target.note}</Banner>}
             <p className="text-[12.5px] text-muted">The destination adapter interface (<span className="font-mono">DriveFormAdapter</span>) is the only integration point. Adding the organiser&apos;s form means configuring an allowlisted destination of kind ORGANISER_FORM — no domain code changes.</p>
             {integ.data && <p className="text-[12.5px]">LLM: <strong>{integ.data.llm.mode}</strong></p>}
+            {integ.data && <p className="text-[12.5px]">Email: <strong>{integ.data.email.transport === "SMTP" ? "SMTP" : "Local mailbox"}</strong> — {integ.data.email.note}</p>}
           </div>
         </Card>
       </div>

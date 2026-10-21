@@ -4,10 +4,11 @@ cachedir: .pytest_cache
 rootdir: backend
 configfile: pytest.ini
 plugins: anyio-4.15.1
-collecting ... collected 3 items
+collecting ... collected 4 items
 
-tests/integration/test_api_live.py::test_auth_required_and_roles PASSED  [ 33%]
-tests/integration/test_api_live.py::test_full_workflow_over_http PASSED  [ 66%]
-tests/integration/test_api_live.py::test_test_lab_endpoint PASSED        [100%]
+tests/integration/test_api_live.py::test_auth_required_and_roles PASSED  [ 25%]
+tests/integration/test_api_live.py::test_full_workflow_over_http PASSED  [ 50%]
+tests/integration/test_api_live.py::test_test_lab_endpoint PASSED        [ 75%]
+tests/integration/test_api_live.py::test_invitation_link_round_trip_over_http PASSED [100%]
 
-============================== 3 passed in 4.47s ===============================
+============================== 4 passed in 5.40s ===============================

@@ -50,6 +50,7 @@ export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: Json | FormData) => request<T>("POST", path, body ?? {}),
   patch: <T>(path: string, body: Json) => request<T>("PATCH", path, body),
+  put: <T>(path: string, body: Json) => request<T>("PUT", path, body),
 };
 
 export function qs(params: Record<string, string | number | boolean | undefined | null>): string {

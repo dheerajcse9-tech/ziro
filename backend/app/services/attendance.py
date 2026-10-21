@@ -20,7 +20,7 @@ from app.db.base import utcnow
 from app.domain.normalize import BRANCH_LABELS
 from app.domain.schedule import to_local
 from app.models.entities import AttendanceSheet, Student
-from app.models.enums import ActorType, VerificationStatus
+from app.models.enums import ActorType, VerificationStatus, consent_scope_key
 from app.services import app_settings
 from app.services.consent import current_consent
 from app.services.uploads import get_upload
@@ -39,7 +39,11 @@ def generate(db: Session, upload_id: int, *, actor: str, run_id: int | None = No
     observed = set(verification.observed_snapshot.get("observed_roll_numbers", []))
     rolls = [r for r in cumulative_submitted(db, op) if r in observed]  # whole drive roster, incl. supplements
     students = {s.roll_number: s for s in db.scalars(select(Student).where(Student.roll_number.in_(rolls)))}
-    consent = current_consent(db, [s.id for s in students.values()], "SHARE_WITH_EMPLOYERS")
+    from app.services.roster import current_criteria
+
+    criteria_row = current_criteria(db, drive.id)
+    scope = consent_scope_key(criteria_row.required_consent_scope if criteria_row else "SHARE_WITH_EMPLOYERS", drive.id)
+    consent = current_consent(db, [s.id for s in students.values()], scope)
     excluded = [{"roll_number": r, "reason": "Consent no longer granted"} for r in rolls
                 if not consent.get(students[r].id, {}).get("granted")]
     excluded_rolls = {e["roll_number"] for e in excluded}

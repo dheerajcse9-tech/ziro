@@ -37,7 +37,7 @@ from app.services import approvals, attendance, uploads, verification
 from app.services.consent import current_consent
 from app.services.roster import criteria_spec, current_criteria, drive_pair_conflicts, evaluate_drive
 
-Permission = Literal["READ", "PROPOSE", "EXECUTE"]
+Permission = Literal["READ", "PROPOSE", "NOTIFY", "EXECUTE"]
 
 
 class ToolFailure(Exception):
@@ -336,6 +336,39 @@ def generate_attendance_sheet(ctx: ToolContext, args: UploadInput) -> dict[str, 
             "sha256": sheet.sha256, "excluded_at_generation": sheet.excluded_at_generation}
 
 
+def send_drive_invitations(ctx: ToolContext, args: DriveInput) -> dict[str, Any]:
+    from app.services import outreach
+
+    drive = _drive(ctx, args.drive_id)
+    try:
+        result = outreach.invite_eligible(ctx.db, drive, ctx.user, actor=ctx.actor)
+    except DomainError as exc:
+        raise ToolFailure("send_drive_invitations", exc.message) from exc
+    return {"invited": len(result["sent"]), "already_invited": len(result["already_invited"]),
+            "criteria_version": result["criteria_version"], "invited_roll_numbers": result["sent"]}
+
+
+def request_missing_data(ctx: ToolContext, args: DriveInput) -> dict[str, Any]:
+    from app.services import outreach
+
+    drive = _drive(ctx, args.drive_id)
+    try:
+        result = outreach.request_missing_for_drive(ctx.db, drive, ctx.user)
+    except DomainError as exc:
+        raise ToolFailure("request_missing_data", exc.message) from exc
+    return {"requested": result["requested"], "count": len(result["requested"])}
+
+
+def send_roster_notifications(ctx: ToolContext, args: UploadInput) -> dict[str, Any]:
+    from app.services import outreach
+
+    op = uploads.get_upload(ctx.db, args.upload_id)
+    if (verification.latest_verification(ctx.db, op.id) or None) is None or \
+            verification.latest_verification(ctx.db, op.id).status != "VERIFIED":
+        raise ToolFailure("send_roster_notifications", "Notifications are only sent for VERIFIED uploads")
+    return outreach.notify_upload(ctx.db, op, ctx.actor)
+
+
 def record_audit_event(ctx: ToolContext, args: AuditNoteInput) -> dict[str, Any]:
     ev = ledger.record(ctx.db, actor_type=ActorType.AGENT, actor_id=ctx.actor, action="AGENT_NOTE",
                        run_id=ctx.run.id, drive_id=ctx.run.drive_id, details={"note": args.note})
@@ -354,6 +387,9 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("execute_approved_upload", "Upload an APPROVED roster to the allowed destination (idempotent).", ApprovalInput, "EXECUTE", execute_approved_upload),
     Tool("verify_uploaded_roster", "Independently re-read the destination and compare exact IDs and counts.", UploadInput, "EXECUTE", verify_uploaded_roster),
     Tool("generate_attendance_sheet", "Generate an attendance sheet from a VERIFIED upload.", UploadInput, "EXECUTE", generate_attendance_sheet),
+    Tool("send_drive_invitations", "Email every eligible student a personal link to accept or decline this drive.", DriveInput, "NOTIFY", send_drive_invitations),
+    Tool("request_missing_data", "Email students whose eligibility is UNKNOWN a link to supply the missing fields (officer verifies before applying).", DriveInput, "NOTIFY", request_missing_data),
+    Tool("send_roster_notifications", "After a VERIFIED upload, email the employer the roster and tell each sent student.", UploadInput, "NOTIFY", send_roster_notifications),
     Tool("record_audit_event", "Append a note to the audit ledger.", AuditNoteInput, "READ", record_audit_event),
 ]}
 
@@ -446,6 +482,13 @@ def summarize(name: str, out: dict[str, Any]) -> str:
             return f"Upload {out['status']} after {out['attempts']} attempt(s); receipt {receipt.get('receipt_no', '—')}"
         if name == "verify_uploaded_roster":
             return f"{out['status']}: observed {out['observed_count']} / approved {out['expected_count']}"
+        if name == "send_drive_invitations":
+            return f"Invitations emailed to {out['invited']} eligible student(s); {out['already_invited']} already invited"
+        if name == "request_missing_data":
+            return f"Missing-data requests emailed to {out['count']} student(s)"
+        if name == "send_roster_notifications":
+            return (f"Employer email {out['employer_email'].lower().replace('_', ' ')}; "
+                    f"{out['students_notified']} student(s) notified")
         if name == "generate_attendance_sheet":
             return f"Attendance sheet #{out['attendance_sheet_id']} with {out['rows']} rows"
     except (KeyError, TypeError):

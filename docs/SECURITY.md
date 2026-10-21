@@ -19,6 +19,9 @@
 | Data retention | Attendance content purged after configurable days (metadata + hash retained) | `attendance.purge_expired` |
 | Demo-only dangerous actions | Demo reset & fault injection refused unless `DEMO_MODE=true` and admin | `routes_ops.py` |
 | Production misconfiguration | `APP_ENV=production` refuses to start without `JWT_SECRET` | `core/config.py` |
+| Student links abused or guessed | 256-bit random tokens, expiry (7–14 days, never after the drive starts), single purpose; public page shows only first name, roll number and drive details | `services/outreach.py` |
+| Students self-reporting false data | Submitted values never touch the record; an officer must verify against official records and click Apply (audited) | `outreach.review_data` |
+| Email spam / duplicates | Every email has a dedupe key; re-running steps never re-sends | `services/mailer.py` |
 | OTP / CAPTCHA | Not bypassed; adapter only performs plain form submission. A destination that requires them must use a manual step | design |
 
 ## Known gaps (honest list)

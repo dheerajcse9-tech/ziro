@@ -34,7 +34,7 @@ from app.models.entities import (
     VerificationResult,
 )
 from app.models.enums import ActorType, ExceptionKind, ExceptionStatus, Role
-from app.services import app_settings, approvals, attendance, test_lab, uploads, verification
+from app.services import app_settings, approvals, attendance, outreach, test_lab, uploads, verification
 from app.services import drives as drive_svc
 from app.services.seed import reset_database, seed
 
@@ -177,6 +177,8 @@ def verify_upload(upload_id: int, db: Session = Depends(get_db), user: User = De
     v = verification.verify(db, upload_id, actor=f"user:{user.id}")
     if v.status == "VERIFIED" and not db.scalar(select(AttendanceSheet).where(AttendanceSheet.upload_id == upload_id)):
         attendance.generate(db, upload_id, actor=f"user:{user.id}")
+    if v.status == "VERIFIED":
+        outreach.notify_upload(db, uploads.get_upload(db, upload_id), f"user:{user.id}")
     graph.sync_after_upload_action(db, upload_id)
     return S.verification(v)
 
@@ -189,6 +191,7 @@ def retry_upload(upload_id: int, db: Session = Depends(get_db), user: User = Dep
         v = verification.verify(db, op.id, actor=f"user:{user.id}")
         if v.status == "VERIFIED":
             attendance.generate(db, op.id, actor=f"user:{user.id}")
+            outreach.notify_upload(db, op, f"user:{user.id}")
         graph.sync_after_upload_action(db, op.id)
     return S.upload(op, verification.latest_verification(db, op.id))
 
@@ -440,6 +443,9 @@ def integrations(db: Session = Depends(get_db), _: User = Depends(require_roles(
         "llm": {"enabled": settings.llm_enabled, "model": settings.llm_model if settings.llm_enabled else None,
                 "mode": "LLM tool-use planner" if settings.llm_enabled else "Deterministic fallback planner (no LLM key configured)"},
         "mock_portal_base_url": settings.mock_portal_base_url,
+        "email": {"transport": "SMTP" if settings.smtp_host else "LOCAL_MAILBOX",
+                  "note": "Emails are delivered through the configured SMTP server" if settings.smtp_host else
+                  "No SMTP server configured: emails are kept in the local mailbox (Communications page)"},
         "demo_mode": settings.demo_mode,
     }
 

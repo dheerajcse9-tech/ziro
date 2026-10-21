@@ -24,7 +24,21 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
     onSuccess: () => { toast.success("Exception resolved; affected approvals were re-validated"); setNote(""); setPreferred(null); onClose(); qc.invalidateQueries(); },
     onError: toastError,
   });
+  const review = useMutation({
+    mutationFn: (apply: boolean) => api.post(`/api/student-requests/${item!.detail.request_id}/review`, { apply, note: note || null }),
+    onSuccess: (_r, apply) => { toast.success(apply ? "Verified details applied to the student record" : "Submitted details rejected"); setNote(""); onClose(); qc.invalidateQueries(); },
+    onError: toastError,
+  });
+  const emailStudent = useMutation({
+    mutationFn: () => api.post(`/api/students/${item!.student_id}/data-requests`, {
+      fields: (item!.detail.missing ?? []).map((m: string) => ({ CGPA: "cgpa", BACKLOGS: "active_backlogs", BRANCH: "branch", GRADUATION_YEAR: "graduation_year" } as Record<string, string>)[m]).filter(Boolean),
+      drive_id: item!.drive_id,
+    }),
+    onSuccess: () => toast.success("Email sent with a personal link to provide the missing details"),
+    onError: toastError,
+  });
   if (!item) return null;
+  const isSubmission = item.kind === "DATA_SUBMITTED";
   const isClash = item.kind === "SCHEDULE_CONFLICT";
   const d = item.detail ?? {};
   const isData = item.kind === "MISSING_STUDENT_DATA" || item.kind === "INVALID_STUDENT_DATA";
@@ -32,7 +46,11 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()} wide title={item.title}
       description={`${item.kind.replace(/_/g, " ").toLowerCase()} · raised ${fmtDateTime(item.created_at)}`}
-      footer={item.status !== "OPEN" ? <Button onClick={onClose}>Close</Button> : isClash ? <>
+      footer={item.status !== "OPEN" ? <Button onClick={onClose}>Close</Button> : isSubmission ? <>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="danger" loading={review.isPending && review.variables === false} onClick={() => review.mutate(false)}>Reject</Button>
+        <Button variant="success" loading={review.isPending && review.variables === true} onClick={() => review.mutate(true)}>Verify &amp; apply to record</Button>
+      </> : isClash ? <>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" disabled={!preferred} loading={resolve.isPending} onClick={() => resolve.mutate("PREFER_DRIVE")}>Assign to selected drive</Button>
       </> : <>
@@ -57,9 +75,17 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
             <Field label="Note" htmlFor="clash_note"><Textarea id="clash_note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Student preference confirmed by email" /></Field>
           </>
         )}
-        {!isClash && item.status === "OPEN" && (
+        {isSubmission && item.status === "OPEN" && (
           <>
-            {isData && item.student_id && <Banner tone="info" title="Fix the source record">Correcting the student record resolves the cause; <Link className="underline" href={`/students/${item.student_id}`}>open student record</Link>. Acknowledge only if the data cannot be obtained before the drive.</Banner>}
+            <p className="text-[13px] text-ink-2">Student <span className="font-mono font-semibold">{d.roll_number}</span> submitted these details through their personal link. Check them against the official record (marksheet, ERP) before applying.</p>
+            <table className="data-table w-full rounded-md border border-line"><thead><tr><th>Field</th><th>Currently on record</th><th>Submitted by student</th></tr></thead>
+              <tbody>{Object.entries(d.submitted ?? {}).map(([k, v]) => <tr key={k}><td>{k}</td><td className="text-muted">{String(d.current?.[k] ?? "missing")}</td><td className="font-semibold">{String(v)}</td></tr>)}</tbody></table>
+            <Field label="Note (optional)" htmlFor="sub_note"><Textarea id="sub_note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          </>
+        )}
+        {!isClash && !isSubmission && item.status === "OPEN" && (
+          <>
+            {isData && item.student_id && <Banner tone="info" title="Fix the source record" action={(d.missing ?? []).length > 0 ? <Button size="sm" loading={emailStudent.isPending} onClick={() => emailStudent.mutate()}>Email student for missing data</Button> : undefined}>Email the student a personal link to provide the missing details, or correct the record yourself: <Link className="underline" href={`/students/${item.student_id}`}>open student record</Link>. Acknowledge only if the data cannot be obtained before the drive.</Banner>}
             {item.kind === "CRITERIA_MISMATCH" && item.drive_id && <Banner tone="info" title="Resolve by updating criteria">Create a new criteria version on <Link className="underline" href={`/drives/${item.drive_id}`}>the drive</Link> (auto-resolves this item), or answer the agent run&apos;s question.</Banner>}
             <Field label="Resolution note (required)" htmlFor="exc_note"><Textarea id="exc_note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
           </>

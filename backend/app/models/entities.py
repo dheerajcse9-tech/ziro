@@ -440,6 +440,69 @@ class TestRun(Base):
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class EmailMessage(TimestampMixin, Base):
+    """Every outbound email. Delivered via SMTP when configured, otherwise kept in the local mailbox."""
+
+    __tablename__ = "email_messages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    to_address: Mapped[str | None] = mapped_column(String(255))
+    to_name: Mapped[str | None] = mapped_column(String(200))
+    subject: Mapped[str] = mapped_column(String(300), nullable=False)
+    body_text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    transport: Mapped[str] = mapped_column(String(30), nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    dedupe_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), index=True)
+    drive_id: Mapped[int | None] = mapped_column(ForeignKey("drives.id", ondelete="SET NULL"), index=True)
+    upload_id: Mapped[int | None] = mapped_column(ForeignKey("upload_operations.id", ondelete="SET NULL"))
+    request_id: Mapped[int | None] = mapped_column(ForeignKey("student_requests.id", ondelete="SET NULL"))
+    sent_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class StudentRequest(TimestampMixin, Base):
+    """A tokenised link sent to a student: a drive invitation or a missing-data request."""
+
+    __tablename__ = "student_requests"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    drive_id: Mapped[int | None] = mapped_column(ForeignKey("drives.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    requested_fields: Mapped[list[str]] = mapped_column(JSON, default=list)
+    response: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    criteria_version: Mapped[int | None] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+
+    student: Mapped[Student] = relationship()
+    drive: Mapped[Drive | None] = relationship()
+
+
+class DriveResult(TimestampMixin, Base):
+    """Employer's outcome for a student who was sent on a drive's roster."""
+
+    __tablename__ = "drive_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    drive_id: Mapped[int] = mapped_column(ForeignKey("drives.id", ondelete="CASCADE"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    recorded_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+    student: Mapped[Student] = relationship()
+    drive: Mapped[Drive] = relationship()
+
+    __table_args__ = (UniqueConstraint("drive_id", "student_id", name="uq_drive_result_student"),)
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
     key: Mapped[str] = mapped_column(String(80), primary_key=True)

@@ -9,6 +9,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { InvitationsPanel, ResultsPanel } from "@/components/drives/outreach-panels";
 import { BRANCHES, CriteriaFields, criteriaSchema, type CriteriaValues, toCriteriaPayload } from "@/components/drives/criteria-fields";
 import { DataTable } from "@/components/ui/data-table";
 import { HashValue, JsonView } from "@/components/ui/evidence";
@@ -77,6 +78,11 @@ export default function DriveWorkspace() {
     onError: toastError,
   });
 
+  const requestData = useMutation({
+    mutationFn: () => api.post<{ requested: { roll_number: string }[] }>(`/api/drives/${id}/missing-data-requests`),
+    onSuccess: (r) => { toast.success(`Missing-data requests emailed to ${r.requested.length} student(s)`, { description: "Their answers appear in the Exception Inbox for you to verify." }); qc.invalidateQueries(); },
+    onError: toastError,
+  });
   const filteredStudents = useMemo(() => (elig.data?.students ?? []).filter((s) => rosterFilter === "ALL" || s.roster_status === rosterFilter || s.decision === rosterFilter), [elig.data, rosterFilter]);
 
   if (drive.isError) return <ErrorState error={drive.error} onRetry={() => drive.refetch()} />;
@@ -91,6 +97,7 @@ export default function DriveWorkspace() {
       min_cgpa: c?.min_cgpa?.toString() ?? "", backlog_policy: c?.backlog_policy ?? "NO_ACTIVE_BACKLOGS",
       max_active_backlogs: c?.max_active_backlogs?.toString() ?? "", allowed_branches: c?.allowed_branches ?? [],
       source_text: c?.source_text ?? "", change_note: "",
+      required_consent_scope: (c?.required_consent_scope as "SHARE_WITH_EMPLOYERS" | "DRIVE_REGISTRATION") ?? "SHARE_WITH_EMPLOYERS",
     });
     setCritOpen(true);
   }
@@ -112,7 +119,8 @@ export default function DriveWorkspace() {
 
       <Tabs value={tab} onValueChange={setTab} tabs={[
         { value: "overview", label: "Overview" }, { value: "eligibility", label: "Eligibility", count: counts?.total },
-        { value: "conflicts", label: "Conflicts" }, { value: "criteria", label: "Criteria versions" }, { value: "whatif", label: "What-if simulator" },
+        { value: "conflicts", label: "Conflicts" }, { value: "invitations", label: "Invitations" }, { value: "results", label: "Results" },
+        { value: "criteria", label: "Criteria versions" }, { value: "whatif", label: "What-if simulator" },
       ]}>
         <TabPanel value="overview">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -165,10 +173,11 @@ export default function DriveWorkspace() {
           <Card>
             <CardHeader title="Eligibility — live evaluation"
               description={elig.data ? `Criteria v${elig.data.criteria.version} applied to ${elig.data.counts.total} students at ${fmtDateTime(elig.data.evaluated_at)}. Hover a value for the rule explanation.` : undefined}
-              actions={<Select aria-label="Filter" value={rosterFilter} onChange={(e) => setRosterFilter(e.target.value)}>
+              actions={<>{editable && (counts?.unknown ?? 0) > 0 && <Button size="sm" loading={requestData.isPending} onClick={() => requestData.mutate()}>Email {counts?.unknown} student(s) with missing data</Button>}
+              <Select aria-label="Filter" value={rosterFilter} onChange={(e) => setRosterFilter(e.target.value)}>
                 <option value="ALL">All students</option><option value="INCLUDED">Included</option><option value="HELD">Held</option>
                 <option value="EXCLUDED">Excluded</option><option value="UNKNOWN">Unknown decisions</option><option value="INELIGIBLE">Ineligible</option>
-              </Select>} />
+              </Select></>} />
             {elig.data && Object.keys(elig.data.exclusion_reasons).length > 0 && (
               <div className="flex flex-wrap gap-1.5 border-b border-line px-4 py-2">
                 {Object.entries(elig.data.exclusion_reasons).map(([r, n]) => <Tag key={r}>{r}: {n}</Tag>)}
@@ -229,6 +238,9 @@ export default function DriveWorkspace() {
             {c?.source_text && <div className="border-t border-line p-4"><p className="mb-1 text-[12px] font-semibold text-muted">Recorded employer source text (current version)</p><pre className="whitespace-pre-wrap rounded-md bg-subtle p-3 text-[12.5px] text-ink-2">{c.source_text}</pre></div>}
           </Card>
         </TabPanel>
+
+        <TabPanel value="invitations"><InvitationsPanel drive={d} /></TabPanel>
+        <TabPanel value="results"><ResultsPanel drive={d} /></TabPanel>
 
         <TabPanel value="whatif"><WhatIf driveId={d.id} criteria={c} startLocal={d.starts_at_local} endLocal={d.ends_at_local} /></TabPanel>
       </Tabs>

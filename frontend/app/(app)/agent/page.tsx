@@ -19,6 +19,8 @@ const EXAMPLES = [
   "Prepare the eligible roster for the upcoming drive, identify unresolved records, and show me the proposal for approval.",
   "Prepare the roster for Helios Analytics and flag any schedule clashes.",
   "What if we lower the CGPA threshold to 6.5 for the Northwind drive?",
+  "Invite eligible students for the Bluepeak drive.",
+  "Email students with missing data for the Northwind drive.",
   "Check clashes for the Bluepeak drive.",
 ];
 
@@ -90,7 +92,7 @@ function AgentInner() {
                   <Wrench className="mt-0.5 size-3.5 shrink-0 text-faint" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5"><span className="font-mono text-[12px] text-ink">{t.name}</span>
-                      <Tag tone={t.permission === "EXECUTE" ? "bad" : t.permission === "PROPOSE" ? "warn" : "neutral"}>{t.permission}</Tag>
+                      <Tag tone={t.permission === "EXECUTE" ? "bad" : t.permission === "PROPOSE" ? "warn" : t.permission === "NOTIFY" ? "info" : "neutral"}>{t.permission}</Tag>
                       {t.llm_callable && <Tag tone="accent">LLM-callable</Tag>}</div>
                     <p className="text-[11.5px] text-muted">{t.description}</p>
                   </div>

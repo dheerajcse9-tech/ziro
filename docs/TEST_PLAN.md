@@ -25,7 +25,7 @@ duplicate execution returns same operation · timeout after commit reconciled wi
 partial upload / extra record / duplicate record → FAILED_VERIFICATION and no attendance sheet · unreadable read-back →
 PENDING then recovered · attendance contents & data minimisation · ambiguous goal → clarification · criteria mismatch
 stop · prompt injection flagged not obeyed · what-if writes nothing · conflict resolution invalidates other proposal ·
-late student sent as a supplementary upload without re-sending others · previously sent student who becomes ineligible flagged for withdrawal · LLM planner tool permissions (scripted client) · LLM failure fallback labelled · viewer cannot start runs · audit chain
+late student sent as a supplementary upload without re-sending others · previously sent student who becomes ineligible flagged for withdrawal · invitations + per-drive consent (accept included, decline excluded, no duplicate invites) · missing-data request → student submits → not applied until officer verifies · expired links refused · selection results notify once and appear in placement history · public invitation link round trip over HTTP · LLM planner tool permissions (scripted client) · LLM failure fallback labelled · viewer cannot start runs · audit chain
 valid, ORM edit blocked, out-of-band edit detected.
 
 ## What is *not* tested

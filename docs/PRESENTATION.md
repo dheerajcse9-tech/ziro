@@ -14,7 +14,7 @@
    invalidates it; consent re-checked at execution; idempotent operation key + reconciliation; exact-ID verification;
    hash-chained audit ledger; prompt-injection text flagged and ignored.
 6. **Official test cases** — TC1–TC4 run live in the Test Lab against real code (not hard-coded); show expected vs actual.
-7. **Measured results** — 59 backend tests, 4/4 official scenarios (39 checks), 8 browser e2e tests, verified on SQLite
+7. **Measured results** — 64 backend tests, 4/4 official scenarios (39 checks), 9 browser e2e tests, verified on SQLite
    and PostgreSQL. *No time-saved figure is claimed: no baseline was measured.*
 8. **Limitations & next steps** — organiser form not available (LOCAL MOCK used; adapter swap planned), LLM planner not
    exercised live in this build, public deployment pending a database, no SSO.
@@ -41,7 +41,7 @@ mapping, preview, issues CSV, safe re-import · Employers & drives with timezone
 Destinations with allowlist · Deterministic eligibility · Consent enforcement · Clash detection, holds and resolution ·
 Agent Control Room (NL commands, plan, live timeline, evidence, questions) · Approval Center · Idempotent upload with
 reconciliation · Verification Center · Receipts · Attendance CSV/XLSX · Exception Inbox · What-if simulator · Test Lab ·
-Audit Explorer with chain verification · Settings (health, integrations, roles, policy, fault injection, demo reset,
+Audit Explorer with chain verification · Drive invitations via personal links (per-drive consent) · Missing-data requests with officer verification · Emails to students and employers (SMTP or local mailbox) · Supplementary uploads · Selection results and placement history · Settings (health, integrations, roles, policy, fault injection, demo reset,
 retention purge).
 
 ## Known limitations

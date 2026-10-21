@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, ShieldCheck, ShieldOff } from "lucide-react";
+import { Mail, Pencil, ShieldCheck, ShieldOff } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -39,6 +39,10 @@ export default function StudentDetailPage() {
   const [editing, setEditing] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [evidence, setEvidence] = useState("");
+  const missingFields = q.data ? [
+    ...(q.data.cgpa === null ? ["cgpa"] : []), ...(q.data.active_backlogs === null ? ["active_backlogs"] : []),
+    ...(q.data.branch === null ? ["branch"] : []),
+  ] : [];
 
   const consent = useMutation({
     mutationFn: (granted: boolean) => api.post<{ invalidated_proposals: number[] }>(`/api/students/${id}/consent`, { granted, evidence_ref: evidence }),
@@ -65,6 +69,12 @@ export default function StudentDetailPage() {
     onError: toastError,
   });
 
+  const requestData = useMutation({
+    mutationFn: () => api.post(`/api/students/${id}/data-requests`, { fields: missingFields }),
+    onSuccess: () => { toast.success("Email sent with a personal link to provide the missing details"); qc.invalidateQueries(); },
+    onError: toastError,
+  });
+
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) return <LoadingRows />;
   const s = q.data;
@@ -85,6 +95,7 @@ export default function StudentDetailPage() {
         </>}
         actions={editable ? <>
           <Button onClick={openEdit} icon={<Pencil className="size-4" />}>Edit record</Button>
+          {missingFields.length > 0 && <Button loading={requestData.isPending} onClick={() => requestData.mutate()} icon={<Mail className="size-4" />}>Request missing data by email</Button>}
           <Button onClick={() => setConsentOpen(true)} icon={s.consent_granted ? <ShieldOff className="size-4" /> : <ShieldCheck className="size-4" />}>{s.consent_granted ? "Record revocation" : "Record consent"}</Button>
         </> : undefined} />
 
@@ -110,6 +121,23 @@ export default function StudentDetailPage() {
           </div>
         </Card>
         <div className="space-y-4 lg:col-span-2">
+          <Card>
+            <CardHeader title="Placement history" description="Every drive: eligibility (and why), invitation answer, whether the profile was sent, and the employer's result." />
+            {s.placement_history.length === 0 ? <EmptyState title="No drives yet" /> : (
+              <table className="data-table w-full">
+                <thead><tr><th>Drive</th><th>Eligibility</th><th>Invitation</th><th>Sent to employer</th><th>Result</th></tr></thead>
+                <tbody>{s.placement_history.map((h) => (
+                  <tr key={h.drive_id}>
+                    <td><Link className="font-medium hover:underline" href={`/drives/${h.drive_id}`}>{h.employer}</Link><div className="text-[11.5px] text-muted">{fmtDateTime(h.starts_at, h.timezone)}</div></td>
+                    <td>{h.decision ? <><StatusBadge status={h.decision} />{h.criteria_version && <span className="ml-1 text-[11px] text-muted">criteria v{h.criteria_version}</span>}
+                      {h.reasons.length > 0 && <div className="mt-0.5 text-[11.5px] text-muted">{h.reasons.join("; ")}</div>}</> : <span className="text-faint">Not evaluated</span>}</td>
+                    <td>{h.invitation ? <StatusBadge status={h.invitation} tone={h.invitation === "ACCEPTED" ? "ok" : h.invitation === "SENT" ? "warn" : "neutral"} label={h.invitation === "SENT" ? "Waiting" : undefined} /> : <span className="text-faint">—</span>}</td>
+                    <td>{h.sent_to_employer ? <Tag tone="info">Sent</Tag> : <span className="text-faint">No</span>}</td>
+                    <td>{h.outcome ? <StatusBadge status={h.outcome} tone={h.outcome === "SELECTED" ? "ok" : "neutral"} /> : <span className="text-faint">—</span>}</td>
+                  </tr>))}</tbody>
+              </table>
+            )}
+          </Card>
           <Card>
             <CardHeader title="Eligibility decisions" description="Latest decision per drive, with the criteria version that produced it." />
             {s.decisions.length === 0 ? <EmptyState title="Not evaluated for any drive yet" /> : (
@@ -138,6 +166,24 @@ export default function StudentDetailPage() {
                     <td><StatusBadge status={a.status} /></td><td className="text-[12px] text-muted">{a.note}</td></tr>))}
                 </tbody>
               </table>
+            )}
+          </Card>
+          <Card>
+            <CardHeader title="Emails & requests" description="Messages sent to this student and their personal links (invitations, data requests)." />
+            {s.emails.length === 0 && s.requests.length === 0 ? <EmptyState title="Nothing sent yet" /> : (
+              <ul className="divide-y divide-line">
+                {s.requests.map((r) => (
+                  <li key={`r${r.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-[12.5px]">
+                    <span>{r.kind === "DRIVE_INVITATION" ? `Invitation · ${r.drive_title}` : `Data request · ${r.requested_fields.join(", ")}`}
+                      {r.kind === "DATA_REQUEST" && r.response?.values && <span className="ml-1 text-muted">→ submitted {JSON.stringify(r.response.values)}</span>}</span>
+                    <StatusBadge status={r.status} tone={["ACCEPTED", "APPLIED"].includes(r.status) ? "ok" : ["SENT", "SUBMITTED"].includes(r.status) ? "warn" : "neutral"} />
+                  </li>))}
+                {s.emails.map((m) => (
+                  <li key={`e${m.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-[12.5px]">
+                    <span><Link className="hover:underline" href="/communications">{m.subject}</Link> <span className="text-muted">· {fmtDateTime(m.created_at)}</span></span>
+                    <StatusBadge status={m.status} tone={m.status === "FAILED" ? "bad" : "ok"} label={m.status === "DELIVERED_LOCAL" ? "Local mailbox" : undefined} />
+                  </li>))}
+              </ul>
             )}
           </Card>
           <Card>

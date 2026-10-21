@@ -85,3 +85,20 @@ def test_test_lab_endpoint(server):
     results = officer.post("/api/tests/run", json={"test_ids": ["TC1"]}).json()
     assert results[0]["passed"] is True
     assert officer.get("/api/tests").json()["tests"][0]["latest"]["test_id"] == "TC1"
+
+
+def test_invitation_link_round_trip_over_http(server):
+    officer = login("officer@placementos.demo")
+    bluepeak = next(d for d in officer.get("/api/drives").json() if d["title"].startswith("Bluepeak"))
+    assert bluepeak["criteria"]["required_consent_scope"] == "DRIVE_REGISTRATION"
+    sent = officer.post(f"/api/drives/{bluepeak['id']}/invitations").json()["sent"]
+    assert sent
+    mail = officer.get("/api/emails?category=DRIVE_INVITATION").json()["items"][0]
+    body = officer.get(f"/api/emails/{mail['id']}").json()["body_text"]
+    token = body.split("/respond/")[1].split()[0]
+    anon = httpx.Client(base_url=server)
+    view = anon.get(f"/api/public/requests/{token}").json()
+    assert view["kind"] == "DRIVE_INVITATION" and view["status"] == "SENT"
+    assert anon.post(f"/api/public/requests/{token}/invitation", json={"accept": True}).json()["status"] == "ACCEPTED"
+    assert anon.get("/api/public/requests/not-a-real-token").status_code == 404
+    assert anon.get("/api/emails").status_code == 401

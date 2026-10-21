@@ -24,7 +24,8 @@ verifies** the result at the destination.
 | Decisions | Deterministic rules engine (CGPA ≥ inclusive, backlog policy, branch, batch) → ELIGIBLE / INELIGIBLE / UNKNOWN with per-rule evidence |
 | Safety | Consent enforced and re-checked before upload · approvals bound to a SHA-256 proposal hash · stale approvals auto-invalidated · destination allowlist · prompt-injection flagging · hash-chained append-only audit ledger |
 | Integration | Replaceable `DriveFormAdapter`; demo target is a **LOCAL MOCK** employer drive portal (HTML form + read-back pages, fault injection) |
-| Evidence | 59 backend tests, 4 official scenarios (TC1–TC4), 8 browser end-to-end tests — see [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md) |
+| Outreach | Drive invitations with personal accept/decline links (per-drive consent), missing-data requests answered by students and verified by officers, emails to students and employers (SMTP or in-app local mailbox), selection results and per-student placement history |
+| Evidence | 64 backend tests, 4 official scenarios (TC1–TC4), 9 browser end-to-end tests — see [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md) |
 
 > **Honesty notes.** The organiser's official mock drive form URL/credentials were not available to this build, so
 > every upload in this repository goes to the clearly labelled LOCAL MOCK portal served by the backend at

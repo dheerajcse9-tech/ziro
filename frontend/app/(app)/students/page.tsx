@@ -30,6 +30,10 @@ const columns: ColumnDef<Student>[] = [
     cell: ({ row }) => row.original.active_backlogs === null ? <Tag tone="warn">Missing</Tag> : <span className="tabular">{row.original.active_backlogs}</span> },
   { id: "consent", header: "Employer-sharing consent", enableSorting: false,
     cell: ({ row }) => row.original.consent ? <StatusBadge status={row.original.consent.status} /> : <StatusBadge status="NONE" tone="warn" label="Not recorded" /> },
+  { id: "selected", header: "Selected at", enableSorting: false,
+    cell: ({ row }) => (row.original as Student & { selected_at?: string[] }).selected_at?.length
+      ? <span className="flex flex-wrap gap-1">{(row.original as Student & { selected_at: string[] }).selected_at.map((e) => <Tag key={e} tone="ok">{e}</Tag>)}</span>
+      : <span className="text-faint">—</span> },
   { id: "issues", header: "Data issues", enableSorting: false,
     cell: ({ row }) => row.original.data_issues.length ? <span className="inline-flex items-center gap-1 text-[12px] text-warn"><AlertCircle className="size-3.5" />{row.original.data_issues.length}</span> : <span className="text-faint">—</span> },
 ];

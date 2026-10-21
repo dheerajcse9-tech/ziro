@@ -56,6 +56,9 @@ REJECTED · FAILED · FAILED_VERIFICATION · COMPLETED (read-only intents).
 | `execute_approved_upload` | EXECUTE | no | Requires APPROVED approval; re-validates hash, consent, destination |
 | `verify_uploaded_roster` | EXECUTE | no | Read-back + exact comparison |
 | `generate_attendance_sheet` | EXECUTE | no | Only from VERIFIED uploads |
+| `send_drive_invitations` | NOTIFY | no | Emails each eligible student a personal accept/decline link |
+| `request_missing_data` | NOTIFY | no | Emails UNKNOWN students a link to supply missing fields (officer verifies before applying) |
+| `send_roster_notifications` | NOTIFY | no | After VERIFIED: emails the employer contact the roster and tells each sent student |
 | `record_audit_event` | READ | no | Agent note in the ledger |
 
 Every call is validated against a strict Pydantic schema (`extra="forbid"`), logged as TOOL_CALL / TOOL_RESULT /
@@ -81,6 +84,14 @@ an authenticated human API call that also requires the approver role.
 | `approval_invalidated` | data changed after proposal | `rerun`, `stop` |
 | `reconcile`, `verification_pending` | uncertain upload / unreadable destination | Verification Center actions |
 | `failure` | tool error | `retry`, `stop` |
+
+## Outreach intents
+- `INVITE_STUDENTS` ("invite eligible students for Bluepeak"): interpret → validate_scope → invite → COMPLETED.
+- `REQUEST_MISSING_DATA` ("email students with missing data for Northwind"): interpret → validate_scope → request_data → COMPLETED.
+- For a drive whose criteria require **DRIVE_REGISTRATION** consent, PREPARE_ROSTER stops with an
+  `invitations_needed` question if no invitations were sent (answers: `send_invitations`, `continue`, `stop`).
+- After a verified upload the graph runs **notify** (employer roster email + student registration emails). An email
+  failure is recorded but never undoes a verified upload.
 
 ## Supplementary uploads (late students)
 Re-running a drive whose roster was already submitted produces a **SUPPLEMENT** proposal: only eligible students not

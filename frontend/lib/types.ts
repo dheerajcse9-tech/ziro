@@ -16,6 +16,9 @@ export interface Student {
 }
 
 export interface StudentDetail extends Student {
+  placement_history: PlacementRow[];
+  requests: StudentRequest[];
+  emails: EmailItem[];
   consent_history: { id: number; scope: string; status: string; source: string; evidence_ref: string | null; effective_at: string; recorded_by_id: number | null }[];
   decisions: { drive_id: number; drive_title: string; criteria_version: number; decision: Decision; roster_status: RosterStatus; reasons: string[]; rule_results: RuleResult[]; evaluated_at: string }[];
   assignments: { drive_id: number; drive_title: string; status: string; note: string | null; starts_at: string; ends_at: string }[];
@@ -180,3 +183,32 @@ export interface Dashboard {
 }
 
 export interface Health { status: string; database: string; database_dialect: string; environment: string; demo_mode: boolean; planner: string; llm_model: string | null; time: string }
+
+export interface StudentRequest {
+  id: number; kind: "DRIVE_INVITATION" | "DATA_REQUEST"; status: string; student_id: number; roll_number: string;
+  full_name: string; drive_id: number | null; drive_title: string | null; requested_fields: string[]; response: any;
+  criteria_version: number | null; expires_at: string; responded_at: string | null; created_at: string;
+}
+
+export interface EmailItem {
+  id: number; category: string; to_address: string | null; to_name: string | null; subject: string; status: string;
+  transport: string; error: string | null; student_id: number | null; drive_id: number | null; upload_id: number | null;
+  request_id: number | null; sent_by: string; created_at: string; sent_at: string | null; body_text?: string;
+}
+
+export interface PlacementRow {
+  drive_id: number; drive_title: string; employer: string; starts_at: string; timezone: string; decision: Decision | null;
+  roster_status?: RosterStatus; criteria_version: number | null; reasons: string[]; invitation: string | null;
+  sent_to_employer: boolean; outcome: string | null;
+}
+
+export interface DriveResultRow {
+  student_id: number; roll_number: string; full_name: string; branch: string | null; outcome: string | null;
+  note: string | null; updated_at: string | null;
+}
+
+export interface PublicRequest {
+  kind: "DRIVE_INVITATION" | "DATA_REQUEST"; status: string; first_name: string; roll_number: string; expires_at: string;
+  requested_fields: { field: string; label: string }[]; branches: { code: string; label: string }[];
+  drive?: { title: string; employer: string; slot: string; location: string | null; criteria: string };
+}

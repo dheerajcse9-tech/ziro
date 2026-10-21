@@ -71,7 +71,7 @@ export default function DrivesPage() {
   const form = useForm<DriveValues>({
     resolver: zodResolver(driveSchema),
     defaultValues: { timezone: "Asia/Kolkata", destination_id: "", employer_id: "", title: "", date: "", start: "10:00", end: "13:00",
-      criteria: { min_cgpa: "7.0", backlog_policy: "NO_ACTIVE_BACKLOGS", max_active_backlogs: "", allowed_branches: [], source_text: "" } },
+      criteria: { min_cgpa: "7.0", backlog_policy: "NO_ACTIVE_BACKLOGS", max_active_backlogs: "", allowed_branches: [], source_text: "", required_consent_scope: "SHARE_WITH_EMPLOYERS" } },
   });
 
   const create = useMutation({

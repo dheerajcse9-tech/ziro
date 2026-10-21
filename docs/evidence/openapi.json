@@ -2647,6 +2647,689 @@
      }
     }
    }
+  },
+  "/api/drives/{drive_id}/invitations": {
+   "post": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Send Invitations",
+    "operationId": "send_invitations_api_drives__drive_id__invitations_post",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "get": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "List Invitations",
+    "operationId": "list_invitations_api_drives__drive_id__invitations_get",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/drives/{drive_id}/missing-data-requests": {
+   "post": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Request Missing For Drive",
+    "operationId": "request_missing_for_drive_api_drives__drive_id__missing_data_requests_post",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/students/{student_id}/data-requests": {
+   "post": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Request Student Data",
+    "operationId": "request_student_data_api_students__student_id__data_requests_post",
+    "parameters": [
+     {
+      "name": "student_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Student Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DataRequestIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/student-requests": {
+   "get": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "List Requests",
+    "operationId": "list_requests_api_student_requests_get",
+    "parameters": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Kind"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "name": "student_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Student Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/student-requests/{request_id}/review": {
+   "post": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Review Request",
+    "operationId": "review_request_api_student_requests__request_id__review_post",
+    "parameters": [
+     {
+      "name": "request_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Request Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReviewIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/drives/{drive_id}/results": {
+   "get": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Get Results",
+    "operationId": "get_results_api_drives__drive_id__results_get",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Put Results",
+    "operationId": "put_results_api_drives__drive_id__results_put",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ResultsIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/emails": {
+   "get": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "List Emails",
+    "operationId": "list_emails_api_emails_get",
+    "parameters": [
+     {
+      "name": "category",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Category"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "name": "student_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Student Id"
+      }
+     },
+     {
+      "name": "drive_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Drive Id"
+      }
+     },
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1,
+       "title": "Page"
+      }
+     },
+     {
+      "name": "page_size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "minimum": 1,
+       "default": 50,
+       "title": "Page Size"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/emails/{email_id}": {
+   "get": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Get Email",
+    "operationId": "get_email_api_emails__email_id__get",
+    "parameters": [
+     {
+      "name": "email_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Email Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/public/requests/{token}": {
+   "get": {
+    "tags": [
+     "public"
+    ],
+    "summary": "Public Request",
+    "operationId": "public_request_api_public_requests__token__get",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Token"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/public/requests/{token}/invitation": {
+   "post": {
+    "tags": [
+     "public"
+    ],
+    "summary": "Public Answer Invitation",
+    "operationId": "public_answer_invitation_api_public_requests__token__invitation_post",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Token"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InvitationAnswer"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/public/requests/{token}/data": {
+   "post": {
+    "tags": [
+     "public"
+    ],
+    "summary": "Public Submit Data",
+    "operationId": "public_submit_data_api_public_requests__token__data_post",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Token"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DataAnswer"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -2839,6 +3522,48 @@
     },
     "type": "object",
     "title": "CriteriaIn"
+   },
+   "DataAnswer": {
+    "properties": {
+     "values": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Values"
+     }
+    },
+    "type": "object",
+    "required": [
+     "values"
+    ],
+    "title": "DataAnswer"
+   },
+   "DataRequestIn": {
+    "properties": {
+     "fields": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "minItems": 1,
+      "title": "Fields"
+     },
+     "drive_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Drive Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "fields"
+    ],
+    "title": "DataRequestIn"
    },
    "DestinationIn": {
     "properties": {
@@ -3234,6 +3959,19 @@
     "type": "object",
     "title": "HTTPValidationError"
    },
+   "InvitationAnswer": {
+    "properties": {
+     "accept": {
+      "type": "boolean",
+      "title": "Accept"
+     }
+    },
+    "type": "object",
+    "required": [
+     "accept"
+    ],
+    "title": "InvitationAnswer"
+   },
    "LoginIn": {
     "properties": {
      "email": {
@@ -3306,6 +4044,81 @@
      "resolution"
     ],
     "title": "ResolveIn"
+   },
+   "ResultItem": {
+    "properties": {
+     "student_id": {
+      "type": "integer",
+      "title": "Student Id"
+     },
+     "outcome": {
+      "type": "string",
+      "title": "Outcome"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     }
+    },
+    "type": "object",
+    "required": [
+     "student_id",
+     "outcome"
+    ],
+    "title": "ResultItem"
+   },
+   "ResultsIn": {
+    "properties": {
+     "results": {
+      "items": {
+       "$ref": "#/components/schemas/ResultItem"
+      },
+      "type": "array",
+      "title": "Results"
+     },
+     "notify": {
+      "type": "boolean",
+      "title": "Notify",
+      "default": true
+     }
+    },
+    "type": "object",
+    "required": [
+     "results"
+    ],
+    "title": "ResultsIn"
+   },
+   "ReviewIn": {
+    "properties": {
+     "apply": {
+      "type": "boolean",
+      "title": "Apply"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 1000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     }
+    },
+    "type": "object",
+    "required": [
+     "apply"
+    ],
+    "title": "ReviewIn"
    },
    "RunIn": {
     "properties": {

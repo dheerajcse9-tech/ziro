@@ -19,6 +19,7 @@ export const criteriaSchema = z.object({
   allowed_branches: z.array(z.string()),
   source_text: z.string().optional(),
   change_note: z.string().optional(),
+  required_consent_scope: z.enum(["SHARE_WITH_EMPLOYERS", "DRIVE_REGISTRATION"]),
 }).refine((v) => v.backlog_policy !== "MAX_ALLOWED" || /^\d+$/.test(v.max_active_backlogs), {
   path: ["max_active_backlogs"], message: "Enter the maximum allowed backlogs",
 });
@@ -33,7 +34,7 @@ export function toCriteriaPayload(v: CriteriaValues) {
     allowed_branches: v.allowed_branches,
     source_text: v.source_text || null,
     change_note: v.change_note || null,
-    required_consent_scope: "SHARE_WITH_EMPLOYERS",
+    required_consent_scope: v.required_consent_scope ?? "SHARE_WITH_EMPLOYERS",
   };
 }
 
@@ -75,6 +76,13 @@ export function CriteriaFields({ form, prefix = "", showNote }: { form: UseFormR
           })}
         </div>
       </fieldset>
+      <Field label="Consent requirement" htmlFor="required_consent_scope" className="sm:col-span-2"
+        hint="'Invitation' emails each eligible student a link; only students who accept are shared with the employer.">
+        <Select id="required_consent_scope" className="w-full" {...form.register(name("required_consent_scope"))}>
+          <option value="SHARE_WITH_EMPLOYERS">Consent already on file (blanket employer-sharing consent)</option>
+          <option value="DRIVE_REGISTRATION">Student must accept this drive&apos;s invitation</option>
+        </Select>
+      </Field>
       <Field label="Employer's published criteria text (source)" htmlFor="source_text" className="sm:col-span-2" hint="Kept as evidence. The agent cross-checks it against the employer form; it never overrides these rules.">
         <Textarea id="source_text" rows={3} {...form.register(name("source_text"))} />
       </Field>

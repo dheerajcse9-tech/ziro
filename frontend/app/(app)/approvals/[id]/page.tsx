@@ -137,7 +137,7 @@ export default function ApprovalDetail() {
 
       <ConfirmDialog open={mode === "approve"} onOpenChange={(o) => !o && setMode(null)} tone="success" loading={approve.isPending}
         title={`Approve ${p.kind === "SUPPLEMENT" ? "supplementary upload" : "upload"} of ${p.included_roll_numbers.length} student(s)?`} confirmLabel="Approve and execute"
-        description="The backend re-computes the roster from live data. If it no longer matches this hash the approval is refused. On approval the agent uploads to the destination and independently verifies the result."
+        description="The backend re-computes the roster from live data. If it no longer matches this hash the approval is refused. On approval the agent uploads to the destination, independently verifies the result, then emails the employer contact this roster and tells each student they were registered."
         onConfirm={() => ack ? approve.mutate() : toast.error("Confirm that you reviewed the roster")}>
         <div className="space-y-3">
           <div className="rounded-md bg-subtle p-3 text-[12.5px]"><p>Destination: <strong>{p.destination.name}</strong></p><p>Hash: <span className="font-mono">{p.proposal_hash.slice(0, 24)}…</span></p></div>

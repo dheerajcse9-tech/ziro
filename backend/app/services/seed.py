@@ -94,6 +94,7 @@ def _drives(tz: str, base_url: str) -> list[dict]:
              published="Minimum CGPA of 7.5. Maximum 1 active backlog. Branches: All."),
         dict(employer="Bluepeak Motors", title="Bluepeak Motors — Graduate Engineer Trainee", role_title="GET",
              location="Placement Cell", start=_at(23, 9, 30, tz), end=_at(23, 12, 30, tz), form_ref="BPM-GET-2026",
+             consent=ConsentScope.DRIVE_REGISTRATION,  # students must accept this drive's invitation
              criteria=dict(min_cgpa=6.5, backlog_policy=BacklogPolicy.NO_ACTIVE_BACKLOGS, max_active_backlogs=0,
                            allowed_branches=["ME", "EEE", "ECE"]),
              published="CGPA >= 6.5, no backlogs.\nBranches: Mechanical, EEE, ECE.\n"
@@ -170,7 +171,7 @@ def seed(db: Session) -> dict:
                       destination_id=dest.id, source_reference=f"{base_url}/forms/{d['form_ref']}")
         db.add(drive)
         db.flush()
-        db.add(DriveCriteria(drive_id=drive.id, version=1, required_consent_scope=ConsentScope.SHARE_WITH_EMPLOYERS,
+        db.add(DriveCriteria(drive_id=drive.id, version=1, required_consent_scope=d.get("consent", ConsentScope.SHARE_WITH_EMPLOYERS),
                              source_text=d["published"], source_reference=drive.source_reference,
                              change_note="Initial criteria (seed)", graduation_years=[], **d["criteria"]))
         existing = db.scalar(select(MockPortalForm).where(MockPortalForm.form_ref == d["form_ref"]))

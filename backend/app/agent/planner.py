@@ -28,7 +28,7 @@ from app.models.enums import DriveStatus
 
 from contextvars import ContextVar
 
-INTENTS = ("PREPARE_ROSTER", "WHAT_IF", "CHECK_CONFLICTS")
+INTENTS = ("PREPARE_ROSTER", "WHAT_IF", "CHECK_CONFLICTS", "INVITE_STUDENTS", "REQUEST_MISSING_DATA")
 # Set by the Test Lab so official scenarios are reproducible and never call a paid LLM.
 FORCE_DETERMINISTIC: ContextVar[bool] = ContextVar("force_deterministic_planner", default=False)
 
@@ -55,7 +55,9 @@ Rules you must follow:
 - If the request is ambiguous about which drive is meant, submit a plan with intent and a clarification
   question listing the candidate drive_ids instead of guessing.
 - Intents: PREPARE_ROSTER (evaluate eligibility, check clashes, prepare a roster proposal for approval),
-  WHAT_IF (read-only simulation of changed criteria/schedule), CHECK_CONFLICTS (evaluate and report clashes only).
+  WHAT_IF (read-only simulation of changed criteria/schedule), CHECK_CONFLICTS (evaluate and report clashes only),
+  INVITE_STUDENTS (email eligible students a link to accept/decline the drive),
+  REQUEST_MISSING_DATA (email students with missing CGPA/backlogs/branch a link to provide them).
 - Finish by calling submit_plan exactly once."""
 
 SUBMIT_PLAN_TOOL = {
@@ -93,7 +95,9 @@ SUBMIT_PLAN_TOOL = {
 _WORD = re.compile(r"[a-z0-9]+")
 _STOP = {"the", "for", "drive", "drives", "roster", "prepare", "eligible", "upcoming", "next", "and", "show", "me",
          "proposal", "approval", "identify", "unresolved", "records", "students", "student", "list", "of", "a",
-         "to", "with", "what", "if", "we", "cgpa", "check", "clash", "clashes", "conflicts", "placement", "on", "in"}
+         "to", "with", "what", "if", "we", "cgpa", "check", "clash", "clashes", "conflicts", "placement", "on", "in",
+         "invite", "invitations", "invitation", "email", "mail", "send", "missing", "data", "details", "consent", "forms",
+         "form", "request", "who", "are", "all", "have", "has"}
 
 
 def _active_drives(ctx: ToolContext) -> list[Drive]:
@@ -105,6 +109,10 @@ def deterministic_plan(ctx: ToolContext, objective: str) -> Plan:
     text = objective.lower()
     if re.search(r"\bwhat[- ]if\b|\bsimulat|\bif we (?:lower|raise|change|allow|relax|move)", text):
         intent = "WHAT_IF"
+    elif re.search(r"\binvit|\bconsent forms?\b|\bregistration (?:form|link)", text):
+        intent = "INVITE_STUDENTS"
+    elif re.search(r"\bmissing (?:data|details|records?|cgpa|backlogs?|information)\b|\brequest (?:the )?missing", text):
+        intent = "REQUEST_MISSING_DATA"
     elif re.search(r"\b(clash|conflict)", text) and not re.search(r"\b(prepare|upload|submit|proposal)\b", text):
         intent = "CHECK_CONFLICTS"
     else:

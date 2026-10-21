@@ -301,13 +301,14 @@ def update_student(db: Session, student: Student, data: dict[str, Any], user: Us
 
 
 def set_consent(db: Session, student: Student, granted: bool, evidence_ref: str | None, user: User | None,
-                source: str = "manual") -> dict[str, Any]:
+                source: str = "manual", scope: str = ConsentScope.SHARE_WITH_EMPLOYERS,
+                actor: str | None = None) -> dict[str, Any]:
     status = ConsentStatus.GRANTED if granted else ConsentStatus.REVOKED
-    rec = ConsentRecord(student_id=student.id, scope=ConsentScope.SHARE_WITH_EMPLOYERS, status=status,
+    rec = ConsentRecord(student_id=student.id, scope=scope, status=status,
                         source=source, evidence_ref=evidence_ref, recorded_by_id=user.id if user else None)
     db.add(rec)
     db.flush()
-    ledger.record(db, actor_type=ActorType.USER if user else ActorType.SYSTEM, actor_id=_actor(user),
+    ledger.record(db, actor_type=ActorType.USER if user else ActorType.SYSTEM, actor_id=actor or _actor(user),
                   action="CONSENT_GRANTED" if granted else "CONSENT_REVOKED", entity_type="student",
                   entity_id=student.id, details={"roll_number": student.roll_number, "scope": rec.scope,
                                                  "evidence_ref": evidence_ref})

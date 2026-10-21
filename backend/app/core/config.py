@@ -78,6 +78,16 @@ class Settings:
     upload_timeout_seconds: float = field(default_factory=lambda: float(os.getenv("UPLOAD_TIMEOUT_SECONDS", "8")))
     upload_max_attempts: int = field(default_factory=lambda: int(os.getenv("UPLOAD_MAX_ATTEMPTS", "3")))
 
+    # Outbound email. Without SMTP_HOST every message is kept in the local mailbox (visible in the app).
+    smtp_host: str = field(default_factory=lambda: os.getenv("SMTP_HOST", ""))
+    smtp_port: int = field(default_factory=lambda: int(os.getenv("SMTP_PORT", "587")))
+    smtp_user: str = field(default_factory=lambda: os.getenv("SMTP_USER", ""))
+    smtp_password: str = field(default_factory=lambda: os.getenv("SMTP_PASSWORD", ""))
+    smtp_from: str = field(default_factory=lambda: os.getenv("SMTP_FROM", "PlacementOS <placements@example.edu>"))
+    smtp_starttls: bool = field(default_factory=lambda: _bool("SMTP_STARTTLS", True))
+    # Base URL students open from emailed links (the frontend).
+    public_app_url: str = field(default_factory=lambda: os.getenv("PUBLIC_APP_URL", "http://localhost:3000"))
+
     # Serve the built static frontend from the API process (single-service deploys).
     frontend_dist: str = field(default_factory=lambda: os.getenv("FRONTEND_DIST", ""))
 

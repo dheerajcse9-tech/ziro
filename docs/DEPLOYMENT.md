@@ -21,6 +21,8 @@ See [`.env.example`](../.env.example). Required in production:
 | `ALLOWED_DESTINATION_HOSTS` | API | must include the API host (and the organiser host, when available) |
 | `CORS_ORIGINS` | API | the web origin (only needed if the browser calls the API directly) |
 | `ANTHROPIC_API_KEY` | API | optional; enables the LLM planner |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | API | optional; without them emails stay in the in-app local mailbox |
+| `PUBLIC_APP_URL` | API | public web URL used in links emailed to students |
 | `BACKEND_URL` | Web | server-side only; target of the `/api` and `/mock-portal` rewrites |
 
 ## Option A — Vercel (two projects from this repository)

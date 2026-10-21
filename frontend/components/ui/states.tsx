@@ -1,4 +1,4 @@
-import { AlertTriangle, Inbox, RotateCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Inbox, RotateCw } from "lucide-react";
 import * as React from "react";
 import { ApiError } from "@/lib/api";
 import { Button, Skeleton } from "./primitives";
@@ -46,7 +46,7 @@ export function Banner({ tone = "warn", title, children, action }: { tone?: "war
   }[tone];
   return (
     <div className={`flex items-start gap-3 rounded-md border px-4 py-3 ${styles}`}>
-      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+      {tone === "ok" ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : tone === "info" ? <Info className="mt-0.5 size-4 shrink-0" /> : <AlertTriangle className="mt-0.5 size-4 shrink-0" />}
       <div className="min-w-0 flex-1 text-[13px]">
         <p className="font-semibold">{title}</p>
         {children && <div className="mt-0.5 text-ink-2">{children}</div>}

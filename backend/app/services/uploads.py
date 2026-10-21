@@ -28,6 +28,7 @@ from app.integrations.drive_form import DestinationError, DestinationUncertain, 
 from app.integrations.registry import adapter_for
 from app.models.entities import ApprovalRequest, Drive, DriveAssignment, Student, UploadOperation
 from app.models.enums import (
+    consent_scope_key,
     ActorType,
     ApprovalStatus,
     AssignmentStatus,
@@ -85,7 +86,8 @@ def execute(db: Session, approval_id: int, *, actor: str, run_id: int | None = N
                                  details={"approved_hash": approval.proposal_hash, "live_hash": live_hash})
     roll_numbers = list(proposal.included_roll_numbers)
     students = {s.roll_number: s for s in db.scalars(select(Student).where(Student.roll_number.in_(roll_numbers)))}
-    consent = current_consent(db, [s.id for s in students.values()], evaluation.criteria.required_consent_scope)
+    consent = current_consent(db, [s.id for s in students.values()],
+                              consent_scope_key(evaluation.criteria.required_consent_scope, drive.id))
     lacking = [r for r in roll_numbers if r not in students or not consent.get(students[r].id, {}).get("granted")]
     if lacking:
         _invalidate_proposal(db, proposal, f"Consent re-check failed for {lacking}", actor=actor)

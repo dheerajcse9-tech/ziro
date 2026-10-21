@@ -28,12 +28,16 @@ from app.agent.tools import ToolContext, ToolFailure, call_tool
 from app.audit import ledger
 from app.core.config import get_settings
 from app.core.errors import Conflict, NotFound, PermissionDenied, ValidationFailed
+from sqlalchemy import func, select
+
 from app.db.base import utcnow
-from app.models.entities import AgentRun, ApprovalRequest, Drive, ExceptionItem, User
+from app.models.entities import AgentRun, ApprovalRequest, Drive, ExceptionItem, StudentRequest, User
 from app.models.enums import (
     TERMINAL_RUN_STATES,
     ActorType,
     ApprovalStatus,
+    ConsentScope,
+    RequestKind,
     DriveStatus,
     ExceptionKind,
     ExceptionStatus,
@@ -44,6 +48,7 @@ from app.models.enums import (
     VerificationStatus,
 )
 from app.services import exceptions
+from app.services.roster import current_criteria
 
 GRAPH = "graph"
 
@@ -59,6 +64,17 @@ PLAN_TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("execute_upload", "Upload the approved roster (idempotent)"),
         ("verify", "Re-read destination and compare exact IDs and counts"),
         ("attendance", "Generate attendance sheet and receipt"),
+        ("notify", "Email the employer the verified roster and notify the students sent"),
+    ],
+    "INVITE_STUDENTS": [
+        ("interpret_goal", "Interpret the request and identify the drive"),
+        ("validate_scope", "Validate scope and permissions"),
+        ("invite", "Email each eligible student a personal accept/decline link"),
+    ],
+    "REQUEST_MISSING_DATA": [
+        ("interpret_goal", "Interpret the request and identify the drive"),
+        ("validate_scope", "Validate scope and permissions"),
+        ("request_data", "Email students with missing data a link to provide it"),
     ],
     "WHAT_IF": [
         ("interpret_goal", "Interpret the request and identify the drive"),
@@ -85,6 +101,9 @@ NODE_STATUS = {
     "execute_upload": RunStatus.EXECUTING,
     "verify": RunStatus.EXECUTING,
     "attendance": RunStatus.EXECUTING,
+    "notify": RunStatus.EXECUTING,
+    "invite": RunStatus.EXECUTING,
+    "request_data": RunStatus.EXECUTING,
 }
 
 
@@ -162,6 +181,24 @@ def node_validate_scope(ctx: ToolContext) -> Step:
         return Step("simulate")
     if run.intent == "CHECK_CONFLICTS":
         return Step("evaluate_roster")
+    if run.intent == "INVITE_STUDENTS":
+        return Step("invite")
+    if run.intent == "REQUEST_MISSING_DATA":
+        return Step("request_data")
+    criteria = current_criteria(ctx.db, drive.id)
+    if criteria is not None and criteria.required_consent_scope == ConsentScope.DRIVE_REGISTRATION and not run.state.get("invitations_checked"):
+        invited = ctx.db.scalar(select(func.count(StudentRequest.id)).where(
+            StudentRequest.drive_id == drive.id, StudentRequest.kind == RequestKind.DRIVE_INVITATION)) or 0
+        if not invited:
+            run.pending_question = {
+                "type": "invitations_needed",
+                "question": "This drive only shares students who accept its invitation, and no invitations have been sent yet. "
+                            "Email every eligible student a personal accept/decline link now?",
+                "options": [{"value": "send_invitations", "label": "Send invitations"},
+                            {"value": "continue", "label": "Continue without inviting"},
+                            {"value": "stop", "label": "Stop"}],
+            }
+            return Step(None, RunStatus.NEEDS_REVIEW, "Invitations not yet sent for a registration-based drive")
     return Step("retrieve_evidence")
 
 
@@ -364,9 +401,42 @@ def node_attendance(ctx: ToolContext) -> Step:
     result = call_tool(ctx, "generate_attendance_sheet", {"upload_id": run.state["upload_id"]}, node="attendance", invoked_by=GRAPH)
     _set_state(run, attendance_sheet_id=result["attendance_sheet_id"])
     _mark(run, "attendance", "done", f"{result['rows']} rows")
+    return Step("notify")
+
+
+def node_notify(ctx: ToolContext) -> Step:
+    run = ctx.run
+    try:
+        result = call_tool(ctx, "send_roster_notifications", {"upload_id": run.state["upload_id"]}, node="notify",
+                           invoked_by=GRAPH)
+        _set_state(run, notifications=result)
+        _mark(run, "notify", "done", f"employer {result['employer_email'].lower()}, {result['students_notified']} students")
+    except ToolFailure as exc:  # an email problem never undoes a verified upload
+        _mark(run, "notify", "failed", exc.message)
+        emit(ctx.db, run, "DECISION", node="notify", status="WARNING", message=f"Notifications not sent: {exc.message}")
     run.pending_question = None
     run.summary = _summary(run)
     return Step(None, RunStatus.VERIFIED, "Roster uploaded and independently verified")
+
+
+def node_invite(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "send_drive_invitations", {"drive_id": run.drive_id}, node="invite", invoked_by=GRAPH)
+    _mark(run, "invite", "done", f"{result['invited']} invited")
+    run.pending_question = None
+    run.summary = (f"Invitations emailed to {result['invited']} eligible student(s) "
+                   f"({result['already_invited']} had already been invited). Students who accept are included when you "
+                   f"prepare the roster; re-run 'prepare roster' after they respond.")
+    return Step(None, RunStatus.COMPLETED, run.summary)
+
+
+def node_request_data(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "request_missing_data", {"drive_id": run.drive_id}, node="request_data", invoked_by=GRAPH)
+    _mark(run, "request_data", "done", f"{result['count']} requested")
+    run.summary = (f"Missing-data requests emailed to {result['count']} student(s). Their answers appear in the "
+                   f"Exception Inbox for you to verify and apply; then re-run 'prepare roster'.")
+    return Step(None, RunStatus.COMPLETED, run.summary)
 
 
 NODES: dict[str, Callable[[ToolContext], Step]] = {
@@ -381,6 +451,9 @@ NODES: dict[str, Callable[[ToolContext], Step]] = {
     "execute_upload": node_execute_upload,
     "verify": node_verify,
     "attendance": node_attendance,
+    "notify": node_notify,
+    "invite": node_invite,
+    "request_data": node_request_data,
 }
 
 
@@ -526,6 +599,16 @@ def answer(db: Session, run: AgentRun, user: User, value: Any) -> AgentRun:
                 exc.resolved_by_id, exc.resolved_at = user.id, utcnow()
                 exc.resolution_note = "Officer confirmed configured criteria are authoritative"
         next_node = "interpret_criteria"
+    elif qtype == "invitations_needed" and value == "send_invitations":
+        _set_state(run, invitations_checked=True)
+        run.intent = "INVITE_STUDENTS"
+        run.plan = _plan("INVITE_STUDENTS")
+        _mark(run, "interpret_goal", "done")
+        _mark(run, "validate_scope", "done")
+        next_node = "invite"
+    elif qtype == "invitations_needed" and value == "continue":
+        _set_state(run, invitations_checked=True)
+        next_node = "retrieve_evidence"
     elif qtype == "source_unavailable" and value == "proceed_without_source":
         _set_state(run, proceed_without_source=True)
         next_node = "retrieve_evidence"
@@ -607,6 +690,7 @@ def sync_after_upload_action(db: Session, upload_id: int) -> None:
             _mark(run, "verify", "done", "Verified after manual reconciliation")
             if sheet:
                 _mark(run, "attendance", "done")
+                _mark(run, "notify", "done", "Sent after manual verification")
             run.summary = _summary(run)
             emit(db, run, "COMPLETE", node="verify", status=RunStatus.VERIFIED,
                  message="Run verified after manual verification/reconciliation in the Verification Center")

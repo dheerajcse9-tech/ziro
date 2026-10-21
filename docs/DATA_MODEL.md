@@ -46,6 +46,9 @@ erDiagram
 | `source_evidence` | Retrieved employer form definition and parse result with content hash | |
 | `exception_items` | Inbox items with dedupe key, severity, resolution and resolver | unique dedupe_key |
 | `audit_events` | Append-only ledger: seq, actor, action, entity, operation id, run, drive, redacted details, prev_hash, hash | unique seq; PG trigger blocks UPDATE/DELETE |
+| `student_requests` | Personal tokenised links: DRIVE_INVITATION (accept/decline → per-drive consent `DRIVE:<id>`) or DATA_REQUEST (student-submitted values await officer review); status, expiry, response | unique token (256-bit) |
+| `email_messages` | Outbox: category, recipient, subject, body, status (DELIVERED_LOCAL / SENT / FAILED / SKIPPED), transport, links to student/drive/upload/request | unique dedupe_key (no duplicate sends) |
+| `drive_results` | Employer outcome per sent student: SELECTED / NOT_SELECTED / ABSENT / WITHDRAWN | unique (drive, student) |
 | `test_runs` | Test Lab results: fixture, expected, actual, checks, evidence | |
 | `app_settings` | Configurable institutional policy | |
 | `mock_portal_*` | Owned by the LOCAL MOCK portal only; core code never touches them | |

@@ -144,6 +144,63 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await shot(page, "14-test-lab");
   });
 
+  test("outreach: invitation accepted via emailed link, missing data supplied and verified, result recorded", async ({ page, context }) => {
+    await login(page, "officer@placementos.demo");
+    await page.goto("/agent");
+    await page.getByLabel("Objective").fill("Invite eligible students for the Bluepeak drive.");
+    await page.getByRole("button", { name: "Run agent" }).click();
+    await expect(page.getByText(/Invitations emailed to \d+ eligible student/).first()).toBeVisible({ timeout: 30_000 });
+
+    // Act as the student: open the invitation from the local mailbox and accept.
+    await page.goto("/communications");
+    await page.getByLabel("Category").selectOption("DRIVE_INVITATION");
+    await page.getByRole("button", { name: "Open" }).first().click();
+    const link = await page.getByRole("link", { name: /\/respond\// }).getAttribute("href");
+    const student = await context.newPage();
+    await student.goto(link!.replace(/^https?:\/\/[^/]+/, ""));
+    await student.getByRole("button", { name: /Accept/ }).click();
+    await expect(student.getByText("You are registered")).toBeVisible();
+    await shot(student, "17-student-invitation-accepted");
+    await student.close();
+
+    // Missing data: request by email, student answers, officer verifies.
+    await page.goto("/agent");
+    await page.getByLabel("Objective").fill("Email students with missing data for the Northwind drive.");
+    await page.getByRole("button", { name: "Run agent" }).click();
+    await expect(page.getByText(/Missing-data requests emailed to [1-9]/).first()).toBeVisible({ timeout: 30_000 });
+    await page.goto("/communications");
+    await page.getByLabel("Category").selectOption("DATA_REQUEST");
+    await page.getByRole("button", { name: "Open" }).first().click();
+    const dataLink = await page.getByRole("link", { name: /\/respond\// }).getAttribute("href");
+    await shot(page, "18-communications");
+    const student2 = await context.newPage();
+    await student2.goto(dataLink!.replace(/^https?:\/\/[^/]+/, ""));
+    await expect(student2.getByRole("button", { name: "Submit details" })).toBeVisible();
+    const input = student2.getByRole("textbox").first();
+    if (await input.count()) await input.fill("0");
+    const select = student2.getByRole("combobox");
+    if (await select.count()) await select.selectOption("CSE");
+    await student2.getByRole("button", { name: "Submit details" }).click();
+    await expect(student2.getByText(/your details were received/)).toBeVisible();
+    await student2.close();
+    await page.goto("/exceptions?kind=DATA_SUBMITTED");
+    await page.getByRole("button", { name: "Resolve" }).first().click();
+    await page.getByRole("button", { name: /Verify & apply/ }).click();
+    await expect(page.getByText(/Verified details applied/).first()).toBeVisible();
+
+    // Selection result on the verified Northwind roster.
+    await page.goto("/drives/1");
+    await page.getByRole("tab", { name: "Results" }).click();
+    await page.getByLabel("Outcome for 21AD001").selectOption("SELECTED");
+    await page.getByRole("button", { name: "Save results" }).click();
+    await expect(page.getByText(/1 result\(s\) saved/).first()).toBeVisible();
+    await page.goto("/students?q=21AD001");
+    await expect(page.getByText("Northwind Systems").first()).toBeVisible();
+    await page.getByRole("link", { name: "21AD001" }).click();
+    await expect(page.getByText("Placement history")).toBeVisible();
+    await shot(page, "19-student-placement-history");
+  });
+
   test("viewer cannot act", async ({ page }) => {
     await login(page, "viewer@placementos.demo");
     await page.goto("/agent");
