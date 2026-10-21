@@ -59,7 +59,7 @@ export default function ApprovalDetail() {
   return (
     <>
       <PageHeader title={`Approval #${a.id} · ${a.drive_title}`} crumbs={[{ label: "Approval Center", href: "/approvals" }, { label: `#${a.id}` }]}
-        meta={<><StatusBadge status={a.status} label={a.status === "CONSUMED" ? "Executed" : undefined} /><Tag tone="accent">criteria v{p.criteria_version}</Tag><Tag>schedule v{p.schedule_version}</Tag>{p.destination.is_local_mock && <MockBadge />}</>}
+        meta={<><StatusBadge status={a.status} label={a.status === "CONSUMED" ? "Executed" : undefined} />{p.kind === "SUPPLEMENT" && <Tag tone="info">Supplementary upload</Tag>}<Tag tone="accent">criteria v{p.criteria_version}</Tag><Tag>schedule v{p.schedule_version}</Tag>{p.destination.is_local_mock && <MockBadge />}</>}
         actions={canApprove ? <>
           <Button variant="secondary" onClick={() => { setNote(""); setMode("reject"); }} icon={<XCircle className="size-4" />}>Reject</Button>
           <Button variant="success" disabled={!a.is_current} onClick={() => { setNote(""); setAck(false); setMode("approve"); }} icon={<CheckCircle2 className="size-4" />}>Approve upload</Button>
@@ -71,8 +71,14 @@ export default function ApprovalDetail() {
         <div className="mb-4"><Banner tone="info" title="Approver action required">Only an approver (Head of Placements) or admin can approve. The agent and placement officers cannot approve proposals.</Banner></div>)}
       {a.status === "INVALIDATED" && <div className="mb-4"><Banner title="Invalidated">{a.invalidated_reason}</Banner></div>}
 
+      {p.kind === "SUPPLEMENT" && (
+        <div className="mb-4"><Banner tone="info" title={`Supplementary upload: only ${p.included_roll_numbers.length} new student(s) will be sent`}>
+          {p.previously_submitted_roll_numbers.length} student(s) were already sent to this employer earlier and will not be sent again.
+          After upload, verification checks the employer&apos;s full list (earlier students + these).</Banner></div>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
-        <KpiCard label="Will be uploaded" value={p.included_roll_numbers.length} tone="ok" />
+        <KpiCard label={p.kind === "SUPPLEMENT" ? "New students to upload" : "Will be uploaded"} value={p.included_roll_numbers.length} tone="ok"
+          hint={p.kind === "SUPPLEMENT" ? `${p.previously_submitted_roll_numbers.length} already sent earlier` : undefined} />
         <KpiCard label="Excluded" value={p.excluded.length} />
         <KpiCard label="Held for officer resolution" value={p.held.length} tone={p.held.length ? "warn" : "neutral"} />
       </div>
@@ -80,9 +86,15 @@ export default function ApprovalDetail() {
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <div className="space-y-4 xl:col-span-2">
           <Card>
-            <CardHeader title="Roster to upload" description="Exact roll numbers bound by the proposal hash." />
+            <CardHeader title={p.kind === "SUPPLEMENT" ? "New students to upload" : "Roster to upload"} description="Exact roll numbers bound by the proposal hash." />
             <div className="p-4"><RollList rolls={p.included_roll_numbers} tone="ok" empty="Empty roster" /></div>
           </Card>
+          {p.previously_submitted_roll_numbers.length > 0 && (
+            <Card>
+              <CardHeader title="Already sent earlier (not re-sent)" description="Part of the bound proposal: if this list changes, the approval is invalidated." />
+              <div className="p-4"><RollList rolls={p.previously_submitted_roll_numbers} /></div>
+            </Card>
+          )}
           {p.held.length > 0 && (
             <Card>
               <CardHeader title="Held — schedule clashes" description="Eligible and consented, but reserved on an overlapping drive. Not part of this upload." actions={<Link href="/conflicts" className="text-[13px] text-accent hover:underline">Resolve →</Link>} />
@@ -124,7 +136,7 @@ export default function ApprovalDetail() {
       </div>
 
       <ConfirmDialog open={mode === "approve"} onOpenChange={(o) => !o && setMode(null)} tone="success" loading={approve.isPending}
-        title={`Approve upload of ${p.included_roll_numbers.length} students?`} confirmLabel="Approve and execute"
+        title={`Approve ${p.kind === "SUPPLEMENT" ? "supplementary upload" : "upload"} of ${p.included_roll_numbers.length} student(s)?`} confirmLabel="Approve and execute"
         description="The backend re-computes the roster from live data. If it no longer matches this hash the approval is refused. On approval the agent uploads to the destination and independently verifies the result."
         onConfirm={() => ack ? approve.mutate() : toast.error("Confirm that you reviewed the roster")}>
         <div className="space-y-3">

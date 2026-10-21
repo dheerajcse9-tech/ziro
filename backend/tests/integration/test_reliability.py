@@ -360,3 +360,47 @@ def test_fixing_missing_data_closes_warning_and_makes_student_eligible(sb, peopl
     assert warning.status == "RESOLVED" and warning.resolution == "RECORD_UPDATED"
     run = graph.answer(sb.db, sb.db.get(type(run), run.id), people["officer"], "rerun")
     assert approvals.get_approval(sb.db, run.state["approval_id"]).proposal.included_roll_numbers == ["S500"]
+
+
+def test_late_student_is_sent_as_supplement_without_resending_others(sb, people):
+    """Officer sends the roster before the deadline, chases a student's missing CGPA, then sends only that student."""
+    sb.student("S601", "On Time", "CSE", 8.0, 0)
+    late = sb.student("S602", "Missing Cgpa", "CSE", None, 0)
+    d = sb.drive("Deadline Drive", ist(2026, 12, 17, 10), ist(2026, 12, 17, 12))
+
+    first = graph.resume_after_approval(sb.db, approve(sb, people, prepare(sb, people, d)))
+    assert first.status == RunStatus.VERIFIED
+    assert sb.db.get(UploadOperation, first.state["upload_id"]).submitted_roll_numbers == ["S601"]
+
+    students.update_student(sb.db, late, {"cgpa": 7.6}, people["officer"])
+    sb.db.commit()
+    second = prepare(sb, people, d)  # drive is ROSTER_SUBMITTED; agent prepares a supplement
+    proposal = approvals.get_approval(sb.db, second.state["approval_id"]).proposal
+    assert proposal.kind == "SUPPLEMENT"
+    assert proposal.included_roll_numbers == ["S602"] and proposal.previously_submitted_roll_numbers == ["S601"]
+    second = graph.resume_after_approval(sb.db, approve(sb, people, second))
+    assert second.status == RunStatus.VERIFIED, second.error
+    assert second.state["verification"]["expected_count"] == 2 and second.state["verification"]["observed_count"] == 2
+    assert sorted(portal_rolls(sb, d)) == ["S601", "S602"]  # nobody sent twice
+    assert submissions(sb) == 2
+    from app.models.entities import AttendanceSheet
+
+    assert sb.db.get(AttendanceSheet, second.state["attendance_sheet_id"]).roll_numbers == ["S601", "S602"]
+
+    third = graph.start_run(sb.db, f"Prepare the eligible roster for drive #{d.id}", people["officer"])
+    assert third.status == RunStatus.COMPLETED and "already sent" in third.summary
+    assert submissions(sb) == 2
+
+
+def test_previously_sent_student_who_becomes_ineligible_is_flagged_for_withdrawal(sb, people):
+    first_student = sb.student("S701", "Will Withdraw", "CSE", 8.0, 0)
+    sb.student("S702", "Stays", "CSE", 8.0, 0)
+    d = sb.drive("Withdrawal Drive", ist(2026, 12, 18, 10), ist(2026, 12, 18, 12))
+    graph.resume_after_approval(sb.db, approve(sb, people, prepare(sb, people, d)))
+    students.set_consent(sb.db, first_student, False, "student emailed withdrawal", people["officer"])
+    sb.db.commit()
+    run = graph.start_run(sb.db, f"Prepare the eligible roster for drive #{d.id}", people["officer"])
+    assert run.status == RunStatus.COMPLETED and "no longer eligible" in run.summary
+    exc = sb.db.scalar(select(ExceptionItem).where(ExceptionItem.kind == "WITHDRAWAL_REQUIRED"))
+    assert exc is not None and exc.detail["roll_number"] == "S701"
+    assert submissions(sb) == 1  # nothing deleted or re-sent automatically

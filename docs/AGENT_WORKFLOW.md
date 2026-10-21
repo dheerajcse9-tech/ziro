@@ -82,6 +82,14 @@ an authenticated human API call that also requires the approver role.
 | `reconcile`, `verification_pending` | uncertain upload / unreadable destination | Verification Center actions |
 | `failure` | tool error | `retry`, `stop` |
 
+## Supplementary uploads (late students)
+Re-running a drive whose roster was already submitted produces a **SUPPLEMENT** proposal: only eligible students not
+yet sent (e.g. a student whose missing CGPA was obtained after the deadline-driven first upload). Students already
+sent are listed and bound into the proposal hash but never re-sent. Verification then expects the employer's full
+list = all earlier uploads + this one, and the attendance sheet covers the whole roster. If nothing new is eligible
+the run completes with "already sent". A previously sent student who is no longer eligible (e.g. consent withdrawn)
+raises a WITHDRAWAL_REQUIRED exception — PlacementOS never deletes from an employer form automatically.
+
 ## Recovery
 - Transient retrieval errors: bounded retries (3 attempts, backoff).
 - Uploads: intent committed first; `UNCERTAIN` (timeout/504) → reconcile by operation key before any resubmit;

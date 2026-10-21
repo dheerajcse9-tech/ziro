@@ -6,10 +6,10 @@ All results below were produced by actually running the commands on 2026-10-20 i
 ## Summary
 | Suite | Result | Log |
 |---|---|---|
-| Backend: unit + reliability + official scenarios + live HTTP (SQLite) | **56 passed, 0 failed** | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
+| Backend: unit + reliability + official scenarios + live HTTP (SQLite) | **59 passed, 0 failed** | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
 | Live HTTP API tests against **PostgreSQL 16** | **3 passed** | [pytest-postgres-live-api.txt](evidence/pytest-postgres-live-api.txt) |
 | Official scenarios via CLI on PostgreSQL + `alembic check` | **TC1 9/9, TC2 10/10, TC3 10/10, TC4 10/10**; no schema drift | [testlab-postgres.txt](evidence/testlab-postgres.txt) |
-| Browser end-to-end (Playwright, Chromium) | **7 passed** | [e2e-playwright.txt](evidence/e2e-playwright.txt) |
+| Browser end-to-end (Playwright, Chromium) | **8 passed** | [e2e-playwright.txt](evidence/e2e-playwright.txt) |
 | Frontend `tsc --noEmit` + `next build` | clean, 19 routes | — |
 
 Environment label for scenario runs (stored with every result): *Isolated sandbox: in-memory SQLite + in-process LOCAL
@@ -66,6 +66,7 @@ This is a **local mock** destination served by the same backend — not an exter
 | Audit chain verified | ![](evidence/screenshots/13-audit.png) |
 | Test Lab | ![](evidence/screenshots/14-test-lab.png) |
 | Viewer (read-only) | ![](evidence/screenshots/15-settings-viewer.png) |
+| Supplementary upload (late student only) | ![](evidence/screenshots/16-supplement-approval.png) |
 
 ## How to reproduce
 ```bash

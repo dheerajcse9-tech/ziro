@@ -56,6 +56,7 @@ class StudentOutcome:
     consent_ok: bool
     consent: dict | None
     conflicts: list[dict] = field(default_factory=list)
+    already_submitted: bool = False
 
     def public(self) -> dict[str, Any]:
         return {
@@ -72,6 +73,7 @@ class StudentOutcome:
             "missing_evidence": self.missing_evidence,
             "consent_ok": self.consent_ok,
             "conflicts": self.conflicts,
+            "already_submitted": self.already_submitted,
         }
 
 
@@ -82,10 +84,30 @@ class RosterEvaluation:
     schedule_version: int
     destination_fingerprint: str | None
     outcomes: list[StudentOutcome]
+    # Roll numbers already submitted to the employer for this drive (CONFIRMED assignments).
+    already_submitted: frozenset[str] = frozenset()
 
     @property
     def included(self) -> list[StudentOutcome]:
         return sorted((o for o in self.outcomes if o.roster_status == RosterStatus.INCLUDED), key=lambda o: o.roll_number)
+
+    @property
+    def is_supplement(self) -> bool:
+        return bool(self.already_submitted)
+
+    @property
+    def to_upload(self) -> list[StudentOutcome]:
+        """Included students not yet sent: the whole roster first, only newcomers in a supplement."""
+        return [o for o in self.included if o.roll_number not in self.already_submitted]
+
+    @property
+    def previously_submitted(self) -> list[str]:
+        return sorted(self.already_submitted)
+
+    @property
+    def no_longer_eligible(self) -> list[StudentOutcome]:
+        """Students already sent to the employer who would not be included today."""
+        return [o for o in self.outcomes if o.roll_number in self.already_submitted and o.roster_status != RosterStatus.INCLUDED]
 
     @property
     def excluded(self) -> list[StudentOutcome]:
@@ -105,6 +127,9 @@ class RosterEvaluation:
             "excluded": len(self.excluded),
             "held": len(self.held),
             "consent_missing": sum(o.decision == Decision.ELIGIBLE and not o.consent_ok for o in self.outcomes),
+            "already_submitted": len(self.already_submitted),
+            "new_to_upload": len(self.to_upload),
+            "no_longer_eligible": len(self.no_longer_eligible),
         }
 
     def exclusion_reason_summary(self) -> dict[str, int]:
@@ -116,18 +141,21 @@ class RosterEvaluation:
         return summary
 
     def roster_fingerprint(self) -> str:
-        return sha256_hex([[o.roll_number, o.record_version] for o in self.included])
+        return sha256_hex([[o.roll_number, o.record_version] for o in self.to_upload])
 
     def proposal_hash(self) -> str:
         if not self.destination_fingerprint:
             raise PreconditionFailed("Drive has no destination configured")
-        return sha256_hex({
+        body = {
             "drive_id": self.drive_id,
             "criteria_version": self.criteria.version,
             "schedule_version": self.schedule_version,
             "destination": self.destination_fingerprint,
-            "included": [[o.roll_number, o.record_version] for o in self.included],
-        })
+            "included": [[o.roll_number, o.record_version] for o in self.to_upload],
+        }
+        if self.already_submitted:
+            body["previously_submitted"] = self.previously_submitted
+        return sha256_hex(body)
 
 
 def _reason_category(reason: str) -> str:
@@ -239,6 +267,8 @@ def evaluate_drive(
     interval = interval_override or Interval(drive.id, drive.starts_at, drive.ends_at)
     buffer_minutes = int(app_settings.get(db, "schedule_buffer_minutes") or 0)
     clashes = _conflict_map(db, drive, interval, ids, buffer_minutes)
+    submitted_ids = set(db.scalars(select(DriveAssignment.student_id).where(
+        DriveAssignment.drive_id == drive.id, DriveAssignment.status == AssignmentStatus.CONFIRMED)))
 
     outcomes: list[StudentOutcome] = []
     for s in students:
@@ -278,7 +308,7 @@ def evaluate_drive(
             decision=result.decision, roster_status=status,
             rule_results=[r.as_dict() for r in result.rule_results], reasons=reasons,
             missing_evidence=result.missing_evidence, consent_ok=consent_ok, consent=consent_info,
-            conflicts=student_conflicts,
+            conflicts=student_conflicts, already_submitted=s.id in submitted_ids,
         ))
 
     evaluation = RosterEvaluation(
@@ -287,6 +317,7 @@ def evaluate_drive(
         schedule_version=drive.schedule_version,
         destination_fingerprint=destination_fingerprint(drive.destination),
         outcomes=outcomes,
+        already_submitted=frozenset(o.roll_number for o in outcomes if o.already_submitted),
     )
     if persist:
         _persist(db, drive, evaluation, run_id)
@@ -299,6 +330,15 @@ def _persist(db: Session, drive: Drive, ev: RosterEvaluation, run_id: int | None
         .where(EligibilityDecision.drive_id == drive.id, EligibilityDecision.is_stale.is_(False))
         .values(is_stale=True)
     )
+    for o in ev.no_longer_eligible:
+        exceptions.raise_exception(
+            db, kind=ExceptionKind.WITHDRAWAL_REQUIRED, severity=Severity.BLOCKING,
+            title=f"{o.roll_number} was already sent to {drive.title} but is no longer eligible",
+            dedupe_key=f"withdrawal:{drive.id}:{o.student_id}:v{o.record_version}:c{ev.criteria.version}",
+            detail={"roll_number": o.roll_number, "reasons": o.reasons,
+                    "action": "Ask the employer to remove this student; PlacementOS never deletes from an employer form automatically."},
+            drive_id=drive.id, student_id=o.student_id, run_id=run_id,
+        )
     for o in ev.outcomes:
         db.add(EligibilityDecision(
             drive_id=drive.id, run_id=run_id, criteria_version=ev.criteria.version,

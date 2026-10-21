@@ -215,6 +215,9 @@ def evaluate_eligibility(ctx: ToolContext, args: DriveInput) -> dict[str, Any]:
         "counts": ev.counts(),
         "exclusion_reasons": ev.exclusion_reason_summary(),
         "included_roll_numbers": [o.roll_number for o in ev.included],
+        "already_submitted": ev.previously_submitted,
+        "new_to_upload": [o.roll_number for o in ev.to_upload],
+        "no_longer_eligible": [{"roll_number": o.roll_number, "reasons": o.reasons} for o in ev.no_longer_eligible],
         "excluded": [{"roll_number": o.roll_number, "decision": o.decision, "reasons": o.reasons} for o in ev.excluded],
         "held": [{"roll_number": o.roll_number, "reasons": o.reasons} for o in ev.held],
         "unknown": [{"roll_number": o.roll_number, "missing": o.missing_evidence} for o in ev.outcomes if o.decision == "UNKNOWN"],
@@ -297,6 +300,7 @@ def create_approval_request(ctx: ToolContext, args: DriveInput) -> dict[str, Any
     except DomainError as exc:
         raise ToolFailure("create_approval_request", exc.message) from exc
     return {"proposal_id": proposal.id, "approval_id": approval.id, "proposal_hash": proposal.proposal_hash,
+            "kind": proposal.kind, "previously_submitted_count": len(proposal.previously_submitted_roll_numbers),
             "included_count": len(proposal.included_roll_numbers), "excluded_count": len(proposal.excluded),
             "held_count": len(proposal.held), "status": approval.status,
             "note": "Awaiting explicit human approval. The agent cannot approve its own proposal."}
@@ -420,9 +424,13 @@ def summarize(name: str, out: dict[str, Any]) -> str:
                     f"{len(src['discrepancies_vs_configured'])} discrepancy(ies)")
         if name == "evaluate_eligibility":
             c = out["counts"]
-            return (f"{c['included']} included, {c['excluded']} excluded, {c['held']} held — "
+            text = (f"{c['included']} included, {c['excluded']} excluded, {c['held']} held — "
                     f"{c['eligible']} eligible, {c['ineligible']} ineligible, {c['unknown']} unknown, "
                     f"{c['consent_missing']} eligible without consent")
+            if c.get("already_submitted"):
+                text += (f"; {c['already_submitted']} already sent earlier, {c['new_to_upload']} new to send"
+                         + (f", {c['no_longer_eligible']} sent but no longer eligible" if c.get("no_longer_eligible") else ""))
+            return text
         if name == "detect_drive_conflicts":
             return (f"{len(out['overlapping_drives'])} overlapping drive(s); "
                     f"{len(out['held_for_resolution'])} student(s) held for clash resolution")
@@ -430,7 +438,8 @@ def summarize(name: str, out: dict[str, Any]) -> str:
             return (f"Roster {out['baseline_counts']['included']} → {out['proposed_counts']['included']} "
                     f"(+{len(out['added_to_roster'])} / -{len(out['removed_from_roster'])}); nothing saved")
         if name == "create_approval_request":
-            return (f"Approval #{out['approval_id']} requested for {out['included_count']} students "
+            label = "supplementary upload of" if out.get("kind") == "SUPPLEMENT" else "upload of"
+            return (f"Approval #{out['approval_id']} requested for {label} {out['included_count']} student(s) "
                     f"(hash {out['proposal_hash'][:10]}…)")
         if name == "execute_approved_upload":
             receipt = out.get("destination_receipt") or {}

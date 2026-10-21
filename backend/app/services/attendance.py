@@ -24,7 +24,7 @@ from app.models.enums import ActorType, VerificationStatus
 from app.services import app_settings
 from app.services.consent import current_consent
 from app.services.uploads import get_upload
-from app.services.verification import latest_verification
+from app.services.verification import cumulative_submitted, latest_verification
 
 ALLOWED_FIELDS = {"roll_number", "full_name", "branch", "email"}
 
@@ -37,7 +37,7 @@ def generate(db: Session, upload_id: int, *, actor: str, run_id: int | None = No
                                  details={"verification_status": verification.status if verification else None})
     drive = op.drive
     observed = set(verification.observed_snapshot.get("observed_roll_numbers", []))
-    rolls = [r for r in op.submitted_roll_numbers if r in observed]
+    rolls = [r for r in cumulative_submitted(db, op) if r in observed]  # whole drive roster, incl. supplements
     students = {s.roll_number: s for s in db.scalars(select(Student).where(Student.roll_number.in_(rolls)))}
     consent = current_consent(db, [s.id for s in students.values()], "SHARE_WITH_EMPLOYERS")
     excluded = [{"roll_number": r, "reason": "Consent no longer granted"} for r in rolls

@@ -38,7 +38,7 @@ const eligibilityColumns: ColumnDef<StudentOutcome>[] = [
   { id: "branch", header: "Branch", accessorFn: (o) => o.branch ?? "", cell: ({ row }) => ruleCell(row.original, "BRANCH") },
   { id: "consent", header: "Consent", accessorFn: (o) => o.consent_ok, cell: ({ row }) => row.original.consent_ok ? <span className="text-ok">Granted</span> : <span className="font-medium text-bad">No</span> },
   { accessorKey: "decision", header: "Decision", cell: ({ row }) => <StatusBadge status={row.original.decision} /> },
-  { accessorKey: "roster_status", header: "Roster", cell: ({ row }) => <StatusBadge status={row.original.roster_status} /> },
+  { accessorKey: "roster_status", header: "Roster", cell: ({ row }) => <span className="flex flex-wrap items-center gap-1"><StatusBadge status={row.original.roster_status} />{row.original.already_submitted && <Tag tone="info">Sent</Tag>}</span> },
   { id: "reasons", header: "Reasons", enableSorting: false, cell: ({ row }) => <span className="text-[12px] text-muted">{row.original.reasons.join("; ") || "—"}</span> },
 ];
 
@@ -116,7 +116,7 @@ export default function DriveWorkspace() {
       ]}>
         <TabPanel value="overview">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="Would be included now" value={counts?.included ?? "—"} tone="ok" hint="Live evaluation, not persisted" />
+            <KpiCard label="Would be included now" value={counts?.included ?? "—"} tone="ok" hint={counts?.already_submitted ? `${counts.already_submitted} already sent · ${counts.new_to_upload} new to send` : "Live evaluation, not persisted"} />
             <KpiCard label="Held (schedule clash)" value={counts?.held ?? "—"} tone={counts?.held ? "warn" : "neutral"} />
             <KpiCard label="Excluded" value={counts?.excluded ?? "—"} hint={counts ? `${counts.consent_missing} eligible but no consent` : undefined} />
             <KpiCard label="Unknown (missing data)" value={counts?.unknown ?? "—"} tone={counts?.unknown ? "warn" : "neutral"} />

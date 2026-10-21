@@ -38,7 +38,7 @@ erDiagram
 | `agent_runs` | Objective, planner mode, intent, status, plan, durable state incl. `next_node`, pending question | |
 | `agent_events` | Every node transition and tool call with input/output and duration | unique (run, seq) |
 | `eligibility_decisions` | Per-student decision with rule results, reasons, missing evidence, consent, conflicts, **criteria version and student record version** | older rows marked `is_stale` |
-| `roster_proposals` | Included roll numbers, excluded/held with reasons, criteria & schedule versions, destination fingerprint, **proposal_hash** | |
+| `roster_proposals` | `kind` FULL/SUPPLEMENT, roll numbers to upload, previously submitted roll numbers, excluded/held with reasons, criteria & schedule versions, destination fingerprint, **proposal_hash** | |
 | `approval_requests` | Status, bound hash, requester (agent run + user), decider, note, invalidation reason | |
 | `upload_operations` | **operation_key** (unique), attempts, attempt log, destination receipt | unique operation_key |
 | `verification_results` | Expected/observed counts, missing/unexpected/duplicate IDs, read-back snapshot, receipt hash | |

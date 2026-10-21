@@ -63,10 +63,10 @@ export interface Clash {
 export interface StudentOutcome {
   student_id: number; roll_number: string; full_name: string; branch: string | null; cgpa: number | null;
   active_backlogs: number | null; decision: Decision; roster_status: RosterStatus; rule_results: RuleResult[];
-  reasons: string[]; missing_evidence: string[]; consent_ok: boolean; conflicts: Clash[];
+  reasons: string[]; missing_evidence: string[]; consent_ok: boolean; conflicts: Clash[]; already_submitted: boolean;
 }
 
-export interface Counts { total: number; eligible: number; ineligible: number; unknown: number; included: number; excluded: number; held: number; consent_missing: number }
+export interface Counts { total: number; eligible: number; ineligible: number; unknown: number; included: number; excluded: number; held: number; consent_missing: number; already_submitted: number; new_to_upload: number; no_longer_eligible: number }
 
 export interface EligibilityResponse {
   drive_id: number; criteria: Record<string, unknown> & { version: number }; counts: Counts;
@@ -104,7 +104,7 @@ export interface AgentEvent {
 export interface Proposal {
   id: number; drive_id: number; drive_title: string; run_id: number | null; criteria_version: number;
   schedule_version: number; destination: Destination; destination_fingerprint: string; roster_fingerprint: string;
-  included_roll_numbers: string[]; excluded: { roll_number: string; full_name: string; decision: Decision; reasons: string[] }[];
+  included_roll_numbers: string[]; kind: "FULL" | "SUPPLEMENT"; previously_submitted_roll_numbers: string[]; excluded: { roll_number: string; full_name: string; decision: Decision; reasons: string[] }[];
   held: { roll_number: string; full_name: string; reasons: string[]; conflicts: Clash[] }[];
   unresolved_issues: { type: string; roll_number: string; detail: string }[];
   proposal_hash: string; status: string; invalidated_reason: string | null; created_at: string;
@@ -114,7 +114,7 @@ export interface Approval {
   id: number; proposal_id: number; proposal_hash: string; status: string; requested_by: string;
   requested_for_user_id: number | null; decided_by: User | null; decided_at: string | null; decision_note: string | null;
   invalidated_reason: string | null; created_at: string; drive_id: number; drive_title: string;
-  included_count: number; excluded_count: number; held_count: number;
+  included_count: number; excluded_count: number; held_count: number; kind: "FULL" | "SUPPLEMENT"; previously_submitted_count: number;
   proposal?: Proposal; live_proposal_hash?: string | null; live_error?: string | null; is_current?: boolean;
 }
 

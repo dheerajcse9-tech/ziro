@@ -133,6 +133,7 @@ class ExceptionKind(StrEnum):
     APPROVAL_INVALIDATED = "APPROVAL_INVALIDATED"
     UPLOAD_DISCREPANCY = "UPLOAD_DISCREPANCY"
     UPLOAD_FAILED = "UPLOAD_FAILED"
+    WITHDRAWAL_REQUIRED = "WITHDRAWAL_REQUIRED"  # already sent to employer, no longer eligible
 
 
 class ExceptionStatus(StrEnum):

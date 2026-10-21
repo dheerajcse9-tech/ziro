@@ -59,7 +59,7 @@ export default function UploadDetailPage() {
             <CardHeader title="Independent read-back comparison" description={v ? `${v.method} · ${fmtDateTime(v.created_at)}` : "Not verified yet"} />
             {!v ? <EmptyState title="No verification yet" /> : (
               <div className="grid gap-4 p-4 md:grid-cols-2">
-                <div><p className="mb-1 text-[12px] font-semibold text-muted">Approved ({u.submitted_roll_numbers.length})</p><RollList rolls={u.submitted_roll_numbers} /></div>
+                <div><p className="mb-1 text-[12px] font-semibold text-muted">Sent in this upload ({u.submitted_roll_numbers.length}) · expected at destination across all uploads for this drive: {v.expected_count}</p><RollList rolls={u.submitted_roll_numbers} /></div>
                 <div><p className="mb-1 text-[12px] font-semibold text-muted">Observed at destination ({v.observed_count ?? "unreadable"})</p>
                   <RollList rolls={v.observed_snapshot?.observed_roll_numbers ?? []} tone={v.status === "VERIFIED" ? "ok" : "neutral"} empty="Could not read" /></div>
                 <div><p className="mb-1 text-[12px] font-semibold text-muted">Missing at destination</p><RollList rolls={v.missing_roll_numbers} tone="bad" /></div>

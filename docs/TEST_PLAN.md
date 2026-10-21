@@ -25,7 +25,7 @@ duplicate execution returns same operation · timeout after commit reconciled wi
 partial upload / extra record / duplicate record → FAILED_VERIFICATION and no attendance sheet · unreadable read-back →
 PENDING then recovered · attendance contents & data minimisation · ambiguous goal → clarification · criteria mismatch
 stop · prompt injection flagged not obeyed · what-if writes nothing · conflict resolution invalidates other proposal ·
-LLM planner tool permissions (scripted client) · LLM failure fallback labelled · viewer cannot start runs · audit chain
+late student sent as a supplementary upload without re-sending others · previously sent student who becomes ineligible flagged for withdrawal · LLM planner tool permissions (scripted client) · LLM failure fallback labelled · viewer cannot start runs · audit chain
 valid, ORM edit blocked, out-of-band edit detected.
 
 ## What is *not* tested

@@ -97,7 +97,7 @@ _STOP = {"the", "for", "drive", "drives", "roster", "prepare", "eligible", "upco
 
 
 def _active_drives(ctx: ToolContext) -> list[Drive]:
-    return list(ctx.db.scalars(select(Drive).where(Drive.status.in_([DriveStatus.OPEN, DriveStatus.DRAFT]))
+    return list(ctx.db.scalars(select(Drive).where(Drive.status.in_([DriveStatus.OPEN, DriveStatus.DRAFT, DriveStatus.ROSTER_SUBMITTED]))
                                .order_by(Drive.starts_at)))
 
 

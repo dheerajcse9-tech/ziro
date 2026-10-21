@@ -16,6 +16,7 @@ async function login(page: Page, email: string) {
 
 test.describe.serial("PlacementOS end-to-end", () => {
   let approvalUrl = "";
+  let supplementUrl = "";
 
   test.beforeAll(async ({ request }) => {
     // Start from the synthetic seed so the run is reproducible.
@@ -54,6 +55,32 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await expect(page.getByText(/no missing, unexpected or duplicate records/).first()).toBeVisible();
     await expect(page.getByRole("link", { name: "CSV" })).toBeVisible();
     await shot(page, "06-verification-receipt");
+  });
+
+  test("late student with missing CGPA is sent later as a supplement", async ({ page }) => {
+    await login(page, "officer@placementos.demo");
+    await page.goto("/students?q=21CS008");
+    await page.getByRole("link", { name: "21CS008" }).click();
+    await page.getByRole("button", { name: "Edit record" }).click();
+    await page.getByLabel("CGPA").fill("8.4");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByText(/Updated cgpa/).first()).toBeVisible();
+    await page.goto("/agent");
+    await page.getByLabel("Objective").fill("Prepare the eligible roster for the Northwind drive");
+    await page.getByRole("button", { name: "Run agent" }).click();
+    await expect(page.getByText("Waiting for human approval").first()).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("link", { name: "Open in Approval Center" }).click();
+    await page.waitForURL(/\/approvals\/\d+$/);
+    supplementUrl = page.url();
+    await login(page, "approver@placementos.demo");
+    await page.goto(supplementUrl);
+    await expect(page.getByText(/Supplementary upload: only 1 new student/).first()).toBeVisible();
+    await shot(page, "16-supplement-approval");
+    await page.getByRole("button", { name: "Approve upload" }).click();
+    await page.getByLabel("I reviewed the roster").check();
+    await page.getByRole("button", { name: "Approve and execute" }).click();
+    await expect(page.getByText("Roster uploaded and independently verified").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/verification VERIFIED \(15\/15\)/).first()).toBeVisible();
   });
 
   test("clash on overlapping drive is flagged before approval", async ({ page }) => {

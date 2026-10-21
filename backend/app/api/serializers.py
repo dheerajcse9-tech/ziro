@@ -114,6 +114,7 @@ def proposal(p: RosterProposal) -> dict[str, Any]:
             "criteria_version": p.criteria_version, "schedule_version": p.schedule_version,
             "destination": destination(p.destination), "destination_fingerprint": p.destination_fingerprint,
             "roster_fingerprint": p.roster_fingerprint, "included_roll_numbers": p.included_roll_numbers,
+            "kind": p.kind, "previously_submitted_roll_numbers": p.previously_submitted_roll_numbers,
             "excluded": p.excluded, "held": p.held, "unresolved_issues": p.unresolved_issues,
             "proposal_hash": p.proposal_hash, "status": p.status, "invalidated_reason": p.invalidated_reason,
             "created_at": iso(p.created_at)}
@@ -126,7 +127,8 @@ def approval(a: ApprovalRequest, decided_by: User | None = None, with_proposal: 
            "invalidated_reason": a.invalidated_reason, "created_at": iso(a.created_at),
            "drive_id": a.proposal.drive_id, "drive_title": a.proposal.drive.title,
            "included_count": len(a.proposal.included_roll_numbers), "excluded_count": len(a.proposal.excluded),
-           "held_count": len(a.proposal.held)}
+           "held_count": len(a.proposal.held), "kind": a.proposal.kind,
+           "previously_submitted_count": len(a.proposal.previously_submitted_roll_numbers)}
     if with_proposal:
         out["proposal"] = proposal(a.proposal)
     return out

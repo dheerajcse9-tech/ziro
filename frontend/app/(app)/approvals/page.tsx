@@ -8,7 +8,7 @@ import { HashValue } from "@/components/ui/evidence";
 import { PageHeader } from "@/components/ui/layout";
 import { Card, CardHeader, Select } from "@/components/ui/primitives";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { StatusBadge } from "@/components/ui/status";
+import { StatusBadge, Tag } from "@/components/ui/status";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/format";
 import type { Approval } from "@/lib/types";
@@ -33,7 +33,7 @@ function ApprovalsInner() {
             empty={<EmptyState title={status === "PENDING" ? "Nothing waiting for approval" : "No approvals"} description="The agent creates approval requests when it prepares a roster." />}
             columns={[
               { accessorKey: "id", header: "#", cell: ({ row }) => <span className="font-mono text-[12px]">#{row.original.id}</span> },
-              { accessorKey: "drive_title", header: "Drive" },
+              { accessorKey: "drive_title", header: "Drive", cell: ({ row }) => <span>{row.original.drive_title}{row.original.kind === "SUPPLEMENT" && <Tag tone="info" className="ml-1.5">Supplement</Tag>}</span> },
               { id: "counts", header: "Upload / excluded / held", cell: ({ row }) => <span className="tabular">{row.original.included_count} / {row.original.excluded_count} / {row.original.held_count}</span> },
               { accessorKey: "proposal_hash", header: "Proposal hash", enableSorting: false, cell: ({ row }) => <HashValue value={row.original.proposal_hash} n={10} /> },
               { accessorKey: "requested_by", header: "Requested by", cell: ({ row }) => <span className="font-mono text-[11.5px] text-muted">{row.original.requested_by}</span> },

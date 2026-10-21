@@ -43,7 +43,9 @@ def verify(db: Session, upload_id: int, *, actor: str, run_id: int | None = None
         raise PreconditionFailed(f"Upload is {op.status}; only submitted uploads can be verified")
     destination = op.destination
     adapter = adapter_for(destination)
-    approved = list(op.submitted_roll_numbers)
+    batch = list(op.submitted_roll_numbers)
+    # The destination should hold everything ever sent for this drive (first upload + supplements).
+    approved = cumulative_submitted(db, op)
     method = f"{adapter.name}: GET roster page + receipt lookup by operation key"
 
     try:
@@ -74,8 +76,8 @@ def verify(db: Session, upload_id: int, *, actor: str, run_id: int | None = None
         problems.append(f"count mismatch: expected {cmp['expected_count']}, observed {cmp['observed_count']}")
     if receipt is None:
         problems.append("destination has no submission for this operation key")
-    elif receipt.candidate_count != len(approved):
-        problems.append(f"destination receipt claims {receipt.candidate_count} candidates, approved {len(approved)}")
+    elif receipt.candidate_count != len(batch):
+        problems.append(f"destination receipt claims {receipt.candidate_count} candidates, this upload sent {len(batch)}")
     status = VerificationStatus.FAILED_VERIFICATION if problems else VerificationStatus.VERIFIED
 
     snapshot = {
@@ -107,6 +109,17 @@ def verify(db: Session, upload_id: int, *, actor: str, run_id: int | None = None
     return result
 
 
+def cumulative_submitted(db: Session, op: UploadOperation) -> list[str]:
+    """Roll numbers sent by this and all earlier successful uploads for the same drive and destination."""
+    rolls: list[str] = []
+    for prior in db.scalars(select(UploadOperation).where(
+        UploadOperation.drive_id == op.drive_id, UploadOperation.destination_id == op.destination_id,
+        UploadOperation.status == UploadStatus.SUBMITTED, UploadOperation.id <= op.id,
+    ).order_by(UploadOperation.id)):
+        rolls.extend(r for r in prior.submitted_roll_numbers if r not in rolls)
+    return rolls
+
+
 def latest_verification(db: Session, upload_id: int) -> VerificationResult | None:
     return db.scalar(select(VerificationResult).where(VerificationResult.upload_id == upload_id)
                      .order_by(VerificationResult.id.desc()).limit(1))
@@ -133,8 +146,11 @@ def build_receipt(db: Session, op: UploadOperation, verification: VerificationRe
                      "schedule_version": proposal.schedule_version},
         "approval": {"id": approval.id if approval else None, "approved_by": approver.email if approver else None,
                      "approved_at": approval.decided_at.isoformat() if approval and approval.decided_at else None},
+        "upload_kind": proposal.kind,
         "counts": {"eligible_uploaded": len(proposal.included_roll_numbers), "excluded": len(proposal.excluded),
-                   "held": len(proposal.held)},
+                   "held": len(proposal.held), "previously_submitted": len(proposal.previously_submitted_roll_numbers),
+                   "total_at_destination_expected": len(cumulative_submitted(db, op))},
+        "previously_submitted_roll_numbers": proposal.previously_submitted_roll_numbers,
         "uploaded_roll_numbers": proposal.included_roll_numbers,
         "exclusion_reasons": reasons,
         "excluded": [{"roll_number": e["roll_number"], "reasons": e["reasons"]} for e in proposal.excluded],

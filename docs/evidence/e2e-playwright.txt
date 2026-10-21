@@ -1,12 +1,13 @@
 
-Running 7 tests using 1 worker
+Running 8 tests using 1 worker
 
-  ✓  1 e2e/workflow.spec.ts:27:7 › PlacementOS end-to-end › officer delegates roster preparation to the agent (3.1s)
-  ✓  2 e2e/workflow.spec.ts:43:7 › PlacementOS end-to-end › approver approves exact proposal; upload is verified by read-back (4.0s)
-  ✓  3 e2e/workflow.spec.ts:59:7 › PlacementOS end-to-end › clash on overlapping drive is flagged before approval (3.3s)
-  ✓  4 e2e/workflow.spec.ts:78:7 › PlacementOS end-to-end › criteria mismatch stops the agent for an officer decision (2.3s)
-  ✓  5 e2e/workflow.spec.ts:88:7 › PlacementOS end-to-end › records pages render real data (4.1s)
-  ✓  6 e2e/workflow.spec.ts:111:7 › PlacementOS end-to-end › test lab runs official scenarios against real code (5.8s)
-  ✓  7 e2e/workflow.spec.ts:120:7 › PlacementOS end-to-end › viewer cannot act (1.8s)
+  ✓  1 e2e/workflow.spec.ts:28:7 › PlacementOS end-to-end › officer delegates roster preparation to the agent (2.8s)
+  ✓  2 e2e/workflow.spec.ts:44:7 › PlacementOS end-to-end › approver approves exact proposal; upload is verified by read-back (4.0s)
+  ✓  3 e2e/workflow.spec.ts:60:7 › PlacementOS end-to-end › late student with missing CGPA is sent later as a supplement (4.9s)
+  ✓  4 e2e/workflow.spec.ts:86:7 › PlacementOS end-to-end › clash on overlapping drive is flagged before approval (3.9s)
+  ✓  5 e2e/workflow.spec.ts:105:7 › PlacementOS end-to-end › criteria mismatch stops the agent for an officer decision (2.3s)
+  ✓  6 e2e/workflow.spec.ts:115:7 › PlacementOS end-to-end › records pages render real data (5.0s)
+  ✓  7 e2e/workflow.spec.ts:138:7 › PlacementOS end-to-end › test lab runs official scenarios against real code (5.1s)
+  ✓  8 e2e/workflow.spec.ts:147:7 › PlacementOS end-to-end › viewer cannot act (1.8s)
 
-  7 passed (27.0s)
+  8 passed (32.6s)

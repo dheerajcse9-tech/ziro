@@ -280,7 +280,10 @@ class RosterProposal(TimestampMixin, Base):
     destination_id: Mapped[int] = mapped_column(ForeignKey("destinations.id"), nullable=False)
     destination_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     roster_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Students this proposal uploads (for a supplement: only those not sent before).
     included_roll_numbers: Mapped[list[str]] = mapped_column(JSON, default=list)
+    kind: Mapped[str] = mapped_column(String(20), default="FULL", server_default="FULL", nullable=False)
+    previously_submitted_roll_numbers: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]", nullable=False)
     excluded: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     held: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     unresolved_issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)

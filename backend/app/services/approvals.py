@@ -47,6 +47,8 @@ def create_proposal(
         raise PreconditionFailed("Drive has no destination configured; cannot propose an upload")
     if not drive.destination.is_enabled:
         raise PreconditionFailed("Drive destination is disabled")
+    if evaluation.is_supplement and not evaluation.to_upload:
+        raise PreconditionFailed("All eligible students were already sent; nothing new for a supplementary upload")
     proposal_hash = evaluation.proposal_hash()
 
     # Supersede older open proposals for the same drive.
@@ -60,7 +62,9 @@ def create_proposal(
         drive_id=drive.id, run_id=run_id, criteria_version=evaluation.criteria.version,
         schedule_version=evaluation.schedule_version, destination_id=drive.destination.id,
         destination_fingerprint=evaluation.destination_fingerprint, roster_fingerprint=evaluation.roster_fingerprint(),
-        included_roll_numbers=[o.roll_number for o in evaluation.included],
+        included_roll_numbers=[o.roll_number for o in evaluation.to_upload],
+        kind="SUPPLEMENT" if evaluation.is_supplement else "FULL",
+        previously_submitted_roll_numbers=evaluation.previously_submitted,
         excluded=[{"roll_number": o.roll_number, "full_name": o.full_name, "decision": o.decision, "reasons": o.reasons}
                   for o in evaluation.excluded],
         held=[{"roll_number": o.roll_number, "full_name": o.full_name, "reasons": o.reasons, "conflicts": o.conflicts}
@@ -80,7 +84,7 @@ def create_proposal(
     # overlapping drives see the clash *before* anything is confirmed.
     existing = {a.student_id: a for a in db.scalars(select(DriveAssignment).where(DriveAssignment.drive_id == drive.id))}
     included_ids = {o.student_id for o in evaluation.included}
-    for o in evaluation.included:
+    for o in evaluation.to_upload:
         a = existing.get(o.student_id)
         if a is None:
             db.add(DriveAssignment(student_id=o.student_id, drive_id=drive.id, status=AssignmentStatus.PROPOSED,
@@ -102,7 +106,8 @@ def create_proposal(
         db, actor_type=ActorType.AGENT if run_id else ActorType.USER, actor_id=requested_by,
         action="APPROVAL_REQUESTED", entity_type="approval", entity_id=approval.id, run_id=run_id, drive_id=drive.id,
         details={"proposal_id": proposal.id, "proposal_hash": proposal_hash, "included": len(proposal.included_roll_numbers),
-                 "excluded": len(proposal.excluded), "held": len(proposal.held),
+                 "excluded": len(proposal.excluded), "held": len(proposal.held), "kind": proposal.kind,
+                 "previously_submitted": len(proposal.previously_submitted_roll_numbers),
                  "criteria_version": proposal.criteria_version, "schedule_version": proposal.schedule_version},
     )
     return proposal, approval
@@ -110,6 +115,9 @@ def create_proposal(
 
 def _unresolved(ev: RosterEvaluation) -> list[dict]:
     issues = []
+    for o in ev.no_longer_eligible:
+        issues.append({"type": "WITHDRAWAL_REQUIRED", "roll_number": o.roll_number,
+                       "detail": "Already sent to the employer but no longer eligible: " + "; ".join(o.reasons)})
     for o in ev.held:
         issues.append({"type": "SCHEDULE_CONFLICT", "roll_number": o.roll_number, "detail": "; ".join(o.reasons)})
     for o in ev.outcomes:

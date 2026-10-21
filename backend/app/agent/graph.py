@@ -143,8 +143,8 @@ def node_validate_scope(ctx: ToolContext) -> Step:
     if ctx.user is None or ctx.user.role not in (Role.OFFICER, Role.ADMIN):
         raise ToolFailure("validate_scope", "Only placement officers or admins can run drive workflows")
     problems = []
-    if drive.status not in (DriveStatus.OPEN, DriveStatus.DRAFT) and run.intent == "PREPARE_ROSTER":
-        problems.append(f"Drive status is {drive.status}; roster preparation requires an OPEN drive")
+    if drive.status not in (DriveStatus.OPEN, DriveStatus.DRAFT, DriveStatus.ROSTER_SUBMITTED) and run.intent == "PREPARE_ROSTER":
+        problems.append(f"Drive status is {drive.status}; roster preparation requires an open drive")
     if run.intent == "PREPARE_ROSTER" and drive.destination is None:
         problems.append("No upload destination configured for this drive")
     elif run.intent == "PREPARE_ROSTER" and not drive.destination.is_enabled:
@@ -299,6 +299,14 @@ def node_simulate(ctx: ToolContext) -> Step:
 
 def node_propose(ctx: ToolContext) -> Step:
     run = ctx.run
+    counts = (run.state.get("eligibility") or {}).get("counts", {})
+    if counts.get("already_submitted") and not counts.get("new_to_upload"):
+        _mark(run, "propose", "skipped", "Nothing new to send")
+        note = (f" {counts['no_longer_eligible']} previously sent student(s) are no longer eligible — see the Exception Inbox."
+                if counts.get("no_longer_eligible") else "")
+        run.summary = (f"All {counts['already_submitted']} eligible student(s) were already sent to the employer; "
+                       f"no supplementary upload is needed.{note}")
+        return Step(None, RunStatus.COMPLETED, run.summary)
     result = call_tool(ctx, "create_approval_request", {"drive_id": run.drive_id}, node="propose", invoked_by=GRAPH)
     run.proposal_id = result["proposal_id"]
     _set_state(run, approval_id=result["approval_id"], proposal_hash=result["proposal_hash"])
