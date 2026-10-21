@@ -345,3 +345,18 @@ def test_audit_chain_valid_and_tamper_evident(sb, people, basic_drive):
     sb.db.execute(AuditEvent.__table__.update().where(AuditEvent.seq == 2).values(action="FORGED"))
     result = ledger.verify_chain(sb.db)
     assert result == {"valid": False, "checked": 2, "broken_at_seq": 2}
+
+
+def test_fixing_missing_data_closes_warning_and_makes_student_eligible(sb, people):
+    s = sb.student("S500", "Sneha", "CSE", None, 0)
+    d = sb.drive("Fix Drive", ist(2026, 12, 16, 10), ist(2026, 12, 16, 12))
+    run = prepare(sb, people, d)
+    assert approvals.get_approval(sb.db, run.state["approval_id"]).proposal.included_roll_numbers == []
+    warning = sb.db.scalar(select(ExceptionItem).where(ExceptionItem.kind == "MISSING_STUDENT_DATA"))
+    assert warning.status == "OPEN"
+    students.update_student(sb.db, s, {"cgpa": 8.1}, people["officer"])
+    sb.db.commit()
+    sb.db.refresh(warning)
+    assert warning.status == "RESOLVED" and warning.resolution == "RECORD_UPDATED"
+    run = graph.answer(sb.db, sb.db.get(type(run), run.id), people["officer"], "rerun")
+    assert approvals.get_approval(sb.db, run.state["approval_id"]).proposal.included_roll_numbers == ["S500"]

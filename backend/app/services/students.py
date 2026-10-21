@@ -22,8 +22,8 @@ from app.domain.normalize import (
     parse_consent,
     parse_year,
 )
-from app.models.entities import ConsentRecord, RosterImport, Student, User
-from app.models.enums import ActorType, ConsentScope, ConsentStatus, ImportStatus
+from app.models.entities import ConsentRecord, ExceptionItem, RosterImport, Student, User
+from app.models.enums import ActorType, ConsentScope, ConsentStatus, ExceptionKind, ExceptionStatus, ImportStatus
 from app.services.approvals import revalidate_open_approvals
 from app.services.consent import current_consent
 
@@ -287,6 +287,15 @@ def update_student(db: Session, student: Student, data: dict[str, Any], user: Us
     ledger.record(db, actor_type=ActorType.USER, actor_id=_actor(user), action="STUDENT_UPDATED",
                   entity_type="student", entity_id=student.id,
                   details={"roll_number": student.roll_number, "changes": changes, "record_version": student.record_version})
+    # Data-quality warnings raised against the old record version are now outdated; the next
+    # evaluation raises a fresh one if anything is still missing.
+    for item in db.scalars(select(ExceptionItem).where(
+        ExceptionItem.student_id == student.id, ExceptionItem.status == ExceptionStatus.OPEN,
+        ExceptionItem.kind.in_([ExceptionKind.MISSING_STUDENT_DATA, ExceptionKind.INVALID_STUDENT_DATA]),
+    )):
+        item.status, item.resolution = ExceptionStatus.RESOLVED, "RECORD_UPDATED"
+        item.resolution_note = f"Student record updated ({', '.join(changes)}) to v{student.record_version}"
+        item.resolved_by_id, item.resolved_at = user.id, utcnow()
     invalidated = revalidate_open_approvals(db, f"Student {student.roll_number} record changed")
     return {"changes": changes, "invalidated_proposals": invalidated}
 
