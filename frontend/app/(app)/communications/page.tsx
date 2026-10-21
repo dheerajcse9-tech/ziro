@@ -1,9 +1,10 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Mail } from "lucide-react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Mail, RotateCw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/layout";
 import { Dialog } from "@/components/ui/overlay";
@@ -11,6 +12,7 @@ import { Button, Card, CardHeader, Select } from "@/components/ui/primitives";
 import { Banner, EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { StatusBadge, Tag } from "@/components/ui/status";
 import { api, qs } from "@/lib/api";
+import { toastError } from "@/lib/errors";
 import { fmtDateTime, relTime, titleCase } from "@/lib/format";
 import type { EmailItem, Paged } from "@/lib/types";
 
@@ -39,6 +41,17 @@ export default function CommunicationsPage() {
     placeholderData: keepPreviousData, refetchInterval: 10_000,
   });
   const detail = useQuery({ queryKey: ["email", openId], queryFn: () => api.get<EmailItem>(`/api/emails/${openId}`), enabled: openId !== null });
+  const qc = useQueryClient();
+  const retry = useMutation({
+    mutationFn: (id?: number) => api.post<{ retried: number; sent: number; failed: number; items: EmailItem[] }>(`/api/emails/retry-failed${qs({ email_id: id })}`),
+    onSuccess: (r) => {
+      if (r.retried === 0) toast.info("No failed emails to retry");
+      else if (r.failed === 0) toast.success(`${r.sent} email(s) sent`);
+      else toast.error(`${r.failed} of ${r.retried} email(s) still failed`, { description: r.items.find((m) => m.error)?.error ?? undefined });
+      qc.invalidateQueries({ queryKey: ["emails"] }); qc.invalidateQueries({ queryKey: ["email"] });
+    },
+    onError: toastError,
+  });
   const pages = q.data ? Math.max(1, Math.ceil(q.data.total / q.data.page_size)) : 1;
 
   return (
@@ -53,6 +66,7 @@ export default function CommunicationsPage() {
       )}
       <Card>
         <CardHeader title="Outbox" actions={<>
+          <Button size="sm" loading={retry.isPending && retry.variables === undefined} onClick={() => retry.mutate(undefined)} icon={<RotateCw className="size-3.5" />}>Retry failed emails</Button>
           <Select aria-label="Category" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}>
             <option value="">All types</option>{CATEGORIES.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}
           </Select>
@@ -87,6 +101,7 @@ export default function CommunicationsPage() {
         {!detail.data ? <LoadingRows rows={4} /> : (
           <div className="space-y-3">
             {detail.data.error && <Banner tone="bad" title="Not delivered">{detail.data.error}</Banner>}
+            {detail.data.status === "FAILED" && <Button size="sm" loading={retry.isPending} onClick={() => retry.mutate(detail.data!.id)} icon={<RotateCw className="size-3.5" />}>Retry this email</Button>}
             <Body text={detail.data.body_text ?? ""} />
           </div>
         )}

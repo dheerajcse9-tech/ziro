@@ -123,3 +123,28 @@ def test_selection_results_notify_and_show_in_history(sb, people, basic_drive):
     history = outreach.placement_history(sb.db, s1)
     assert history[0]["outcome"] == "SELECTED" and history[0]["sent_to_employer"] and history[0]["decision"] == "ELIGIBLE"
     assert outreach.selected_employers(sb.db, [s1.id, s2.id]) == {s1.id: [basic_drive.employer.name]}
+
+
+def test_failed_smtp_email_can_be_retried(sb, monkeypatch):
+    import socket
+
+    from app.services import mailer
+
+    def unreachable(msg):
+        raise socket.gaierror(8, "nodename nor servname provided, or not known")
+
+    monkeypatch.setattr(mailer, "transport_name", lambda: "SMTP")
+    monkeypatch.setattr(mailer, "_deliver_smtp", unreachable)
+    msg = mailer.send(sb.db, category="DATA_REQUEST", to_address="s@example.edu", to_name="S", subject="Hi",
+                      body="Body", dedupe_key="retry-test", sent_by="user:1")
+    assert msg.status == "FAILED" and "could not be found" in msg.error
+    # Same dedupe key does not send again on its own.
+    assert mailer.send(sb.db, category="DATA_REQUEST", to_address="s@example.edu", to_name="S", subject="Hi",
+                       body="Body", dedupe_key="retry-test", sent_by="user:1").status == "FAILED"
+
+    delivered = []
+    monkeypatch.setattr(mailer, "_deliver_smtp", delivered.append)
+    retried = mailer.retry_failed(sb.db, sent_by="user:1")
+    assert [m.id for m in retried] == [msg.id] and delivered == [msg]
+    assert msg.status == "SENT" and msg.error is None and msg.sent_at is not None
+    assert mailer.retry_failed(sb.db, sent_by="user:1") == []

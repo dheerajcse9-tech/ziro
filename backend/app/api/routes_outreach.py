@@ -14,7 +14,7 @@ from app.core.errors import NotFound
 from app.db.session import get_db
 from app.models.entities import EmailMessage, StudentRequest, User
 from app.services import drives as drive_svc
-from app.services import outreach
+from app.services import mailer, outreach
 from app.services import students as student_svc
 
 router = APIRouter(prefix="/api")
@@ -138,6 +138,15 @@ def get_email(email_id: int, db: Session = Depends(get_db), _: User = Depends(re
     if m is None:
         raise NotFound("Email not found")
     return email_dict(m, with_body=True)
+
+
+@router.post("/emails/retry-failed", tags=["outreach"])
+def retry_failed_emails(email_id: int | None = None, db: Session = Depends(get_db),
+                        user: User = Depends(require_roles(*OFFICER_ROLES))):
+    retried = mailer.retry_failed(db, sent_by=outreach._actor(user), email_id=email_id)
+    db.commit()
+    return {"retried": len(retried), "sent": sum(m.status == "SENT" for m in retried),
+            "failed": sum(m.status == "FAILED" for m in retried), "items": [email_dict(m) for m in retried]}
 
 
 # --------------------------------------------------------------------------- public student endpoints (token = credential)

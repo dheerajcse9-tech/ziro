@@ -54,20 +54,52 @@ def send(
     )
     db.add(msg)
     db.flush()
-    if not to_address:
-        msg.error = "No email address on record"
+    _attempt(msg)
+    _audit(db, msg, sent_by)
+    return msg
+
+
+def _explain(exc: Exception) -> str:
+    text = f"{type(exc).__name__}: {exc}"
+    if isinstance(exc, OSError) and type(exc).__name__ == "gaierror":
+        text += (f" — the SMTP server name '{get_settings().smtp_host}' could not be found. Check SMTP_HOST in "
+                 "backend/.env (for Gmail it must be exactly smtp.gmail.com) and your internet connection.")
+    elif isinstance(exc, smtplib.SMTPAuthenticationError):
+        text += " — the SMTP username or password was rejected. For Gmail, SMTP_PASSWORD must be an App Password."
+    return text
+
+
+def _attempt(msg: EmailMessage) -> None:
+    msg.transport, msg.error = transport_name(), None
+    if not msg.to_address:
+        msg.status, msg.error = EmailStatus.SKIPPED, "No email address on record"
     elif msg.transport == "SMTP":
         try:
             _deliver_smtp(msg)
             msg.status, msg.sent_at = EmailStatus.SENT, utcnow()
         except (OSError, smtplib.SMTPException) as exc:
-            msg.status, msg.error = EmailStatus.FAILED, f"{type(exc).__name__}: {exc}"
+            msg.status, msg.error = EmailStatus.FAILED, _explain(exc)
     else:
         msg.status, msg.sent_at = EmailStatus.DELIVERED_LOCAL, utcnow()
+
+
+def retry_failed(db: Session, *, sent_by: str, email_id: int | None = None) -> list[EmailMessage]:
+    """Re-attempt delivery of FAILED messages (one, or all of them) with the current SMTP settings."""
+    stmt = select(EmailMessage).where(EmailMessage.status == EmailStatus.FAILED)
+    if email_id is not None:
+        stmt = stmt.where(EmailMessage.id == email_id)
+    retried = list(db.scalars(stmt.order_by(EmailMessage.id)))
+    for msg in retried:
+        _attempt(msg)
+        _audit(db, msg, sent_by, retry=True)
+    db.flush()
+    return retried
+
+
+def _audit(db: Session, msg: EmailMessage, sent_by: str, retry: bool = False) -> None:
     ledger.record(db, actor_type=ActorType.SYSTEM if sent_by.startswith("system") else
                   (ActorType.AGENT if sent_by.startswith("agent") else ActorType.USER),
                   actor_id=sent_by, action="EMAIL_" + msg.status, entity_type="email", entity_id=msg.id,
-                  drive_id=drive_id, details={"category": category, "to": to_address, "subject": subject,
-                                              "transport": msg.transport, "error": msg.error})
+                  drive_id=msg.drive_id, details={"category": msg.category, "to": msg.to_address, "subject": msg.subject,
+                                                  "transport": msg.transport, "error": msg.error, "retry": retry})
     db.flush()
-    return msg
