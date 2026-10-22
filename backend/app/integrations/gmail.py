@@ -112,7 +112,9 @@ def complete_sign_in(db: Session, code: str, user_id: int) -> OAuthCredential:
     granted = set((tokens.get("scope") or "").split())
     missing = [sc for sc in SCOPES if sc not in granted]
     if missing:
-        raise GmailError(f"Please allow all requested Gmail permissions (missing: {', '.join(m.rsplit('/', 1)[-1] for m in missing)})")
+        raise GmailError("Google gave only part of the access PlacementOS needs "
+                         f"(missing: {', '.join(m.rsplit('/', 1)[-1] for m in missing)}). Click Connect Gmail again and, on "
+                         "Google's permission screen, tick BOTH boxes (read and send email) or 'Select all'.")
     _access_cache.clear()
     _access_cache.update(token=tokens["access_token"], expires=utcnow() + timedelta(seconds=int(tokens.get("expires_in", 3600)) - 60))
     profile = _get(f"{API}/profile", tokens["access_token"])
