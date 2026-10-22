@@ -1,12 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Link2, LogOut, Mail, Save, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Clock, Link2, LogOut, Mail, Save, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { DefinitionList } from "@/components/ui/layout";
-import { Button, Card, CardHeader, Field, Input, Textarea } from "@/components/ui/primitives";
+import { Button, Card, CardHeader, Field, Input, Select, Textarea } from "@/components/ui/primitives";
 import { Banner, LoadingRows } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status";
 import { api } from "@/lib/api";
@@ -68,6 +68,38 @@ export function GmailCard() {
           {!canConnect && <p className="text-[12px] text-muted">Only the drive upload officer or an admin can connect the mailbox.</p>}
         </div>
       )}
+    </Card>
+  );
+}
+
+const WINDOWS: [number, string][] = [[30, "Last 30 minutes"], [60, "Last 1 hour"], [360, "Last 6 hours"], [1440, "Last 24 hours"],
+  [10080, "Last 7 days"], [43200, "Last 30 days"]];
+
+/** How far back the Mailbox Agent reads company emails. */
+export function MailWindowCard() {
+  const me = useMe();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["inbox", ""], queryFn: () => api.get<InboxResponse>("/api/inbox") });
+  const editable = me.data?.role === "coordinator" || me.data?.role === "admin";
+  const save = useMutation({
+    mutationFn: (minutes: number) => api.put<{ window_minutes: number }>("/api/inbox-settings/window", { minutes }),
+    onSuccess: (r) => { toast.success(`Reading company emails from the ${WINDOWS.find(([m]) => m === r.window_minutes)?.[1].toLowerCase()}`); qc.invalidateQueries({ queryKey: ["inbox"] }); },
+    onError: toastError,
+  });
+  const box = q.data?.mailbox;
+  return (
+    <Card>
+      <CardHeader title={<span className="flex items-center gap-2"><Clock className="size-4 text-faint" />Which company emails to read</span>}
+        description="The Mailbox Agent only reads emails received in this time. Older emails are ignored." />
+      <div className="space-y-2 p-4">
+        <Field label="Read emails from" htmlFor="mail_window">
+          <Select id="mail_window" className="w-full" disabled={!editable || save.isPending || !box}
+            value={String(box?.window_minutes ?? 60)} onChange={(e) => save.mutate(Number(e.target.value))}>
+            {WINDOWS.map(([m, label]) => <option key={m} value={m}>{label}</option>)}
+          </Select>
+        </Field>
+        {box?.read_since && <p className="text-[12px] text-muted">Emails received before the last reset ({fmtDateTime(box.read_since)}) are always ignored.</p>}
+      </div>
     </Card>
   );
 }

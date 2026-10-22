@@ -148,6 +148,22 @@ def set_read_since(body: ReadSinceIn, db: Session = Depends(get_db), user: User 
     return {"read_since": value}
 
 
+class WindowIn(BaseModel):
+    minutes: int
+
+
+@router.put("/inbox-settings/window", tags=["inbox"])
+def set_read_window(body: WindowIn, db: Session = Depends(get_db), user: User = Depends(require_roles(Role.COORDINATOR, Role.ADMIN))):
+    """How far back the Mailbox Agent reads company emails (30 min, 1 h, 6 h, 24 h, 7 days or 30 days)."""
+    if body.minutes not in intake.WINDOW_CHOICES:
+        raise ValidationFailed(f"Choose one of {list(intake.WINDOW_CHOICES)} minutes")
+    app_settings.set_value(db, "mailbox_window_minutes", body.minutes)
+    ledger.record(db, actor_type=ActorType.USER, actor_id=f"user:{user.id}", action="MAILBOX_WINDOW_SET",
+                  details={"minutes": body.minutes})
+    db.commit()
+    return {"window_minutes": body.minutes}
+
+
 @router.put("/inbox-settings/trusted-senders", tags=["inbox"])
 def set_trusted_senders(body: TrustedIn, db: Session = Depends(get_db), user: User = Depends(require_roles(Role.COORDINATOR, Role.ADMIN))):
     senders = sorted({x.strip().lower() for x in body.senders if x.strip()})

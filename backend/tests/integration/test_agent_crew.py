@@ -6,6 +6,7 @@ External services are replaced at their boundary only: Gemini by a fake client w
 import base64
 import email
 import email.policy
+import email.utils
 import json
 import re
 from datetime import timedelta
@@ -331,6 +332,19 @@ def test_after_a_reset_the_mailbox_agent_skips_emails_it_already_handled(sb, cre
     assert f"after:{int(intake.read_since(sb.db).timestamp())}" in google.last_query
     # The drive upload officer chooses "Read older emails too".
     app_settings.set_value(sb.db, "mailbox_read_since", None)
+    sb.db.commit()
+    assert intake.fetch_mailbox(sb.db, None)["new"] == 1
+
+
+def test_settings_time_window_limits_which_emails_are_read(sb, crew_people, google):
+    gmail.complete_sign_in(sb.db, "auth-code", crew_people["coordinator"].id)
+    sb.db.commit()
+    google.inbox[0] = google.inbox[0].replace(b"Wed, 21 Oct 2026 10:00:00 +0530",
+                                              email.utils.format_datetime(utcnow() - timedelta(minutes=45)).encode())
+    app_settings.set_value(sb.db, "mailbox_window_minutes", 30)  # the email is 45 minutes old
+    sb.db.commit()
+    assert intake.fetch_mailbox(sb.db, None)["new"] == 0
+    app_settings.set_value(sb.db, "mailbox_window_minutes", 60)
     sb.db.commit()
     assert intake.fetch_mailbox(sb.db, None)["new"] == 1
 

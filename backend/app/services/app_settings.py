@@ -25,6 +25,9 @@ DEFAULTS: dict[str, Any] = {
     # The Mailbox Agent ignores emails received before this time (ISO, UTC). Set when the data is (re)loaded,
     # so a reset does not re-read company emails that were already handled. None = the last INBOX_LOOKBACK_DAYS.
     "mailbox_read_since": None,
+    # The Mailbox Agent reads company emails from the last N minutes (Settings: 30 min ... 30 days).
+    # None = INBOX_LOOKBACK_DAYS. Both limits apply: whichever is later wins.
+    "mailbox_window_minutes": None,
 }
 
 

@@ -200,6 +200,7 @@ def seed_institute(db: Session) -> dict:
     app_settings.set_value(db, "institution_name", settings.institution_name)
     # Fresh data: the Mailbox Agent only reads company emails that arrive from now on.
     app_settings.set_value(db, "mailbox_read_since", utcnow().isoformat())
+    app_settings.set_value(db, "mailbox_window_minutes", 60)  # read company emails from the last hour
     db.flush()
     ledger.record(db, actor_type=ActorType.SYSTEM, actor_id="system:seed", action="INSTITUTE_DATA_LOADED",
                   details={"students": count, "real_email_students": sorted(real), "company_senders": senders})

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ExternalLink, RotateCcw, Save, Trash2, Zap } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AgentPolicyCard, GmailCard, TrustedSendersCard } from "@/components/settings/agent-settings";
+import { AgentPolicyCard, GmailCard, MailWindowCard, TrustedSendersCard } from "@/components/settings/agent-settings";
 import { DefinitionList, PageHeader } from "@/components/ui/layout";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { Button, Card, CardHeader, Field, Input, Select } from "@/components/ui/primitives";
@@ -77,6 +77,7 @@ export default function SettingsPage() {
       {(me.data?.role === "coordinator" || isAdmin) && (
         <div className="mb-4 grid gap-4 xl:grid-cols-2">
           <Suspense fallback={<Card><LoadingRows rows={3} /></Card>}><GmailCard /></Suspense>
+          <MailWindowCard />
           <TrustedSendersCard />
         </div>
       )}

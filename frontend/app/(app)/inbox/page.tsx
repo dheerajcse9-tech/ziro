@@ -249,6 +249,11 @@ function PasteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   );
 }
 
+function fmtWindow(minutes?: number) {
+  if (!minutes) return "30 days";
+  return minutes < 60 ? `${minutes} minutes` : minutes < 1440 ? `${minutes / 60} hour${minutes === 60 ? "" : "s"}` : `${minutes / 1440} day${minutes === 1440 ? "" : "s"}`;
+}
+
 export default function InboxPage() {
   const qc = useQueryClient();
   const me = useMe();
@@ -298,9 +303,9 @@ export default function InboxPage() {
               Reading emails whose subject contains “{box.filter || "anything"}”. Read-only: nothing is marked, moved or deleted.
               {pilot?.enabled ? ` The Mailbox Agent checks every ${Math.round(pilot.interval_seconds / 60) || 1} min${pilot.last_tick_at ? ` (last check ${relTime(pilot.last_tick_at)})` : ""}.` : " Autopilot is off — use Check mailbox now."}
               <span className="mt-1 block">
-                {box.read_since ? <>Only emails received after <strong>{fmtDateTime(box.read_since)}</strong> are read (older ones were handled before the last reset).</> : "Emails from the last 30 days are read."}
+                Reading emails from the last <strong>{fmtWindow(box.window_minutes)}</strong> (change in Settings){box.read_since ? <>, received after the last reset ({fmtDateTime(box.read_since)})</> : null}.
                 {can(me.data, "connectMailbox") && <button type="button" className="ml-2 text-accent underline" disabled={readSince.isPending}
-                  onClick={() => readSince.mutate(box.read_since ? "all" : "now")}>{box.read_since ? "Read older emails too" : "Ignore emails already in the mailbox"}</button>}
+                  onClick={() => readSince.mutate(box.read_since ? "all" : "now")}>{box.read_since ? "Ignore the reset time" : "Ignore emails already in the mailbox"}</button>}
               </span>
             </Banner>
           ) : (

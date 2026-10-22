@@ -112,11 +112,15 @@ def mailbox_status(db: Session) -> dict[str, Any]:
 
     s = get_settings()
     since = app_settings.get(db, "mailbox_read_since")
+    window = app_settings.get(db, "mailbox_window_minutes") or s.inbox_lookback_days * 1440
     if gmail.connected(db):
-        return {"source": "GMAIL", "address": gmail.account_email(db), "filter": s.inbox_subject_filter, "read_since": since}
+        return {"source": "GMAIL", "address": gmail.account_email(db), "filter": s.inbox_subject_filter, "read_since": since,
+                "window_minutes": window}
     if s.inbox_imap_host:
-        return {"source": "IMAP", "address": s.inbox_imap_user, "filter": s.inbox_subject_filter, "read_since": since}
-    return {"source": None, "address": s.inbox_address, "filter": s.inbox_subject_filter, "read_since": since}
+        return {"source": "IMAP", "address": s.inbox_imap_user, "filter": s.inbox_subject_filter, "read_since": since,
+                "window_minutes": window}
+    return {"source": None, "address": s.inbox_address, "filter": s.inbox_subject_filter, "read_since": since,
+            "window_minutes": window}
 
 
 def _raw_from_imap(imap_factory: Callable[..., Any] | None, limit: int) -> list[bytes]:
@@ -143,12 +147,19 @@ def _raw_from_imap(imap_factory: Callable[..., Any] | None, limit: int) -> list[
     return out
 
 
+WINDOW_CHOICES = (30, 60, 360, 1440, 10080, 43200)  # 30 min, 1 h, 6 h, 24 h, 7 days, 30 days
+
+
 def read_since(db: Session) -> datetime | None:
+    """The oldest email the Mailbox Agent reads: the later of the reset time and the chosen time window."""
     raw = app_settings.get(db, "mailbox_read_since")
     try:
-        return datetime.fromisoformat(raw) if raw else None
+        reset = datetime.fromisoformat(raw) if raw else None
     except ValueError:
-        return None
+        reset = None
+    minutes = app_settings.get(db, "mailbox_window_minutes")
+    window = utcnow() - timedelta(minutes=int(minutes)) if minutes else None
+    return max((t for t in (reset, window) if t is not None), default=None)
 
 
 def gmail_query(since: datetime | None = None) -> str:
