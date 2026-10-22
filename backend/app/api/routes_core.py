@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
@@ -159,6 +159,21 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(require_roles(*AN
         if op.status != UploadStatus.SUBMITTED or v is None or v.status != "VERIFIED":
             ver_problem += 1
     runs = list(db.scalars(select(AgentRun).where(AgentRun.is_test_fixture.is_(False)).order_by(AgentRun.id.desc()).limit(6)))
+    # Shortlists that reached companies (verified uploads), per drive.
+    shortlisted: dict[int, dict] = {}
+    for op in db.scalars(select(UploadOperation).order_by(UploadOperation.id)):
+        v = db.scalar(select(VerificationResult).where(VerificationResult.upload_id == op.id).order_by(VerificationResult.id.desc()))
+        if v is None or v.status != "VERIFIED":
+            continue
+        row = shortlisted.setdefault(op.drive_id, {"drive_id": op.drive_id, "title": op.drive.title,
+                                                   "employer": op.drive.employer.name, "students": 0})
+        row["students"] += len(op.submitted_roll_numbers or [])
+    from app.models.entities import AuditEvent, EmailMessage
+
+    week_ago = now - timedelta(days=7)
+    emails_sent = db.scalar(select(func.count(EmailMessage.id)).where(EmailMessage.status.in_(["SENT", "DELIVERED_LOCAL"]))) or 0
+    agent_actions = db.scalar(select(func.count(AuditEvent.id)).where(AuditEvent.actor_type == "AGENT",
+                                                                     AuditEvent.occurred_at >= week_ago)) or 0
     return {
         "metrics": {
             "total_students": students,
@@ -175,6 +190,9 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(require_roles(*AN
                 InboundEmail.status.in_(["NEW", "NEEDS_REVIEW"]))) or 0,
         },
         "drive_readiness": readiness,
+        "shortlisted": sorted(shortlisted.values(), key=lambda r: -r["students"]),
+        "activity": {"emails_sent": emails_sent, "agent_actions_7d": agent_actions,
+                     "consent": {k: sum((r["consent"] or {}).get(k, 0) for r in readiness) for k in ("sent", "accepted", "declined", "pending")}},
         "recent_runs": [S.run(r, include_state=False) for r in runs],
         "upcoming_schedule": [{"drive_id": d.id, "title": d.title, "employer": d.employer.name, "starts_at": S.iso(d.starts_at),
                                "ends_at": S.iso(d.ends_at), "timezone": d.timezone, "location": d.location} for d in upcoming[:8]],

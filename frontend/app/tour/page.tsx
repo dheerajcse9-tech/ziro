@@ -128,7 +128,7 @@ export default function TourPage() {
 
       {!tour ? (
         <main className="mx-auto max-w-3xl space-y-5 px-4 py-10">
-          <h1 className="text-[26px] font-semibold leading-tight text-ink">See a whole placement drive, run by agents, in 10 steps</h1>
+          <h1 className="text-[26px] font-semibold leading-tight text-ink">See a whole placement drive, run by agents, in 11 steps</h1>
           <p className="text-[14px] leading-relaxed text-ink-2">
             You only press <strong>Yes, continue</strong>. Each press runs the next step on the real code: two companies email the
             placement office, the agents create the drives and send consent forms, students answer, the placement officer runs the drives,

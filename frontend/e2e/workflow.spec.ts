@@ -284,13 +284,27 @@ test.describe.serial("PlaceCrew end-to-end", () => {
     await page.goto("/login");
     await page.getByRole("link", { name: /Guided walkthrough/ }).click();
     await page.getByRole("button", { name: "Start the walkthrough" }).click();
-    await expect(page.getByText("Step 1 of 10")).toBeVisible({ timeout: 30_000 });
-    for (let i = 2; i <= 10; i++) {
+    await expect(page.getByText("Step 1 of 11")).toBeVisible({ timeout: 30_000 });
+    for (let i = 2; i <= 11; i++) {
       await page.getByRole("button", { name: "Yes, continue" }).click();
-      await expect(page.getByText(`Step ${i} of 10`)).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(`Step ${i} of 11`)).toBeVisible({ timeout: 60_000 });
     }
     await expect(page.getByRole("heading", { name: "Every check passed" })).toBeVisible();
     await shot(page, "18-evaluator-walkthrough");
+  });
+
+  test("Ask PlaceCrew answers from live data and only proposes actions; dashboard shows totals", async ({ page }) => {
+    await login(page, "approver@placementos.demo");
+    await expect(page.getByText("Shortlisted & sent to companies")).toBeVisible();
+    await page.getByRole("button", { name: "Ask PlaceCrew" }).click();
+    await page.getByLabel("Ask a question").fill("What if Helios lowered the CGPA to 6?");
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(/Nothing was changed/).first()).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel("Ask a question").fill("Send personal forms for Northwind");
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("Proposed action — needs your OK")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "Confirm" })).toBeVisible();
+    await shot(page, "19-ask-placecrew");
   });
 
   test("viewer cannot act", async ({ page }) => {

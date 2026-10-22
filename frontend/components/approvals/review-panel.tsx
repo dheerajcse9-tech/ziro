@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CheckCircle2, CircleAlert, Info, Send, XCircle } from "lucide-react";
+import { Bot, CheckCircle2, CircleAlert, Info, Send, XCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -92,6 +92,14 @@ export function ReviewPanel({ approvalId, driveId, pending }: { approvalId: numb
         actions={<Button size="sm" variant="ghost" loading={q.isFetching} onClick={() => q.refetch()}>Re-check</Button>} />
       {q.isError ? <div className="p-4"><ErrorState error={q.error} /></div> : !r ? <LoadingRows rows={4} /> : (
         <>
+          {r.summary && (
+            <div className="mx-4 mt-3 rounded-lg border border-accent/30 bg-accent-soft/40 p-3">
+              <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-accent">
+                <Sparkles className="size-3.5" />{r.summary.mode === "AI" ? "Summary by Gemini" : "Summary"}</p>
+              <p className="text-[13.5px] leading-relaxed text-ink">{r.summary.text}</p>
+              {r.summary.mode === "RULES" && r.summary.ai_error && <p className="mt-1 text-[11.5px] text-muted">Written from the checks below (AI not used: {r.summary.ai_error}).</p>}
+            </div>
+          )}
           <div className="px-4 pt-3"><Banner tone={VERDICT[r.verdict].tone} title={VERDICT[r.verdict].title} /></div>
           <ul className="divide-y divide-line">{r.checks.map((c) => <CheckRow key={c.key} c={c} />)}</ul>
           {followCheck && followCheck.items.length > 0 && (

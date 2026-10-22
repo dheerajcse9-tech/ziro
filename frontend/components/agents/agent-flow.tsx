@@ -29,6 +29,18 @@ const STATE_LABEL: Record<State, string> = {
   done: "Done", working: "Working…", waiting: "Waiting", stopped: "Stopped", next: "Not yet", skipped: "Skipped",
 };
 
+/** Agents' notes in plain words (the raw note stays in the technical timeline). */
+export function plain(note: string): string {
+  return note
+    .replace(/^Verdict READY_WITH_NOTES$/, "Checked: ready, with notes for the approver")
+    .replace(/^Verdict READY$/, "Checked: ready to approve")
+    .replace(/^Verdict DO_NOT_APPROVE$/, "Checked: do not approve yet")
+    .replace(/^Approval #\d+ requested$/, "List sent to the approver")
+    .replace(/^0 student\(s\) held for clash resolution$/, "No schedule clashes")
+    .replace(/ held for clash resolution$/, " held for a schedule clash")
+    .replace(/^(\d+)\/(\d+) eligible said yes, (\d+) no, (\d+) no answer$/, "$1 of $2 who qualify said YES · $3 said NO · $4 no answer");
+}
+
 function stepState(p: PlanStep): State {
   if (p.status === "done") return "done";
   if (p.status === "running") return "working";
@@ -57,10 +69,10 @@ export function flowNodes(run: AgentRun, agents: CrewAgent[]): Node[] {
     const st = stepState(p);
     if (target) {
       target.steps.push(p.title);
-      if (p.note) target.results.push(p.note);
+      if (p.note) target.results.push(plain(p.note));
       target.state = worst([target.state, st]);
     } else {
-      nodes.push({ kind: "agent", key, name: a?.name ?? p.title, purpose: a?.purpose, state: st, results: p.note ? [p.note] : [],
+      nodes.push({ kind: "agent", key, name: a?.name ?? p.title, purpose: a?.purpose, state: st, results: p.note ? [plain(p.note)] : [],
         steps: [p.title], ai: a?.uses_ai });
     }
   }

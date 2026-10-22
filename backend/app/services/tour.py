@@ -228,6 +228,38 @@ def step_officer_runs(t: Tour) -> dict[str, Any]:
     }
 
 
+def step_ask(t: Tour) -> dict[str, Any]:
+    from app.agent import assistant
+
+    db, people = t.sb.db, t.state["people"]
+    qa = []
+    for q in ("Why isn't Farah on the Nimbus list?", "What if Nimbus lowered the CGPA to 6.5?", "Send personal forms for Nimbus"):
+        qa.append((q, assistant.ask(db, people[Role.APPROVER], q)))
+    blocks: list[dict[str, Any]] = []
+    for q, r in qa:
+        how = "Gemini, with tools" if r["mode"] == "AI" else f"built-in rules (AI not used: {r.get('ai_error')})"
+        blocks += [{"type": "heading", "text": f"“{q}”"},
+                   {"type": "kv", "items": [["Answer", r["answer"]],
+                                            ["How it worked", f"{how} · " + " → ".join(s["label"] for s in r["steps"])]]
+                    + ([["Proposed action (needs a person's OK)", f"{p['label']} · {p.get('drive', '')}"] for p in r["proposals"]])}]
+    farah, what_if, forms = (r for _q, r in qa)
+    return {
+        "role": "Approver · Ask PlaceCrew", "title": "Ask the crew in plain language",
+        "explain": "Staff can ask questions in their own words. The assistant agent plans which read-only tools to use (on live "
+                   "data), answers with the real reasons, can run a what-if without changing anything, and can only PROPOSE "
+                   "actions: a person must confirm them. On the deployed app it uses Gemini when a key is configured; otherwise "
+                   "the same tools are driven by built-in rules, and the answer says so.",
+        "blocks": blocks,
+        "checks": [_check("Farah's answer quotes the real reason", True, "CGPA 6.40 below minimum 7.00" in farah["answer"]
+                          or "6.4" in farah["answer"]),
+                   _check("What-if finds Kabir (6.99) would be added, nothing changed", True,
+                          "Kabir" in what_if["answer"] and "Kabir" not in str(approvals.get_approval(db, t.state["first_approval"])
+                                                                            .proposal.included_roll_numbers)),
+                   _check("The action is only proposed, not done", ("send_personal_forms", 0),
+                          (forms["proposals"][0]["action"] if forms["proposals"] else None, len(_mails(db, "DATA_REQUEST"))))],
+    }
+
+
 def step_approver_forms(t: Tour) -> dict[str, Any]:
     db, people = t.sb.db, t.state["people"]
     A = db.get(Drive, t.state["A"])
@@ -368,11 +400,11 @@ def step_test_lab(t: Tour) -> dict[str, Any]:
 
 STEPS: list[tuple[str, Callable[[Tour], dict[str, Any]]]] = [
     ("setup", step_setup), ("company_emails", step_company_emails), ("bad_emails", step_bad_emails),
-    ("students_answer", step_students_answer), ("officer_runs", step_officer_runs), ("approver_forms", step_approver_forms),
+    ("students_answer", step_students_answer), ("officer_runs", step_officer_runs), ("ask", step_ask), ("approver_forms", step_approver_forms),
     ("students_reply", step_students_reply), ("approve", step_approve), ("clash", step_clash), ("test_lab", step_test_lab),
 ]
 OUTLINE = ["Institute data", "Companies email the mailbox", "Problem emails stopped", "Students answer consent forms",
-           "Officer runs the drives", "Approver sends forms", "Students reply; list updates", "Approval and company email",
+           "Officer runs the drives", "Ask the crew", "Approver sends forms", "Students reply; list updates", "Approval and company email",
            "Schedule clash settled", "All test scenarios"]
 
 

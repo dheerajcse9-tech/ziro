@@ -300,7 +300,9 @@ class FollowupIn(BaseModel):
 
 @router.get("/approvals/{approval_id}/review", tags=["approvals"])
 def approval_agent_review(approval_id: int, db: Session = Depends(get_db), _: User = Depends(require_roles(*REVIEWERS))):
-    result = approval_review.review(db, approvals.get_approval(db, approval_id))
+    approval = approvals.get_approval(db, approval_id)
+    result = approval_review.review(db, approval)
+    result["summary"] = approval_review.plain_summary(result, approval)
     db.commit()
     return result
 

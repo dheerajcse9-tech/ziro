@@ -463,6 +463,12 @@ def serialize(row: InboundEmail, with_body: bool = False) -> dict[str, Any]:
         "received_at_local": to_local(row.received_at, tz).replace(tzinfo=None).isoformat(timespec="minutes"),
         "status": row.status, "drive_id": row.drive_id, "drive_title": row.drive.title if row.drive else None,
         "run_id": row.run_id, "extraction_mode": (row.extraction or {}).get("mode"),
+        "reading": {"model": (row.extraction or {}).get("model"), "rules": (row.extraction or {}).get("rules_reading"),
+                    "ai": {k: (row.extraction or {}).get(k) for k in ("company", "role", "drive_date", "start_time", "end_time",
+                                                                      "venue", "registration_deadline", "roster_due", "min_cgpa",
+                                                                      "backlog_policy", "max_active_backlogs", "allowed_branches",
+                                                                      "graduation_years")},
+                    "ai_error": (row.extraction or {}).get("ai_error_plain")},
         "details": details(row), "issues": row.issues or [], "overrides": sorted((row.overrides or {}).keys()),
         "note": row.note, "processed_at": row.processed_at.isoformat() if row.processed_at else None,
     }

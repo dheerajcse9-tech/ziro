@@ -3,7 +3,7 @@
 **Ziro Digital Agentic AI Hackathon 2026 · Problem statement: Placement Drive Coordinator**
 
 > **Evaluators:** open the app and click **"Guided walkthrough"** on the login page (or go to `/tour`). No login; you
-> press "Yes, continue" and the real agents run a whole drive in 10 steps, ending with every test scenario.
+> press "Yes, continue" and the real agents run a whole drive in 11 steps, ending with every test scenario.
 > See [docs/EVALUATOR_GUIDE.md](docs/EVALUATOR_GUIDE.md).
 
 A crew of 21 named agents runs the placement process in three stages, each owned by a person:

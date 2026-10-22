@@ -65,7 +65,7 @@ labelled. Stack: FastAPI + SQLAlchemy + PostgreSQL, Next.js 15, Gemini API, Goog
 ## Test cases / proof of working agent
 ```
 Live proof, no login: <demo-url>/tour. Each "Yes, continue" runs the next step of a full drive on the real code in a
-private sandbox (43 checks, read back from the database), ending by re-running all scenarios. The Test Lab (admin)
+private sandbox (46 checks, read back from the database), ending by re-running all scenarios. The Test Lab (admin)
 re-runs them on demand and explains why each check passes, with an evidence CSV.
 
 TC1 CGPA threshold & backlogs – CGPA 7.00 passes (≥ inclusive), 6.99 fails, any backlog fails, missing CGPA/backlogs →

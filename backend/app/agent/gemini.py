@@ -124,6 +124,26 @@ class GeminiClient:
         return r.json()
 
 
+def generate_text(client: Any, system: str, prompt: str) -> str:
+    """Plain text answer (no tools), for short summaries."""
+    if hasattr(client, "generate_text"):
+        return client.generate_text(system=system, prompt=prompt)
+    s = get_settings()
+    body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+    url = f"{s.gemini_base_url.rstrip('/')}/models/{client.model}:generateContent"
+    try:
+        with httpx.Client(timeout=client.timeout, transport=client.transport) as http:
+            r = http.post(url, json=body, headers={"x-goog-api-key": client.api_key})
+    except httpx.HTTPError as exc:
+        raise GeminiError(f"Could not reach the Gemini API: {type(exc).__name__}: {exc}") from exc
+    if r.status_code != 200:
+        raise GeminiError(f"Gemini API returned HTTP {r.status_code}: {r.text[:300]}")
+    text = text_of(first_content(r.json()))
+    if not text:
+        raise GeminiError("Gemini returned an empty answer")
+    return text
+
+
 def first_content(response: dict[str, Any]) -> dict[str, Any]:
     candidates = response.get("candidates") or []
     if not candidates:

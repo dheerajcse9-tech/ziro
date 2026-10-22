@@ -170,6 +170,8 @@ function EmailDetail({ id, onClose }: { id: number; onClose: () => void }) {
                     </div>
                   </div>
                 ) : (
+                  <>
+                  <div className="mb-4"><TwoReaders e={e} /></div>
                   <DefinitionList cols={2} items={[
                     { label: "Company", value: e.details.company ?? <Missing /> },
                     { label: "Role", value: e.details.role ?? <Missing /> },
@@ -184,6 +186,7 @@ function EmailDetail({ id, onClose }: { id: number; onClose: () => void }) {
                     { label: "Branches", value: e.details.allowed_branches?.length ? e.details.allowed_branches.join(", ") : "All" },
                     { label: "Batch", value: e.details.graduation_years?.length ? e.details.graduation_years.join(", ") : "—" },
                   ]} />
+                  </>
                 )}
                 {!editing && Object.keys(e.details.evidence ?? {}).length > 0 && (
                   <details className="mt-4 text-[12px]">
@@ -253,6 +256,48 @@ function PasteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 function fmtWindow(minutes?: number) {
   if (!minutes) return "30 days";
   return minutes < 60 ? `${minutes} minutes` : minutes < 1440 ? `${minutes / 60} hour${minutes === 60 ? "" : "s"}` : `${minutes / 1440} day${minutes === 1440 ? "" : "s"}`;
+}
+
+const READ_FIELDS: [string, string][] = [["company", "Company"], ["role", "Role"], ["drive_date", "Drive date"],
+  ["start_time", "Starts"], ["end_time", "Ends"], ["registration_deadline", "Register by"], ["min_cgpa", "Minimum CGPA"],
+  ["backlog_policy", "Backlogs"], ["allowed_branches", "Branches"], ["graduation_years", "Batch"]];
+
+function shown(v: unknown) {
+  if (v === null || v === undefined || (Array.isArray(v) && v.length === 0)) return "—";
+  if (Array.isArray(v)) return v.join(", ");
+  const t = String(v);
+  if (/^[A-Z_]+$/.test(t)) return t.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+  return /^\d{4}-\d{2}-\d{2}T/.test(t) ? t.replace("T", " ") : t;
+}
+
+/** Gemini's reading next to the rule-based reading, field by field: the AI is visible, and checked. */
+function TwoReaders({ e }: { e: InboundEmail }) {
+  const r = e.reading;
+  if (e.extraction_mode === "RULES_AI_FAILED") return (
+    <Banner tone="warn" title="Gemini not used for this email">{r?.ai_error ? `Reason: ${r.ai_error}. ` : ""}The built-in rules read it instead; every check still ran.</Banner>
+  );
+  if (e.extraction_mode !== "AI" || !r?.rules) return null;
+  const rows = READ_FIELDS.map(([k, label]) => {
+    const a = shown(r.ai[k]), b = shown(r.rules![k]);
+    return { k, label, a, b, same: a === b || b === "—" };
+  });
+  const agree = rows.filter((x) => x.same).length;
+  return (
+    <div className="rounded-md border border-line">
+      <div className="flex items-center justify-between gap-2 border-b border-line bg-accent-soft/40 px-3 py-2">
+        <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-accent"><Sparkles className="size-3.5" />Read by Gemini{r.model ? ` (${r.model})` : ""}, checked by rules</p>
+        <p className="text-[12px] text-muted">{agree}/{rows.length} fields agree</p>
+      </div>
+      <table className="data-table w-full text-[12.5px]">
+        <thead><tr><th>Field</th><th>Gemini read</th><th>Rules read</th><th /></tr></thead>
+        <tbody>{rows.map((x) => (
+          <tr key={x.k} className={x.same ? "" : "bg-warn-soft/40"}>
+            <td className="text-muted">{x.label}</td><td>{x.a}</td><td className="text-muted">{x.b}</td>
+            <td>{x.same ? <span className="text-ok">✓ agree</span> : <span className="text-warn">differs — check</span>}</td>
+          </tr>))}</tbody>
+      </table>
+    </div>
+  );
 }
 
 export default function InboxPage() {

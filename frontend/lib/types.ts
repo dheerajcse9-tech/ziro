@@ -87,6 +87,7 @@ export interface InboundEmail {
   drive_id: number | null; drive_title: string | null; run_id: number | null; extraction_mode: string | null;
   details: IntakeDetails; issues: IntakeIssue[]; overrides: string[]; note: string | null; processed_at: string | null;
   body_text?: string; message_id?: string;
+  reading?: { model: string | null; rules: Record<string, unknown> | null; ai: Record<string, unknown>; ai_error: string | null };
   run: { id: number; status: string; pending_question: PendingQuestion | null; summary: string | null } | null;
 }
 
@@ -123,6 +124,7 @@ export interface ReviewCheck { key: string; label: string; status: "PASS" | "WAR
 export interface ApprovalReview {
   approval_id: number; proposal_id: number; drive_id: number; verdict: "READY" | "READY_WITH_NOTES" | "DO_NOT_APPROVE";
   checks: ReviewCheck[]; followup_candidates: number; reviewed_at: string; live_hash_matches: boolean;
+  summary?: { text: string; mode: "AI" | "RULES"; model?: string; ai_error: string | null };
 }
 
 export interface FollowupCandidate {
@@ -255,6 +257,8 @@ export interface Dashboard {
   };
   drive_readiness: { drive_id: number; title: string; employer: string; starts_at: string; timezone: string; status: string; stage: string; consent: { sent: number; accepted: number; declined: number; pending: number; status: string; closes_at: string } | null; included: number; excluded: number; held: number; unknown: number; open_exceptions: number; pending_approvals: number }[];
   recent_runs: AgentRun[];
+  shortlisted: { drive_id: number; title: string; employer: string; students: number }[];
+  activity: { emails_sent: number; agent_actions_7d: number; consent: { sent: number; accepted: number; declined: number; pending: number } };
   upcoming_schedule: { drive_id: number; title: string; employer: string; starts_at: string; ends_at: string; timezone: string; location: string | null }[];
 }
 

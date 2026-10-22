@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 import app.models  # noqa: F401  (register all tables)
-from app.api import routes_core, routes_intake, routes_ops, routes_outreach, routes_tour
+from app.api import routes_assistant, routes_core, routes_intake, routes_ops, routes_outreach, routes_tour
 from app.audit.ledger import AuditImmutableError
 from app.core.config import get_settings
 from app.core.errors import DomainError
@@ -88,6 +88,7 @@ app.include_router(routes_ops.router)
 app.include_router(routes_outreach.router)
 app.include_router(routes_intake.router)
 app.include_router(routes_tour.router)
+app.include_router(routes_assistant.router)
 # The LOCAL MOCK employer portal is a separate ASGI app; PlaceCrew reaches it only over HTTP.
 app.mount("/mock-portal", create_mock_portal_app(SessionLocal, mock_admin_token()))
 

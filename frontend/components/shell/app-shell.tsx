@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { ROLE_LABEL, useMe } from "@/lib/auth";
 import { cn } from "@/lib/format";
 import type { Dashboard, Health, Role } from "@/lib/types";
+import { AskPanel } from "../assistant/ask-panel";
 import { Skeleton } from "../ui/primitives";
 
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; roles: Role[]; badge?: (d?: Dashboard) => number | undefined };
@@ -120,10 +121,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : <Skeleton className="h-8 w-32" />}
           </div>
         </header>
-        <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+        <main className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6">
           {me.data ? children : <div className="space-y-3"><Skeleton className="h-8 w-64" /><Skeleton className="h-40 w-full" /></div>}
         </main>
       </div>
+      <AskPanel />
     </div>
   );
 }

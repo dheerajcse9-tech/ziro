@@ -160,3 +160,66 @@ def review(db: Session, approval: ApprovalRequest, actor: str = "agent:review") 
                   details={"verdict": verdict, "fails": [c["key"] for c in checks if c["status"] == FAIL],
                            "warnings": [c["key"] for c in checks if c["status"] == WARN]})
     return result
+
+
+# --------------------------------------------------------------------------- plain-English summary for the approver
+
+_SUMMARY_CACHE: dict[tuple, dict[str, Any]] = {}
+_WORDS = {"cgpa": "CGPA", "active_backlogs": "backlog count", "branch": "branch", "graduation_year": "batch",
+          "consent": "a YES/NO answer"}
+SUMMARY_PROMPT = ("You summarise an automated review of a student list for the Head of Placements, who must approve or "
+                  "reject it. Write 2-4 plain sentences: how many students are on the list, who could still qualify and "
+                  "what each is missing, anything held or unusual, and whether it looks ready. Use only the facts given; "
+                  "never invent names or numbers. No headings, no markdown.")
+
+
+def _facts(review_result: dict[str, Any], approval: ApprovalRequest) -> dict[str, Any]:
+    checks = {c["key"]: c for c in review_result["checks"]}
+    follow = (checks.get("followup") or {}).get("items") or []
+    return {
+        "drive": approval.proposal.drive.title, "students_on_list": len(approval.proposal.included_roll_numbers),
+        "verdict": review_result["verdict"],
+        "could_still_qualify": [f"{i['full_name']} ({i['roll_number']}): missing {', '.join(_WORDS.get(x, x) for x in i['fields'])}"
+                                for i in follow],
+        "held_for_clash": [h["roll_number"] for h in (approval.proposal.held or [])],
+        "notes": [f"{c['label']}: {c['detail']}" for c in review_result["checks"] if c["status"] in ("WARN", "FAIL")],
+    }
+
+
+def _template(f: dict[str, Any]) -> str:
+    parts = [f"{f['students_on_list']} student(s) are on the list for {f['drive']}."]
+    if f["could_still_qualify"]:
+        names = f["could_still_qualify"]
+        more = f" and {len(names) - 5} more" if len(names) > 5 else ""
+        parts.append(f"{len(names)} more could still qualify: " + "; ".join(names[:5]) + more
+                     + ". Sending them personal forms before approving may add them.")
+    if f["held_for_clash"]:
+        parts.append(f"Held for a schedule clash: {', '.join(f['held_for_clash'])}.")
+    parts.append({"READY": "Everything checks out: ready to approve.",
+                  "READY_WITH_NOTES": "It can be approved; see the notes below.",
+                  "DO_NOT_APPROVE": "Do not approve yet: a check failed (see below)."}[f["verdict"]])
+    return " ".join(parts)
+
+
+def plain_summary(review_result: dict[str, Any], approval: ApprovalRequest, client: Any | None = None) -> dict[str, Any]:
+    """Gemini writes the summary when a key works; otherwise a template from the same facts. Cached per review state."""
+    facts = _facts(review_result, approval)
+    key = (approval.id, approval.proposal_hash, repr(sorted(facts.items())))
+    if key in _SUMMARY_CACHE and client is None:
+        return _SUMMARY_CACHE[key]
+    settings = get_settings()
+    out: dict[str, Any] = {"text": _template(facts), "mode": "RULES", "ai_error": None}
+    if client is not None or settings.active_llm == "gemini":
+        from app.agent import gemini
+
+        try:
+            import json
+
+            text = gemini.generate_text(client or gemini.GeminiClient(), SUMMARY_PROMPT, json.dumps(facts))
+            out = {"text": text.strip(), "mode": "AI", "model": settings.gemini_model, "ai_error": None}
+        except Exception as exc:  # noqa: BLE001 - the template is always available
+            out["ai_error"] = gemini.friendly_error(exc)
+    else:
+        out["ai_error"] = "no Gemini key is configured"
+    _SUMMARY_CACHE[key] = out
+    return out

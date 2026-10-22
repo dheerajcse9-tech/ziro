@@ -86,6 +86,10 @@ def _valid_dt(v: Any) -> str | None:
         return f"{d}T23:59" if d else None
 
 
+COMPARED = ("company", "role", "drive_date", "start_time", "end_time", "venue", "registration_deadline", "roster_due",
+            "min_cgpa", "backlog_policy", "max_active_backlogs", "allowed_branches", "graduation_years")
+
+
 def _from_llm(data: dict[str, Any], rules: email_intake.Extraction) -> dict[str, Any]:
     out = email_intake.Extraction(mode="AI")
     out.company = (data.get("company") or "").strip() or None
@@ -117,6 +121,8 @@ def _from_llm(data: dict[str, Any], rules: email_intake.Extraction) -> dict[str,
         a, b = result.get(key), rule_values.get(key)
         if a is not None and b is not None and a != b:
             result["ambiguities"].append(f"AI and rule-based readings disagree on {label}: {a} vs {b}")
+    # Both readings are kept so people can see where Gemini and the rules agree.
+    result["rules_reading"] = {k: rule_values.get(k) for k in COMPARED}
     if sorted(result["allowed_branches"]) != sorted(rule_values["allowed_branches"]) and rule_values["allowed_branches"]:
         result["ambiguities"].append(f"AI and rule-based readings disagree on branches: "
                                      f"{result['allowed_branches']} vs {rule_values['allowed_branches']}")
@@ -168,6 +174,9 @@ def read_email(subject: str, body: str, *, client: Any | None = None, today: dat
         return result
     except Exception as exc:  # noqa: BLE001 - any AI failure falls back to the rules, labelled
         result = rules.as_dict()
+        from app.agent.gemini import friendly_error
+
         result["mode"] = "RULES_AI_FAILED"
         result["ai_error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+        result["ai_error_plain"] = friendly_error(exc)
         return result
