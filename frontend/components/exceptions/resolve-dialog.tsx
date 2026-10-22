@@ -21,7 +21,7 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
     mutationFn: (resolution: string) => api.post<ExceptionItem>(`/api/exceptions/${item!.id}/resolve`, {
       resolution, note: note || null, preferred_drive_id: resolution === "PREFER_DRIVE" ? preferred : null,
     }),
-    onSuccess: () => { toast.success("Issue closed"); setNote(""); setPreferred(null); onClose(); qc.invalidateQueries(); },
+    onSuccess: (_r, resolution) => { toast.success(resolution === "PREFER_DRIVE" ? "Clash resolved; the affected lists were re-checked" : "Issue closed"); setNote(""); setPreferred(null); onClose(); qc.invalidateQueries(); },
     onError: toastError,
   });
   const review = useMutation({

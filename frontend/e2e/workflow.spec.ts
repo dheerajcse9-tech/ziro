@@ -102,7 +102,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await expect(page.getByText(/already confirmed on the other drive/).first()).toBeVisible();
     await page.getByRole("button", { name: /Northwind Systems/ }).first().click();
     await page.getByRole("button", { name: "Assign to selected drive" }).click();
-    await expect(page.getByText(/Exception resolved/).first()).toBeVisible();
+    await expect(page.getByText(/Clash resolved/).first()).toBeVisible();
   });
 
   test("criteria mismatch stops the agent for an officer decision", async ({ page }) => {
