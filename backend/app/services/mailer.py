@@ -1,14 +1,16 @@
 """Outbound email with an auditable outbox.
 
-Every message is stored first. With SMTP configured it is then delivered over
-SMTP; otherwise it stays in the local mailbox (status DELIVERED_LOCAL), which
-the Communications page shows. A dedupe key guarantees the same notification
+Every message is stored first, then delivered through the connected Gmail
+account (Google sign-in) or, failing that, the configured SMTP server;
+otherwise it stays in the local mailbox (status DELIVERED_LOCAL), which the
+Communications page shows. A dedupe key guarantees the same notification
 is never sent twice, even if a workflow step is retried.
 """
 from __future__ import annotations
 
 import smtplib
 from email.message import EmailMessage as MimeMessage
+from email.utils import formataddr, parseaddr
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,17 +22,33 @@ from app.models.entities import EmailMessage
 from app.models.enums import ActorType, EmailStatus
 
 
-def transport_name() -> str:
+def transport_name(db: Session | None = None) -> str:
+    from app.integrations import gmail
+
+    if db is not None and gmail.connected(db):
+        return "GMAIL_API"
     return "SMTP" if get_settings().smtp_host else "LOCAL_MAILBOX"
+
+
+def _mime(msg: EmailMessage, from_header: str) -> MimeMessage:
+    mime = MimeMessage()
+    mime["From"] = from_header
+    mime["To"] = formataddr((msg.to_name or "", msg.to_address))
+    mime["Subject"] = msg.subject
+    mime.set_content(msg.body_text)
+    return mime
+
+
+def _deliver_gmail(db: Session, msg: EmailMessage) -> None:
+    from app.integrations import gmail
+
+    name = parseaddr(get_settings().smtp_from)[0] or "Placement Cell"
+    gmail.send_mime(db, _mime(msg, formataddr((name, gmail.account_email(db) or ""))).as_bytes())
 
 
 def _deliver_smtp(msg: EmailMessage) -> None:
     settings = get_settings()
-    mime = MimeMessage()
-    mime["From"] = settings.smtp_from
-    mime["To"] = f"{msg.to_name} <{msg.to_address}>" if msg.to_name else msg.to_address
-    mime["Subject"] = msg.subject
-    mime.set_content(msg.body_text)
+    mime = _mime(msg, settings.smtp_from)
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
         if settings.smtp_starttls:
             smtp.starttls()
@@ -46,16 +64,18 @@ def send(
 ) -> EmailMessage:
     existing = db.scalar(select(EmailMessage).where(EmailMessage.dedupe_key == dedupe_key))
     if existing is not None:
+        existing.created_now = False  # transient: lets callers count only new sends
         return existing
     msg = EmailMessage(
         category=category, to_address=to_address, to_name=to_name, subject=subject, body_text=body,
-        status=EmailStatus.SKIPPED, transport=transport_name(), dedupe_key=dedupe_key, student_id=student_id,
+        status=EmailStatus.SKIPPED, transport=transport_name(db), dedupe_key=dedupe_key, student_id=student_id,
         drive_id=drive_id, upload_id=upload_id, request_id=request_id, sent_by=sent_by,
     )
     db.add(msg)
     db.flush()
-    _attempt(msg)
+    _attempt(db, msg)
     _audit(db, msg, sent_by)
+    msg.created_now = True
     return msg
 
 
@@ -69,14 +89,21 @@ def _explain(exc: Exception) -> str:
     return text
 
 
-def _attempt(msg: EmailMessage) -> None:
-    msg.transport, msg.error = transport_name(), None
+def _attempt(db: Session, msg: EmailMessage) -> None:
+    from app.integrations.gmail import GmailError
+
+    msg.transport, msg.error = transport_name(db), None
     if not msg.to_address:
         msg.status, msg.error = EmailStatus.SKIPPED, "No email address on record"
-    elif msg.transport == "SMTP":
+    elif msg.transport in ("SMTP", "GMAIL_API"):
         try:
-            _deliver_smtp(msg)
+            if msg.transport == "GMAIL_API":
+                _deliver_gmail(db, msg)
+            else:
+                _deliver_smtp(msg)
             msg.status, msg.sent_at = EmailStatus.SENT, utcnow()
+        except GmailError as exc:
+            msg.status, msg.error = EmailStatus.FAILED, str(exc)
         except (OSError, smtplib.SMTPException) as exc:
             msg.status, msg.error = EmailStatus.FAILED, _explain(exc)
     else:
@@ -90,7 +117,7 @@ def retry_failed(db: Session, *, sent_by: str, email_id: int | None = None) -> l
         stmt = stmt.where(EmailMessage.id == email_id)
     retried = list(db.scalars(stmt.order_by(EmailMessage.id)))
     for msg in retried:
-        _attempt(msg)
+        _attempt(db, msg)
         _audit(db, msg, sent_by, retry=True)
     db.flush()
     return retried

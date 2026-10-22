@@ -81,6 +81,18 @@ class SimulateInput(_Strict):
     shift_minutes: int | None = Field(default=None, description="Move the drive start/end by this many minutes")
 
 
+class InviteInput(_Strict):
+    drive_id: int
+    audience: Literal["ALL_STUDENTS", "ELIGIBLE"] | None = Field(
+        default=None, description="Who receives the consent form; defaults to the form's audience")
+
+
+class FollowupSendInput(_Strict):
+    drive_id: int
+    closes_at: str = Field(description="When the personal forms close, ISO date-time in UTC")
+    student_ids: list[int] = Field(description="Students the Form Builder Agent selected")
+
+
 class InboundInput(_Strict):
     email_id: int = Field(description="Company email id in the inbox")
 
@@ -343,16 +355,93 @@ def generate_attendance_sheet(ctx: ToolContext, args: UploadInput) -> dict[str, 
             "sha256": sheet.sha256, "excluded_at_generation": sheet.excluded_at_generation}
 
 
-def send_drive_invitations(ctx: ToolContext, args: DriveInput) -> dict[str, Any]:
+def create_consent_form(ctx: ToolContext, args: InviteInput) -> dict[str, Any]:
+    from app.services import consent_forms
+
+    drive = _drive(ctx, args.drive_id)
+    try:
+        form, created = consent_forms.create_form(ctx.db, drive, ctx.actor, args.audience or "ELIGIBLE")
+    except DomainError as exc:
+        raise ToolFailure("create_consent_form", exc.message) from exc
+    return {"consent_form_id": form.id, "created": created, "title": form.title, "audience": form.audience,
+            "closes_at_local": to_local(form.closes_at, drive.timezone).isoformat(timespec="minutes"),
+            "questions": [q["key"] for q in form.questions]}
+
+
+def consent_status(ctx: ToolContext, args: DriveInput) -> dict[str, Any]:
+    from app.services import consent_forms
+
+    drive = _drive(ctx, args.drive_id)
+    ev = evaluate_drive(ctx.db, drive)
+    eligible = [o for o in ev.outcomes if o.decision == "ELIGIBLE"]
+    form = consent_forms.summary(ctx.db, drive.id)
+    return {"scope": ev.criteria.required_consent_scope, "eligible": len(eligible),
+            "eligible_with_consent": sum(o.consent_ok for o in eligible),
+            "eligible_declined": sum(o.consent is not None and not o.consent.get("granted") for o in eligible),
+            "eligible_no_answer": sum(o.consent is None for o in eligible),
+            "form": None if form is None else {k: form[k] for k in ("status", "closes_at_local", "sent", "accepted",
+                                                                     "declined", "pending", "expired")}}
+
+
+def review_roster_proposal(ctx: ToolContext, args: ApprovalInput) -> dict[str, Any]:
+    from app.services import approval_review
+
+    try:
+        approval = approvals.get_approval(ctx.db, args.approval_id)
+    except DomainError as exc:
+        raise ToolFailure("review_roster_proposal", exc.message) from exc
+    return approval_review.review(ctx.db, approval, actor=ctx.actor)
+
+
+def plan_followup_forms(ctx: ToolContext, args: DriveInput) -> dict[str, Any]:
+    from app.services import approval_review
+
+    drive = _drive(ctx, args.drive_id)
+    candidates = approval_review.followup_candidates(ctx.db, drive)
+    forms = [c for c in candidates if not c["form_open"]]
+    return {"forms": [{"student_id": c["student_id"], "roll_number": c["roll_number"], "fields": c["fields"]} for c in forms],
+            "already_open": len(candidates) - len(forms)}
+
+
+def send_followup_forms(ctx: ToolContext, args: FollowupSendInput) -> dict[str, Any]:
+    from datetime import datetime
+
+    from app.services import approval_review, outreach
+
+    drive = _drive(ctx, args.drive_id)
+    try:
+        closes_at = datetime.fromisoformat(args.closes_at)
+    except ValueError as exc:
+        raise ToolFailure("send_followup_forms", "closes_at is not a valid date-time") from exc
+    if closes_at.tzinfo is None:
+        raise ToolFailure("send_followup_forms", "closes_at must include a timezone")
+    # Recompute what each student needs: the list of ids is a selection, never a source of field names.
+    wanted = set(args.student_ids)
+    sent = []
+    for c in approval_review.followup_candidates(ctx.db, drive):
+        if c["student_id"] not in wanted or c["form_open"]:
+            continue
+        try:
+            req = outreach.request_missing_data(ctx.db, ctx.db.get(Student, c["student_id"]), c["fields"], None,
+                                                drive=drive, actor=ctx.actor, expires_at=closes_at)
+        except DomainError as exc:
+            raise ToolFailure("send_followup_forms", exc.message) from exc
+        sent.append({"roll_number": c["roll_number"], "fields": c["fields"], "request_id": req.id})
+    return {"sent": sent, "count": len(sent),
+            "closes_at_local": to_local(closes_at, drive.timezone).isoformat(timespec="minutes")}
+
+
+def send_drive_invitations(ctx: ToolContext, args: InviteInput) -> dict[str, Any]:
     from app.services import outreach
 
     drive = _drive(ctx, args.drive_id)
     try:
-        result = outreach.invite_eligible(ctx.db, drive, ctx.user, actor=ctx.actor)
+        result = outreach.invite_eligible(ctx.db, drive, ctx.user, actor=ctx.actor, audience=args.audience)
     except DomainError as exc:
         raise ToolFailure("send_drive_invitations", exc.message) from exc
     return {"invited": len(result["sent"]), "already_invited": len(result["already_invited"]),
-            "criteria_version": result["criteria_version"], "invited_roll_numbers": result["sent"]}
+            "criteria_version": result["criteria_version"], "invited_roll_numbers": result["sent"],
+            "audience": result["audience"], "consent_form_id": result["consent_form_id"]}
 
 
 def request_missing_data(ctx: ToolContext, args: DriveInput) -> dict[str, Any]:
@@ -435,7 +524,12 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("execute_approved_upload", "Upload an APPROVED roster to the allowed destination (idempotent).", ApprovalInput, "EXECUTE", execute_approved_upload),
     Tool("verify_uploaded_roster", "Independently re-read the destination and compare exact IDs and counts.", UploadInput, "EXECUTE", verify_uploaded_roster),
     Tool("generate_attendance_sheet", "Generate an attendance sheet from a VERIFIED upload.", UploadInput, "EXECUTE", generate_attendance_sheet),
-    Tool("send_drive_invitations", "Email every eligible student a personal link to accept or decline this drive.", DriveInput, "NOTIFY", send_drive_invitations),
+    Tool("create_consent_form", "Prepare the drive's consent form (what is shared, criteria, closing time).", InviteInput, "WRITE", create_consent_form),
+    Tool("consent_status", "Count eligible students who said yes, no, or have not answered this drive's consent form.", DriveInput, "READ", consent_status),
+    Tool("review_roster_proposal", "Independently re-check a roster proposal awaiting approval (advisory only).", ApprovalInput, "READ", review_roster_proposal),
+    Tool("plan_followup_forms", "List students who could still qualify and the exact details or consent each must supply.", DriveInput, "READ", plan_followup_forms),
+    Tool("send_followup_forms", "Email selected students a personal form for their missing details/consent, closing at a set time.", FollowupSendInput, "NOTIFY", send_followup_forms),
+    Tool("send_drive_invitations", "Email students a personal link to the drive's consent form (yes / no).", InviteInput, "NOTIFY", send_drive_invitations),
     Tool("request_missing_data", "Email students whose eligibility is UNKNOWN a link to supply the missing fields (officer verifies before applying).", DriveInput, "NOTIFY", request_missing_data),
     Tool("send_roster_notifications", "After a VERIFIED upload, email the employer the roster and tell each sent student.", UploadInput, "NOTIFY", send_roster_notifications),
     Tool("read_company_email", "Read a company recruitment email (untrusted data) and extract the drive details.", InboundInput, "READ", read_company_email),
@@ -450,11 +544,15 @@ LLM_ALLOWED_TOOLS = {"list_drives", "get_student_roster", "get_drive_requirement
 def call_tool(ctx: ToolContext, name: str, raw_args: dict[str, Any], *, node: str, invoked_by: str,
               allowed: set[str] | None = None, retries: int = 0) -> dict[str, Any]:
     """Validate, permission-check, execute and record one tool call."""
+    from app.agent.crew import CURRENT_AGENT, may_use
+
     tool = TOOLS.get(name)
-    if tool is None or (allowed is not None and name not in allowed):
+    agent = CURRENT_AGENT.get()
+    if tool is None or (allowed is not None and name not in allowed) or not may_use(agent, name):
+        who = agent.name if agent is not None and not may_use(agent, name) else invoked_by
         emit(ctx.db, ctx.run, "TOOL_DENIED", node=node, tool_name=name, status="DENIED",
-             message=f"Tool '{name}' is not permitted for {invoked_by}", payload={"input": raw_args})
-        raise ToolFailure(name, f"Tool not permitted for {invoked_by}")
+             message=f"Tool '{name}' is not permitted for {who}", payload={"input": raw_args})
+        raise ToolFailure(name, f"Tool not permitted for {who}")
     try:
         args = tool.input_model.model_validate(raw_args)
     except ValidationError as exc:
@@ -494,6 +592,18 @@ def summarize(name: str, out: dict[str, Any]) -> str:
     try:
         if name == "list_drives":
             return f"{len(out['drives'])} active drive(s) found"
+        if name == "create_consent_form":
+            return f"Consent form #{out['consent_form_id']} ({out['audience'].replace('_', ' ').lower()}), closes {out['closes_at_local']}"
+        if name == "consent_status":
+            return (f"{out['eligible_with_consent']} of {out['eligible']} eligible said yes, {out['eligible_declined']} no, "
+                    f"{out['eligible_no_answer']} no answer")
+        if name == "review_roster_proposal":
+            fails = [c["label"] for c in out["checks"] if c["status"] == "FAIL"]
+            return f"Verdict {out['verdict']}" + (f": {', '.join(fails)}" if fails else "")
+        if name == "plan_followup_forms":
+            return f"{len(out['forms'])} personal form(s) to send; {out['already_open']} already open"
+        if name == "send_followup_forms":
+            return f"{out['count']} form(s) emailed, closing {out['closes_at_local']}"
         if name == "read_company_email":
             f = out["fields"]
             return (f"{f.get('company') or '?'} — {f.get('role') or '?'} on {f.get('drive_date') or '?'}; "
@@ -542,7 +652,8 @@ def summarize(name: str, out: dict[str, Any]) -> str:
         if name == "verify_uploaded_roster":
             return f"{out['status']}: observed {out['observed_count']} / approved {out['expected_count']}"
         if name == "send_drive_invitations":
-            return f"Invitations emailed to {out['invited']} eligible student(s); {out['already_invited']} already invited"
+            who = 'eligible student(s)' if out.get('audience') == 'ELIGIBLE' else 'student(s)'
+            return f"Consent form emailed to {out['invited']} {who}; {out['already_invited']} already had it"
         if name == "request_missing_data":
             return f"Missing-data requests emailed to {out['count']} student(s)"
         if name == "send_roster_notifications":

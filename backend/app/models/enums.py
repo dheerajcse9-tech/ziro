@@ -189,6 +189,8 @@ class EmailCategory(StrEnum):
     DATA_REQUEST = "DATA_REQUEST"
     PROFILE_SUBMITTED = "PROFILE_SUBMITTED"
     EMPLOYER_ROSTER = "EMPLOYER_ROSTER"
+    NOT_SHORTLISTED = "NOT_SHORTLISTED"  # consented but did not meet the criteria
+    REMINDER = "REMINDER"
     SELECTED = "SELECTED"
     NOT_SELECTED = "NOT_SELECTED"
 
@@ -209,7 +211,8 @@ class DriveOutcome(StrEnum):
 
 class InboundSource(StrEnum):
     DEMO = "DEMO"  # synthetic company emails seeded for the demo
-    IMAP = "IMAP"  # fetched from the placement mailbox
+    GMAIL = "GMAIL"  # fetched from the connected Gmail account (Google sign-in)
+    IMAP = "IMAP"  # fetched from the placement mailbox over IMAP
     MANUAL = "MANUAL"  # pasted by the drive upload officer
 
 

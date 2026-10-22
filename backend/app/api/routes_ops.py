@@ -85,7 +85,8 @@ def run_events(run_id: int, after_seq: int = 0, db: Session = Depends(get_db), _
 
 
 @router.post("/agent/runs/{run_id}/answer", tags=["agent"])
-def answer_run(run_id: int, body: AnswerIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*OFFICER_ROLES))):
+def answer_run(run_id: int, body: AnswerIn, db: Session = Depends(get_db),
+               user: User = Depends(require_roles(*OFFICER_ROLES, Role.COORDINATOR, Role.APPROVER))):
     run = graph.answer(db, graph.get_run(db, run_id), user, body.value)
     return S.run(run)
 
@@ -384,6 +385,9 @@ class SettingsPatch(BaseModel):
     schedule_buffer_minutes: int | None = Field(default=None, ge=0, le=240)
     attendance_retention_days: int | None = Field(default=None, ge=1, le=3650)
     attendance_fields: list[str] | None = None
+    auto_apply_student_data: bool | None = None
+    reminder_hours_before_deadline: int | None = Field(default=None, ge=1, le=168)
+    reminder_hours_before_drive: int | None = Field(default=None, ge=1, le=168)
 
 
 @router.get("/settings", tags=["settings"])
@@ -416,7 +420,8 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db), user: Use
 
 
 @router.get("/users", tags=["settings"])
-def list_users(db: Session = Depends(get_db), _: User = Depends(require_roles(Role.ADMIN, Role.OFFICER, Role.APPROVER))):
+def list_users(db: Session = Depends(get_db),
+               _: User = Depends(require_roles(Role.ADMIN, Role.OFFICER, Role.APPROVER, Role.COORDINATOR))):
     return [S.user(u) for u in db.scalars(select(User).order_by(User.id))]
 
 
@@ -440,14 +445,24 @@ def integrations(db: Session = Depends(get_db), _: User = Depends(require_roles(
                                               "All destinations are the clearly labelled LOCAL MOCK portal."},
         "destinations": out,
         "allowed_destination_hosts": settings.allowed_destination_hosts,
-        "llm": {"enabled": settings.llm_enabled, "model": settings.llm_model if settings.llm_enabled else None,
-                "mode": "LLM tool-use planner" if settings.llm_enabled else "Deterministic fallback planner (no LLM key configured)"},
+        "llm": {"enabled": settings.llm_enabled, "provider": settings.active_llm, "model": settings.active_llm_model,
+                "mode": (f"{'Gemini' if settings.active_llm == 'gemini' else 'Claude'} reads goals and company emails"
+                         if settings.llm_enabled else "Rule-based fallback (no AI key configured)")},
         "mock_portal_base_url": settings.mock_portal_base_url,
-        "email": {"transport": "SMTP" if settings.smtp_host else "LOCAL_MAILBOX",
-                  "note": "Emails are delivered through the configured SMTP server" if settings.smtp_host else
-                  "No SMTP server configured: emails are kept in the local mailbox (Communications page)"},
+        "email": _email_status(db),
         "demo_mode": settings.demo_mode,
     }
+
+
+def _email_status(db: Session) -> dict:
+    from app.integrations import gmail
+    from app.services.mailer import transport_name
+
+    transport = transport_name(db)
+    notes = {"GMAIL_API": f"Emails are sent from {gmail.account_email(db)} through Gmail (Google sign-in)",
+             "SMTP": "Emails are delivered through the configured SMTP server",
+             "LOCAL_MAILBOX": "No mailbox connected: emails are kept in the local mailbox (Communications page)"}
+    return {"transport": transport, "note": notes[transport]}
 
 
 class FaultIn(BaseModel):

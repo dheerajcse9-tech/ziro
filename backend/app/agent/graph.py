@@ -7,11 +7,19 @@ restarts and can be resumed exactly where it stopped. Human decisions are
 interrupts: the run stops in NEEDS_REVIEW or AWAITING_APPROVAL and resumes
 only through an authenticated API call.
 
-    interpret_goal -> validate_scope -> retrieve_evidence -> interpret_criteria
-        -> evaluate_roster -> check_conflicts -> propose ==(AWAITING_APPROVAL)==>
-        [human approves] -> execute_upload -> verify -> attendance -> VERIFIED
+    PROCESS_COMPANY_EMAIL (stage 1, drive upload officer):
+        read_email -> check_email ==(NEEDS_REVIEW if anything is wrong)==> create_drive
+        -> consent_form -> publish -> COMPLETED
+    PREPARE_ROSTER (stage 2, placement officer):
+        interpret_goal -> validate_scope -> retrieve_evidence -> interpret_criteria
+        -> evaluate_roster -> check_consent -> check_conflicts -> propose -> review
+        ==(AWAITING_APPROVAL)==> [human approves] -> execute_upload -> verify
+        -> attendance -> notify -> VERIFIED
+    FOLLOW_UP (stage 3, approver): build_forms -> send_forms -> COMPLETED
     WHAT_IF:          ... validate_scope -> simulate -> COMPLETED
     CHECK_CONFLICTS:  ... evaluate_roster -> check_conflicts -> COMPLETED
+
+Each node is executed by one named agent (see app.agent.crew).
 """
 from __future__ import annotations
 
@@ -22,6 +30,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.agent.crew import CURRENT_AGENT, agent_for_node
 from app.agent.events import emit
 from app.agent.planner import make_plan
 from app.agent.tools import ToolContext, ToolFailure, call_tool
@@ -59,8 +68,10 @@ PLAN_TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("retrieve_evidence", "Retrieve configured criteria and the employer's published drive form"),
         ("interpret_criteria", "Cross-check published criteria against configured criteria"),
         ("evaluate_roster", "Validate roster and evaluate eligibility + consent for every student"),
+        ("check_consent", "Keep only students who said YES on the drive's consent form"),
         ("check_conflicts", "Detect schedule clashes and hold affected students"),
         ("propose", "Create hashed roster proposal and request human approval"),
+        ("review", "Independently re-check the proposal for the approver"),
         ("execute_upload", "Upload the approved roster (idempotent)"),
         ("verify", "Re-read destination and compare exact IDs and counts"),
         ("attendance", "Generate attendance sheet and receipt"),
@@ -69,7 +80,19 @@ PLAN_TEMPLATES: dict[str, list[tuple[str, str]]] = {
     "INVITE_STUDENTS": [
         ("interpret_goal", "Interpret the request and identify the drive"),
         ("validate_scope", "Validate scope and permissions"),
-        ("invite", "Email each eligible student a personal accept/decline link"),
+        ("consent_form", "Prepare the drive's consent form"),
+        ("invite", "Email each eligible student a personal link to the consent form"),
+    ],
+    "PROCESS_COMPANY_EMAIL": [
+        ("read_email", "Read the company email and extract the drive details (untrusted data)"),
+        ("check_email", "Check every detail is present and valid: dates, deadline, criteria, sender"),
+        ("create_drive", "Create the drive with versioned criteria and deadlines"),
+        ("consent_form", "Prepare the drive's consent form"),
+        ("publish", "Email every student a personal link to the consent form"),
+    ],
+    "FOLLOW_UP": [
+        ("build_forms", "Work out each student's missing details or consent"),
+        ("send_forms", "Email each of them a personal form with a closing time"),
     ],
     "REQUEST_MISSING_DATA": [
         ("interpret_goal", "Interpret the request and identify the drive"),
@@ -104,6 +127,15 @@ NODE_STATUS = {
     "notify": RunStatus.EXECUTING,
     "invite": RunStatus.EXECUTING,
     "request_data": RunStatus.EXECUTING,
+    "check_consent": RunStatus.EVALUATING_ROSTER,
+    "review": RunStatus.READY_FOR_APPROVAL,
+    "read_email": RunStatus.RETRIEVING_EVIDENCE,
+    "check_email": RunStatus.VALIDATING_INPUTS,
+    "create_drive": RunStatus.EXECUTING,
+    "consent_form": RunStatus.EXECUTING,
+    "publish": RunStatus.EXECUTING,
+    "build_forms": RunStatus.EVALUATING_ROSTER,
+    "send_forms": RunStatus.EXECUTING,
 }
 
 
@@ -138,7 +170,7 @@ def node_interpret_goal(ctx: ToolContext) -> Step:
     run = ctx.run
     plan = make_plan(ctx, run.objective, client=_llm_override.get(run.id))
     run.planner_mode = plan.planner_mode
-    run.llm_model = get_settings().llm_model if plan.planner_mode.startswith("LLM") else None
+    run.llm_model = get_settings().active_llm_model if plan.planner_mode == "LLM" else None
     run.intent = plan.intent
     run.plan = _plan(plan.intent)
     _mark(run, "interpret_goal", "done", plan.rationale)
@@ -182,7 +214,7 @@ def node_validate_scope(ctx: ToolContext) -> Step:
     if run.intent == "CHECK_CONFLICTS":
         return Step("evaluate_roster")
     if run.intent == "INVITE_STUDENTS":
-        return Step("invite")
+        return Step("consent_form")
     if run.intent == "REQUEST_MISSING_DATA":
         return Step("request_data")
     criteria = current_criteria(ctx.db, drive.id)
@@ -299,6 +331,21 @@ def node_evaluate_roster(ctx: ToolContext) -> Step:
     run.criteria_version = result["criteria_version"]
     _set_state(run, eligibility={"counts": result["counts"], "exclusion_reasons": result["exclusion_reasons"]})
     _mark(run, "evaluate_roster", "done", f"{result['counts']['included']} included, {result['counts']['excluded']} excluded")
+    return Step("check_conflicts" if run.intent == "CHECK_CONFLICTS" else "check_consent")
+
+
+def node_check_consent(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "consent_status", {"drive_id": run.drive_id}, node="check_consent", invoked_by=GRAPH)
+    _set_state(run, consent=result)
+    note = (f"{result['eligible_with_consent']}/{result['eligible']} eligible said yes, "
+            f"{result['eligible_declined']} no, {result['eligible_no_answer']} no answer")
+    _mark(run, "check_consent", "done", note)
+    form = result.get("form")
+    if result["eligible_no_answer"] and form and form["status"] == "OPEN":
+        emit(ctx.db, run, "DECISION", node="check_consent", status="NOTE",
+             message=f"The consent form is still open until {form['closes_at_local']}; students who say yes later "
+                     f"can be added with a supplementary list")
     return Step("check_conflicts")
 
 
@@ -348,9 +395,22 @@ def node_propose(ctx: ToolContext) -> Step:
     run.proposal_id = result["proposal_id"]
     _set_state(run, approval_id=result["approval_id"], proposal_hash=result["proposal_hash"])
     _mark(run, "propose", "done", f"Approval #{result['approval_id']} requested")
-    run.pending_question = {"type": "approval", "approval_id": result["approval_id"],
-                            "question": f"Review and approve roster proposal #{result['proposal_id']} "
-                                        f"({result['included_count']} students) in the Approval Center."}
+    _set_state(run, included_count=result["included_count"], proposal_id=result["proposal_id"])
+    return Step("review")
+
+
+def node_review(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "review_roster_proposal", {"approval_id": run.state["approval_id"]}, node="review",
+                       invoked_by=GRAPH)
+    _set_state(run, review={"verdict": result["verdict"], "followup_candidates": result["followup_candidates"],
+                            "warnings": [c["label"] for c in result["checks"] if c["status"] == "WARN"],
+                            "fails": [c["label"] for c in result["checks"] if c["status"] == "FAIL"]})
+    _mark(run, "review", "done", f"Verdict {result['verdict']}")
+    run.pending_question = {"type": "approval", "approval_id": run.state["approval_id"],
+                            "question": f"Review and approve roster proposal #{run.state['proposal_id']} "
+                                        f"({run.state['included_count']} students) in the Approval Center. "
+                                        f"Approval Review Agent: {result['verdict'].replace('_', ' ').lower()}."}
     run.summary = _summary(run)
     return Step(None, RunStatus.AWAITING_APPROVAL, "Waiting for human approval")
 
@@ -419,6 +479,16 @@ def node_notify(ctx: ToolContext) -> Step:
     return Step(None, RunStatus.VERIFIED, "Roster uploaded and independently verified")
 
 
+def node_consent_form(ctx: ToolContext) -> Step:
+    run = ctx.run
+    audience = "ALL_STUDENTS" if run.intent == "PROCESS_COMPANY_EMAIL" else None
+    result = call_tool(ctx, "create_consent_form", {"drive_id": run.drive_id, "audience": audience},
+                       node="consent_form", invoked_by=GRAPH)
+    _set_state(run, consent_form_id=result["consent_form_id"])
+    _mark(run, "consent_form", "done", f"Form #{result['consent_form_id']} closes {result['closes_at_local']}")
+    return Step("publish" if run.intent == "PROCESS_COMPANY_EMAIL" else "invite")
+
+
 def node_invite(ctx: ToolContext) -> Step:
     run = ctx.run
     result = call_tool(ctx, "send_drive_invitations", {"drive_id": run.drive_id}, node="invite", invoked_by=GRAPH)
@@ -427,6 +497,101 @@ def node_invite(ctx: ToolContext) -> Step:
     run.summary = (f"Invitations emailed to {result['invited']} eligible student(s) "
                    f"({result['already_invited']} had already been invited). Students who accept are included when you "
                    f"prepare the roster; re-run 'prepare roster' after they respond.")
+    return Step(None, RunStatus.COMPLETED, run.summary)
+
+
+def _email_row(ctx: ToolContext):
+    from app.services import intake
+
+    return intake.get(ctx.db, int(ctx.run.state["email_id"]))
+
+
+def node_read_email(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "read_company_email", {"email_id": run.state["email_id"]}, node="read_email", invoked_by=GRAPH)
+    mode = result["mode"]
+    run.planner_mode = {"AI": "LLM", "RULES_AI_FAILED": "LLM_FAILED_DETERMINISTIC_FALLBACK"}.get(mode, "DETERMINISTIC_FALLBACK")
+    run.llm_model = get_settings().active_llm_model if mode == "AI" else None
+    if result.get("ai_error"):
+        emit(ctx.db, run, "LLM_ERROR", node="read_email", status="FALLBACK",
+             message=f"AI reader failed ({result['ai_error']}); used rule-based reading")
+    f = result["fields"]
+    _mark(run, "read_email", "done", f"{f.get('company') or '?'} — {f.get('role') or '?'} ({'AI' if mode == 'AI' else 'rules'})")
+    return Step("check_email")
+
+
+def node_check_email(ctx: ToolContext) -> Step:
+    from app.services import intake
+
+    run = ctx.run
+    result = call_tool(ctx, "check_company_email", {"email_id": run.state["email_id"]}, node="check_email", invoked_by=GRAPH)
+    row = _email_row(ctx)
+    stopping = intake.blocking(result["issues"], bool(run.state.get("review_acknowledged")))
+    if not stopping:
+        _mark(run, "check_email", "done", "All details present and valid")
+        return Step("create_drive")
+    errors = [i for i in stopping if i["level"] == "ERROR"]
+    row.status = "NEEDS_REVIEW"
+    _mark(run, "check_email", "blocked", f"{len(errors)} error(s), {len(stopping) - len(errors)} to confirm")
+    options = [] if errors else [{"value": "confirm", "label": "Details are correct — create the drive and send consent forms"}]
+    options += [{"value": "recheck", "label": "I corrected the details in the Company Inbox — check again"},
+                {"value": "ignore", "label": "Ignore this email"}]
+    question = ("This company email needs the drive upload officer: "
+                + "; ".join(i["message"] for i in stopping)
+                + (". Correct the details in the Company Inbox, then choose 'check again'." if errors else "."))
+    run.pending_question = {"type": "intake_review", "email_id": row.id, "question": question,
+                            "issues": stopping, "options": options}
+    exceptions.raise_exception(
+        ctx.db, kind=ExceptionKind.INTAKE_REVIEW, severity=Severity.WARNING if not errors else Severity.BLOCKING,
+        title=f"Company email '{row.subject[:120]}' needs review", dedupe_key=f"intake:{row.id}",
+        detail={"email_id": row.id, "run_id": run.id, "issues": stopping}, run_id=run.id)
+    return Step(None, RunStatus.NEEDS_REVIEW, question)
+
+
+def node_create_drive(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "create_drive_from_email", {"email_id": run.state["email_id"]}, node="create_drive",
+                       invoked_by=GRAPH)
+    run.drive_id = result["drive_id"]
+    exceptions.auto_resolve(ctx.db, f"intake:{run.state['email_id']}", f"Drive #{result['drive_id']} created")
+    _mark(run, "create_drive", "done", f"Drive #{result['drive_id']}; registration closes {result['registration_deadline_local']}")
+    return Step("consent_form")
+
+
+def node_publish(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "send_drive_invitations", {"drive_id": run.drive_id}, node="publish", invoked_by=GRAPH)
+    row = _email_row(ctx)
+    row.status = "PUBLISHED"
+    drive = ctx.db.get(Drive, run.drive_id)
+    _mark(run, "publish", "done", f"{result['invited']} consent form link(s) sent")
+    run.pending_question = None
+    run.summary = (f"Drive #{drive.id} '{drive.title}' created from {row.from_address}'s email. Consent form sent to "
+                   f"{result['invited']} student(s)" + (f" ({result['already_invited']} already had it)" if result['already_invited'] else "")
+                   + ". Students who say YES are considered when the placement officer runs the drive.")
+    return Step(None, RunStatus.COMPLETED, run.summary)
+
+
+def node_build_forms(ctx: ToolContext) -> Step:
+    run = ctx.run
+    result = call_tool(ctx, "plan_followup_forms", {"drive_id": run.drive_id}, node="build_forms", invoked_by=GRAPH)
+    _set_state(run, followup={"forms": result["forms"], "already_open": result["already_open"]})
+    _mark(run, "build_forms", "done", f"{len(result['forms'])} form(s) to send")
+    if not result["forms"]:
+        run.summary = ("Nobody needs a personal form" + (f" ({result['already_open']} already have an open form)."
+                                                          if result["already_open"] else "."))
+        return Step(None, RunStatus.COMPLETED, run.summary)
+    return Step("send_forms")
+
+
+def node_send_forms(ctx: ToolContext) -> Step:
+    run = ctx.run
+    ids = [f["student_id"] for f in run.state["followup"]["forms"]]
+    result = call_tool(ctx, "send_followup_forms", {"drive_id": run.drive_id, "closes_at": run.state["closes_at"],
+                                                    "student_ids": ids}, node="send_forms", invoked_by=GRAPH)
+    _mark(run, "send_forms", "done", f"{result['count']} sent")
+    run.summary = (f"Personal forms emailed to {result['count']} student(s); they close {result['closes_at_local']}. "
+                   f"Answers are applied by the Response Reader Agent and re-checked against the drive.")
     return Step(None, RunStatus.COMPLETED, run.summary)
 
 
@@ -454,6 +619,15 @@ NODES: dict[str, Callable[[ToolContext], Step]] = {
     "notify": node_notify,
     "invite": node_invite,
     "request_data": node_request_data,
+    "check_consent": node_check_consent,
+    "review": node_review,
+    "consent_form": node_consent_form,
+    "read_email": node_read_email,
+    "check_email": node_check_email,
+    "create_drive": node_create_drive,
+    "publish": node_publish,
+    "build_forms": node_build_forms,
+    "send_forms": node_send_forms,
 }
 
 
@@ -477,7 +651,8 @@ def _summary(run: AgentRun) -> str:
 # --------------------------------------------------------------------------- runtime
 
 def _ctx(db: Session, run: AgentRun) -> ToolContext:
-    return ToolContext(db=db, run=run, user=db.get(User, run.created_by_id) if run.created_by_id else None)
+    return ToolContext(db=db, run=run, user=db.get(User, run.created_by_id) if run.created_by_id else None,
+                       llm_client=_llm_override.get(run.id))
 
 
 def advance(db: Session, run: AgentRun, max_steps: int = 25) -> AgentRun:
@@ -490,45 +665,51 @@ def advance(db: Session, run: AgentRun, max_steps: int = 25) -> AgentRun:
         run.current_step = node
         run.status = NODE_STATUS.get(node, run.status)
         _mark(run, node, "running")
-        emit(db, run, "NODE_START", node=node, status=run.status, message=f"Entering {node}")
-        db.commit()
+        agent = agent_for_node(node)
+        token = CURRENT_AGENT.set(agent)
         try:
-            step = fn(ctx)
-        except ToolFailure as exc:
-            db.rollback()
-            run = db.get(AgentRun, run.id)
-            ctx.run = run
-            _mark(run, node, "failed", exc.message)
-            run.status, run.error = RunStatus.FAILED, exc.message
-            _set_state(run, next_node=None, failed_node=node)
-            run.pending_question = {"type": "failure", "question": f"Step '{node}' failed: {exc.message}",
-                                    "options": [{"value": "retry", "label": "Retry this step"}, {"value": "stop", "label": "Stop"}]}
-            emit(db, run, "ERROR", node=node, status="FAILED", message=exc.message)
+            emit(db, run, "NODE_START", node=node, status=run.status,
+                 message=f"{agent.name}: {node}" if agent else f"Entering {node}")
             db.commit()
-            return run
-        except Exception as exc:  # noqa: BLE001 - unexpected errors stop the run safely
-            db.rollback()
-            run = db.get(AgentRun, run.id)
-            ctx.run = run
-            run.status, run.error = RunStatus.FAILED, f"{type(exc).__name__}: {exc}"
-            _set_state(run, next_node=None, failed_node=node)
-            run.pending_question = {"type": "failure", "question": f"Unexpected error in '{node}'",
-                                    "options": [{"value": "retry", "label": "Retry this step"}, {"value": "stop", "label": "Stop"}]}
-            emit(db, run, "ERROR", node=node, status="FAILED", message=run.error,
-                 payload={"trace": traceback.format_exc()[-3000:]})
+            try:
+                step = fn(ctx)
+            except ToolFailure as exc:
+                db.rollback()
+                run = db.get(AgentRun, run.id)
+                ctx.run = run
+                _mark(run, node, "failed", exc.message)
+                run.status, run.error = RunStatus.FAILED, exc.message
+                _set_state(run, next_node=None, failed_node=node)
+                run.pending_question = {"type": "failure", "question": f"Step '{node}' failed: {exc.message}",
+                                        "options": [{"value": "retry", "label": "Retry this step"}, {"value": "stop", "label": "Stop"}]}
+                emit(db, run, "ERROR", node=node, status="FAILED", message=exc.message)
+                db.commit()
+                return run
+            except Exception as exc:  # noqa: BLE001 - unexpected errors stop the run safely
+                db.rollback()
+                run = db.get(AgentRun, run.id)
+                ctx.run = run
+                run.status, run.error = RunStatus.FAILED, f"{type(exc).__name__}: {exc}"
+                _set_state(run, next_node=None, failed_node=node)
+                run.pending_question = {"type": "failure", "question": f"Unexpected error in '{node}'",
+                                        "options": [{"value": "retry", "label": "Retry this step"}, {"value": "stop", "label": "Stop"}]}
+                emit(db, run, "ERROR", node=node, status="FAILED", message=run.error,
+                     payload={"trace": traceback.format_exc()[-3000:]})
+                db.commit()
+                return run
+            _set_state(run, next_node=step.next_node)
+            if step.next_node is None:
+                run.status = step.status
+                emit(db, run, "INTERRUPT" if step.status not in TERMINAL_RUN_STATES else "COMPLETE", node=node,
+                     status=step.status, message=step.message)
+                ledger.record(db, actor_type=ActorType.AGENT, actor_id=f"agent:run:{run.id}", action=f"AGENT_RUN_{step.status}",
+                              entity_type="agent_run", entity_id=run.id, run_id=run.id, drive_id=run.drive_id,
+                              details={"node": node, "message": step.message})
+            else:
+                emit(db, run, "TRANSITION", node=node, status="OK", message=f"{node} -> {step.next_node}")
             db.commit()
-            return run
-        _set_state(run, next_node=step.next_node)
-        if step.next_node is None:
-            run.status = step.status
-            emit(db, run, "INTERRUPT" if step.status not in TERMINAL_RUN_STATES else "COMPLETE", node=node,
-                 status=step.status, message=step.message)
-            ledger.record(db, actor_type=ActorType.AGENT, actor_id=f"agent:run:{run.id}", action=f"AGENT_RUN_{step.status}",
-                          entity_type="agent_run", entity_id=run.id, run_id=run.id, drive_id=run.drive_id,
-                          details={"node": node, "message": step.message})
-        else:
-            emit(db, run, "TRANSITION", node=node, status="OK", message=f"{node} -> {step.next_node}")
-        db.commit()
+        finally:
+            CURRENT_AGENT.reset(token)
     return run
 
 
@@ -557,6 +738,62 @@ def start_run(db: Session, objective: str, user: User, *, llm_client: Any | None
 _llm_override: dict[int, Any] = {}
 
 
+def _start_workflow(db: Session, user: User, *, objective: str, intent: str, first_node: str, state: dict[str, Any],
+                    drive_id: int | None = None, llm_client: Any | None = None) -> AgentRun:
+    run = AgentRun(objective=objective, planner_mode="DETERMINISTIC_FALLBACK", status=RunStatus.DRAFT,
+                   created_by_id=user.id, intent=intent, drive_id=drive_id, plan=_plan(intent),
+                   state={"next_node": first_node, **state})
+    db.add(run)
+    db.flush()
+    emit(db, run, "GOAL", node=None, status=RunStatus.DRAFT, message=objective, payload={"user_id": user.id, "role": user.role})
+    emit(db, run, "PLAN", node=None, status="OK", message=f"Workflow {intent}", payload={"intent": intent, "steps": run.plan})
+    ledger.record(db, actor_type=ActorType.USER, actor_id=f"user:{user.id}", action="AGENT_RUN_STARTED",
+                  entity_type="agent_run", entity_id=run.id, run_id=run.id, drive_id=drive_id,
+                  details={"objective": objective, "intent": intent})
+    db.commit()
+    if llm_client is not None:
+        _llm_override[run.id] = llm_client
+    try:
+        return advance(db, run)
+    finally:
+        _llm_override.pop(run.id, None)
+
+
+def start_intake_run(db: Session, email_row: Any, user: User, *, llm_client: Any | None = None) -> AgentRun:
+    """Stage 1: Email Reader -> Criteria Check -> Drive Builder -> Consent Form -> Student Outreach."""
+    if user.role not in (Role.COORDINATOR, Role.OFFICER, Role.ADMIN):
+        raise PermissionDenied("Only the drive upload officer, placement officers or admins process company emails")
+    if email_row.status in ("DRIVE_CREATED", "PUBLISHED", "IGNORED"):
+        raise Conflict(f"This email was already handled ({email_row.status.lower().replace('_', ' ')})")
+    if email_row.run_id:
+        existing = db.get(AgentRun, email_row.run_id)
+        if existing is not None and existing.status in (RunStatus.NEEDS_REVIEW, RunStatus.FAILED):
+            return existing
+        if existing is not None and existing.status not in TERMINAL_RUN_STATES:
+            raise Conflict("This email is already being processed")
+    email_row.status = "PROCESSING"
+    run = _start_workflow(db, user, objective=f"Process company email #{email_row.id}: {email_row.subject}"[:2000],
+                          intent="PROCESS_COMPANY_EMAIL", first_node="read_email", state={"email_id": email_row.id},
+                          llm_client=llm_client)
+    if email_row.run_id != run.id:
+        email_row.run_id = run.id
+        db.commit()
+    return run
+
+
+def start_followup_run(db: Session, drive: Drive, user: User, closes_at: Any) -> AgentRun:
+    """Stage 3: Form Builder -> Follow-up Mailer, started by the approver (or an officer)."""
+    if user.role not in (Role.APPROVER, Role.OFFICER, Role.ADMIN):
+        raise PermissionDenied("Only approvers, placement officers or admins can send follow-up forms")
+    if closes_at <= utcnow():
+        raise ValidationFailed("The forms must close in the future")
+    if closes_at > drive.starts_at:
+        raise ValidationFailed("The forms must close before the drive starts")
+    return _start_workflow(db, user, objective=f"Ask students with missing details or consent for drive #{drive.id}",
+                           intent="FOLLOW_UP", first_node="build_forms", drive_id=drive.id,
+                           state={"closes_at": closes_at.isoformat()})
+
+
 def get_run(db: Session, run_id: int) -> AgentRun:
     run = db.get(AgentRun, run_id)
     if run is None:
@@ -565,9 +802,14 @@ def get_run(db: Session, run_id: int) -> AgentRun:
 
 
 def answer(db: Session, run: AgentRun, user: User, value: Any) -> AgentRun:
-    """Officer's response to a NEEDS_REVIEW / FAILED interrupt."""
-    if user.role not in (Role.OFFICER, Role.ADMIN):
-        raise PermissionDenied("Only officers or admins can answer agent questions")
+    """A person's response to a NEEDS_REVIEW / FAILED interrupt."""
+    allowed = {Role.OFFICER, Role.ADMIN}
+    if run.intent == "PROCESS_COMPANY_EMAIL":
+        allowed.add(Role.COORDINATOR)
+    if run.intent == "FOLLOW_UP":
+        allowed.add(Role.APPROVER)
+    if user.role not in allowed:
+        raise PermissionDenied("Your role cannot answer this agent's questions")
     q = run.pending_question or {}
     if run.status not in (RunStatus.NEEDS_REVIEW, RunStatus.FAILED):
         raise Conflict(f"Run is {run.status}; it is not waiting for an officer answer")
@@ -605,7 +847,29 @@ def answer(db: Session, run: AgentRun, user: User, value: Any) -> AgentRun:
         run.plan = _plan("INVITE_STUDENTS")
         _mark(run, "interpret_goal", "done")
         _mark(run, "validate_scope", "done")
-        next_node = "invite"
+        next_node = "consent_form"
+    elif qtype == "intake_review" and value in ("confirm", "recheck"):
+        from app.services import intake
+
+        row = intake.get(db, int(run.state["email_id"]))
+        if value == "confirm":
+            if any(i["level"] == "ERROR" for i in intake.check(db, row)):
+                raise ValidationFailed("The email still has errors; correct the details first, then check again")
+            ledger.record(db, actor_type=ActorType.USER, actor_id=f"user:{user.id}", action="COMPANY_EMAIL_CONFIRMED",
+                          entity_type="inbound_email", entity_id=row.id,
+                          details={"acknowledged": [i["code"] for i in row.issues if i["level"] == "REVIEW"]})
+        _set_state(run, review_acknowledged=value == "confirm")
+        _mark(run, "check_email", "pending")
+        next_node = "check_email"
+    elif qtype == "intake_review" and value == "ignore":
+        from app.services import intake
+
+        intake.ignore(db, intake.get(db, int(run.state["email_id"])), user, "Ignored from the agent's question")
+        exceptions.auto_resolve(db, f"intake:{run.state['email_id']}", "Email ignored")
+        run.status, run.pending_question, run.summary = RunStatus.COMPLETED, None, "Company email ignored"
+        _set_state(run, next_node=None)
+        db.commit()
+        return run
     elif qtype == "invitations_needed" and value == "continue":
         _set_state(run, invitations_checked=True)
         next_node = "retrieve_evidence"

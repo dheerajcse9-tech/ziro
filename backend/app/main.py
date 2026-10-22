@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 import app.models  # noqa: F401  (register all tables)
-from app.api import routes_core, routes_ops, routes_outreach
+from app.api import routes_core, routes_intake, routes_ops, routes_outreach
 from app.audit.ledger import AuditImmutableError
 from app.core.config import get_settings
 from app.core.errors import DomainError
@@ -41,7 +41,11 @@ async def lifespan(_: FastAPI):
         if settings.demo_mode:
             with SessionLocal() as db:
                 log.info("seed: %s", seed(db))
+    from app.services import autopilot
+
+    autopilot.start()  # background agents: mailbox, deadlines, reminders (AUTOPILOT=false to disable)
     yield
+    autopilot.stop()
 
 
 app = FastAPI(
@@ -82,6 +86,7 @@ async def unhandled(request: Request, exc: Exception):
 app.include_router(routes_core.router)
 app.include_router(routes_ops.router)
 app.include_router(routes_outreach.router)
+app.include_router(routes_intake.router)
 # The LOCAL MOCK employer portal is a separate ASGI app; PlacementOS reaches it only over HTTP.
 app.mount("/mock-portal", create_mock_portal_app(SessionLocal, mock_admin_token()))
 

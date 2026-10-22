@@ -8,7 +8,7 @@ officer to verify and apply it.
 from __future__ import annotations
 
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -48,7 +48,8 @@ from app.services.roster import current_criteria, evaluate_drive
 
 RULE_TO_FIELD = {"CGPA": "cgpa", "BACKLOGS": "active_backlogs", "BRANCH": "branch", "GRADUATION_YEAR": "graduation_year"}
 FIELD_LABEL = {"cgpa": "CGPA", "active_backlogs": "Number of active backlogs", "branch": "Branch",
-               "graduation_year": "Graduation year"}
+               "graduation_year": "Graduation year", "consent": "Consent for this drive"}
+DATA_FIELDS = ("cgpa", "active_backlogs", "branch", "graduation_year")
 OPEN_INVITATION = (RequestStatus.SENT, RequestStatus.ACCEPTED, RequestStatus.DECLINED)
 
 
@@ -77,8 +78,9 @@ def _criteria_summary(db: Session, drive: Drive) -> str:
 
 
 def _new_request(db: Session, *, kind: str, student: Student, drive: Drive | None, fields: list[str],
-                 criteria_version: int | None, ttl: timedelta, user: User | None) -> StudentRequest:
-    expires = utcnow() + ttl
+                 criteria_version: int | None, ttl: timedelta | None = None, user: User | None,
+                 expires_at: datetime | None = None) -> StudentRequest:
+    expires = expires_at or utcnow() + ttl
     if drive is not None and kind == RequestKind.DRIVE_INVITATION:
         expires = min(expires, drive.starts_at)
     req = StudentRequest(kind=kind, token=secrets.token_urlsafe(32), student_id=student.id,
@@ -96,45 +98,54 @@ def _actor(user: User | None, fallback: str = "system") -> str:
 
 # --------------------------------------------------------------------------- invitations
 
-def invite_eligible(db: Session, drive: Drive, user: User | None, actor: str | None = None) -> dict[str, Any]:
-    """Email a personal registration link to every student who meets this drive's criteria."""
+def invite_eligible(db: Session, drive: Drive, user: User | None, actor: str | None = None,
+                    audience: str | None = None) -> dict[str, Any]:
+    """Student Outreach Agent: email each recipient a personal link to the drive's consent form.
+
+    The drive's consent form decides the audience: every student (forms made from company emails) or only
+    students who already meet the criteria. One link per student per drive; re-running never duplicates.
+    """
+    from app.services import consent_forms
+
     if drive.starts_at <= utcnow():
         raise PreconditionFailed("The drive has already started; invitations can no longer be sent")
+    actor = actor or _actor(user)
+    form, _ = consent_forms.create_form(db, drive, actor, audience or "ELIGIBLE")
+    if form.status != "OPEN" or form.closes_at <= utcnow():
+        raise PreconditionFailed("The consent form for this drive is closed")
     ev = evaluate_drive(db, drive)
     already = {r.student_id for r in db.scalars(select(StudentRequest).where(
         StudentRequest.drive_id == drive.id, StudentRequest.kind == RequestKind.DRIVE_INVITATION,
         StudentRequest.status.in_(OPEN_INVITATION)))}
-    actor = actor or _actor(user)
     sent, skipped = [], []
-    criteria = _criteria_summary(db, drive)
+    closes = to_local(form.closes_at, drive.timezone)
     for o in ev.outcomes:
-        if o.decision != Decision.ELIGIBLE:
+        if form.audience == "ELIGIBLE" and o.decision != Decision.ELIGIBLE:
             continue
         if o.student_id in already:
             skipped.append(o.roll_number)
             continue
         s = db.get(Student, o.student_id)
         req = _new_request(db, kind=RequestKind.DRIVE_INVITATION, student=s, drive=drive, fields=[],
-                           criteria_version=ev.criteria.version, ttl=timedelta(days=14), user=user)
-        body = (f"Dear {_first_name(s)},\n\n"
-                f"You meet the eligibility criteria for {drive.title} ({drive.employer.name}).\n\n"
-                f"  Date & time: {_slot(drive)}\n  Venue: {drive.location or 'to be announced'}\n"
-                f"  Criteria: {criteria}\n\n"
-                f"To register and allow the Placement Cell to share your profile (roll number, name, branch, CGPA) "
-                f"with {drive.employer.name} for this drive, open your personal link and choose Accept or Decline:\n\n"
-                f"  {_link(req.token)}\n\n"
-                f"The link expires on {to_local(req.expires_at, drive.timezone):%d %b %Y %H:%M}. "
-                f"If you do not respond, your details will not be shared for this drive.\n\n— Placement Cell")
+                           criteria_version=ev.criteria.version, expires_at=form.closes_at, user=user)
+        intro = (f"You meet the eligibility criteria for {drive.title}." if form.audience == "ELIGIBLE" else
+                 f"A new placement drive is open: {drive.title}. Please read the eligibility criteria below.")
+        body = (f"Dear {_first_name(s)},\n\n{intro}\n\n"
+                + "\n".join(f"  {ln}" if ln else "" for ln in form.description.splitlines())
+                + f"\n\nAnswer the consent form (YES or NO) with your personal link:\n\n  {_link(req.token)}\n\n"
+                f"Please answer by {closes:%d %b %Y, %H:%M}. — Placement Cell")
         mailer.send(db, category=EmailCategory.DRIVE_INVITATION, to_address=s.email, to_name=s.full_name,
-                    subject=f"Invitation: {drive.title} — please confirm by {to_local(req.expires_at, drive.timezone):%d %b}",
+                    subject=f"Consent form: {drive.title} — answer by {closes:%d %b}",
                     body=body, dedupe_key=f"invite:{req.id}", sent_by=actor, student_id=s.id, drive_id=drive.id,
                     request_id=req.id)
         sent.append(s.roll_number)
-    ledger.record(db, actor_type=ActorType.USER if user else ActorType.AGENT, actor_id=actor, action="INVITATIONS_SENT",
-                  entity_type="drive", entity_id=drive.id, drive_id=drive.id,
-                  details={"sent": len(sent), "already_invited": len(skipped), "criteria_version": ev.criteria.version})
+    ledger.record(db, actor_type=ActorType.AGENT if actor.startswith("agent") else ActorType.USER, actor_id=actor,
+                  action="INVITATIONS_SENT", entity_type="drive", entity_id=drive.id, drive_id=drive.id,
+                  details={"sent": len(sent), "already_invited": len(skipped), "criteria_version": ev.criteria.version,
+                           "audience": form.audience, "consent_form_id": form.id})
     db.commit()
-    return {"sent": sent, "already_invited": skipped, "criteria_version": ev.criteria.version}
+    return {"sent": sent, "already_invited": skipped, "criteria_version": ev.criteria.version,
+            "audience": form.audience, "consent_form_id": form.id}
 
 
 def invitation_summary(db: Session, drive_id: int) -> list[dict[str, Any]]:
@@ -147,24 +158,35 @@ def invitation_summary(db: Session, drive_id: int) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- missing data
 
 def request_missing_data(db: Session, student: Student, fields: list[str], user: User | None,
-                         drive: Drive | None = None, actor: str | None = None) -> StudentRequest:
-    fields = [f for f in fields if f in FIELD_LABEL]
+                         drive: Drive | None = None, actor: str | None = None,
+                         expires_at: datetime | None = None) -> StudentRequest:
+    """Follow-up Mailer Agent: a personal form with exactly the student's missing fields (and consent, for a drive)."""
+    fields = [f for f in fields if f in FIELD_LABEL and (f != "consent" or drive is not None)]
     if not fields:
         raise ValidationFailed("Choose at least one field to request")
+    if expires_at is not None and expires_at <= utcnow():
+        raise ValidationFailed("The form must close in the future")
     open_req = db.scalar(select(StudentRequest).where(
         StudentRequest.student_id == student.id, StudentRequest.kind == RequestKind.DATA_REQUEST,
         StudentRequest.status == RequestStatus.SENT, StudentRequest.expires_at > utcnow()))
     if open_req is not None and set(fields) <= set(open_req.requested_fields):
         return open_req
     req = _new_request(db, kind=RequestKind.DATA_REQUEST, student=student, drive=drive, fields=fields,
-                       criteria_version=None, ttl=timedelta(days=7), user=user)
+                       criteria_version=None, ttl=timedelta(days=7), expires_at=expires_at, user=user)
     why = f" so that you can be considered for {drive.title} ({drive.employer.name})" if drive else ""
+    tz = drive.timezone if drive else get_settings().default_timezone
+    missing = [FIELD_LABEL[f] for f in fields if f != "consent"]
+    asks = []
+    if missing:
+        asks.append(f"your placement record (roll number {student.roll_number}) is missing: {', '.join(missing)}")
+    if "consent" in fields:
+        asks.append(f"we have not received your consent answer for {drive.title}")
+    sentence = "; and ".join(asks)
     body = (f"Dear {_first_name(student)},\n\n"
-            f"Your placement record (roll number {student.roll_number}) is missing: "
-            f"{', '.join(FIELD_LABEL[f] for f in fields)}. Please provide it{why} using your personal link:\n\n"
+            f"{sentence[:1].upper() + sentence[1:]}. Please complete your personal form{why}:\n\n"
             f"  {_link(req.token)}\n\n"
-            f"The Placement Cell verifies the details before updating your record. "
-            f"The link expires in 7 days.\n\n— Placement Cell")
+            f"The form closes on {to_local(req.expires_at, tz):%d %b %Y at %H:%M}. "
+            f"After that it can no longer be submitted.\n\n— Placement Cell")
     mailer.send(db, category=EmailCategory.DATA_REQUEST, to_address=student.email, to_name=student.full_name,
                 subject="Action needed: missing details in your placement record", body=body,
                 dedupe_key=f"data-request:{req.id}", sent_by=actor or _actor(user), student_id=student.id,
@@ -208,17 +230,32 @@ def public_view(db: Session, req: StudentRequest) -> dict[str, Any]:
                            "requested_fields": [{"field": f, "label": FIELD_LABEL[f]} for f in req.requested_fields],
                            "branches": [{"code": k, "label": v} for k, v in BRANCH_LABELS.items()]}
     if req.drive is not None:
+        from app.services.consent_forms import get_form
+
         d = req.drive
         out["drive"] = {"title": d.title, "employer": d.employer.name, "slot": _slot(d), "location": d.location,
                         "criteria": _criteria_summary(db, d)}
+        form = get_form(db, d.id) if req.kind == RequestKind.DRIVE_INVITATION else None
+        if form is not None:
+            out["form"] = {"title": form.title, "description": form.description, "questions": form.questions,
+                           "status": form.status, "closes_at": form.closes_at.isoformat()}
+        if "consent" in req.requested_fields:
+            out["consent_question"] = (f"Do you want to take part in {d.title} and allow the Placement Cell to share your "
+                                       f"roll number, name, branch, CGPA and backlog count with {d.employer.name}?")
+    if req.status == RequestStatus.APPLIED and (req.response or {}).get("recheck"):
+        out["recheck"] = req.response["recheck"]
     return out
 
 
-def respond_invitation(db: Session, req: StudentRequest, accept: bool) -> StudentRequest:
+def respond_invitation(db: Session, req: StudentRequest, accept: bool, comment: str | None = None) -> StudentRequest:
+    from app.services.consent_forms import get_form
     from app.services.students import set_consent
 
     if req.kind != RequestKind.DRIVE_INVITATION:
         raise ValidationFailed("This link is not an invitation")
+    form = get_form(db, req.drive_id)
+    if form is not None and (form.status != "OPEN" or form.closes_at <= utcnow()):
+        raise PreconditionFailed("This consent form has closed. Please contact the Placement Cell.")
     if req.status == RequestStatus.EXPIRED:
         raise PreconditionFailed("This invitation has expired. Please contact the Placement Cell.")
     if req.status not in (RequestStatus.SENT, RequestStatus.ACCEPTED, RequestStatus.DECLINED):
@@ -227,7 +264,8 @@ def respond_invitation(db: Session, req: StudentRequest, accept: bool) -> Studen
     if req.status == new_status:
         return req
     req.status, req.responded_at = new_status, utcnow()
-    req.response = {"accepted": accept, "answered_at": req.responded_at.isoformat()}
+    req.response = {"accepted": accept, "answered_at": req.responded_at.isoformat(),
+                    **({"comment": comment.strip()[:1000]} if comment and comment.strip() else {})}
     criteria = current_criteria(db, req.drive_id)
     scope = consent_scope_key("DRIVE_REGISTRATION", req.drive_id)
     set_consent(db, req.student, accept, f"Invitation response (request #{req.id})", None,
@@ -240,60 +278,123 @@ def respond_invitation(db: Session, req: StudentRequest, accept: bool) -> Studen
     return req
 
 
-def submit_data(db: Session, req: StudentRequest, values: dict[str, Any]) -> StudentRequest:
-    if req.kind != RequestKind.DATA_REQUEST:
-        raise ValidationFailed("This link is not a data request")
-    if req.status == RequestStatus.EXPIRED:
-        raise PreconditionFailed("This link has expired. Please contact the Placement Cell.")
-    if req.status != RequestStatus.SENT:
-        raise Conflict("Details were already submitted with this link")
+def _parse_submission(req: StudentRequest, values: dict[str, Any]) -> dict[str, Any]:
     clean, errors = {}, {}
     for f in req.requested_fields:
         raw = values.get(f)
-        if f == "cgpa":
-            parsed = parse_cgpa(raw)
-        elif f == "active_backlogs":
-            parsed = parse_backlogs(raw)
-        elif f == "graduation_year":
-            parsed = parse_year(raw)
-        else:
+        if f == "consent":
+            if isinstance(raw, bool):
+                clean[f] = raw
+            elif str(raw).strip().lower() in {"yes", "true", "1"}:
+                clean[f] = True
+            elif str(raw).strip().lower() in {"no", "false", "0"}:
+                clean[f] = False
+            else:
+                errors[f] = "Choose Yes or No"
+            continue
+        if f == "branch":
             code = normalize_branch(raw)
             clean[f] = code
             if code is None:
                 errors[f] = "Choose a branch from the list"
             continue
+        parsed = {"cgpa": parse_cgpa, "active_backlogs": parse_backlogs, "graduation_year": parse_year}[f](raw)
         if parsed.value is None:
             errors[f] = parsed.issues[0].message if parsed.issues else "Required"
         clean[f] = parsed.value
     if errors:
         raise ValidationFailed("Please correct the highlighted fields", details={"fields": errors})
+    return clean
+
+
+def _apply_submission(db: Session, req: StudentRequest, actor: str, user: User | None) -> dict[str, Any]:
+    """Write submitted values to the student record (data fields marked self-reported) and record consent."""
+    from app.services.students import set_consent, update_student
+
+    values = dict(req.response.get("values", {}))
+    s = req.student
+    data = {k: v for k, v in values.items() if k in DATA_FIELDS}
+    result: dict[str, Any] = {}
+    if data:
+        result = update_student(db, s, data, user, actor=actor)
+        s.self_reported = [x for x in (s.self_reported or []) if x.get("field") not in data] + [
+            {"field": k, "value": v, "request_id": req.id, "at": utcnow().isoformat()} for k, v in data.items()]
+    if "consent" in values and req.drive_id is not None:
+        set_consent(db, s, bool(values["consent"]), f"Personal form (request #{req.id})", None,
+                    source=f"data-request:{req.id}", scope=consent_scope_key("DRIVE_REGISTRATION", req.drive_id),
+                    actor=actor)
+        # The drive's consent form answer for this student follows the latest answer.
+        for inv in db.scalars(select(StudentRequest).where(
+                StudentRequest.drive_id == req.drive_id, StudentRequest.student_id == s.id,
+                StudentRequest.kind == RequestKind.DRIVE_INVITATION)):
+            inv.status = RequestStatus.ACCEPTED if values["consent"] else RequestStatus.DECLINED
+            inv.responded_at = inv.responded_at or utcnow()
+    db.flush()
+    return result
+
+
+def recheck_student(db: Session, student: Student, drive: Drive) -> dict[str, Any]:
+    """Eligibility Re-check Agent: evaluate one student against one drive (read-only)."""
+    ev = evaluate_drive(db, drive)
+    o = next(x for x in ev.outcomes if x.student_id == student.id)
+    out = {"drive_id": drive.id, "drive_title": drive.title, "decision": o.decision, "roster_status": o.roster_status,
+           "reasons": o.reasons, "now_qualifies": o.roster_status == "INCLUDED"}
+    ledger.record(db, actor_type=ActorType.AGENT, actor_id="agent:recheck", action="ELIGIBILITY_RECHECKED",
+                  entity_type="student", entity_id=student.id, drive_id=drive.id,
+                  details={"roll_number": student.roll_number, "decision": o.decision, "roster_status": o.roster_status})
+    return out
+
+
+def submit_data(db: Session, req: StudentRequest, values: dict[str, Any]) -> StudentRequest:
+    """A student submits their personal form. The Response Reader Agent validates it and, when the
+    institution allows (auto_apply_student_data), applies it at once; otherwise an officer verifies it."""
+    from app.services import app_settings
+
+    if req.kind != RequestKind.DATA_REQUEST:
+        raise ValidationFailed("This link is not a data request")
+    if req.status == RequestStatus.SENT and req.expires_at <= utcnow():
+        req.status = RequestStatus.EXPIRED
+        db.commit()
+    if req.status == RequestStatus.EXPIRED:
+        raise PreconditionFailed("This form has closed. Please contact the Placement Cell.")
+    if req.status != RequestStatus.SENT:
+        raise Conflict("Details were already submitted with this link")
+    clean = _parse_submission(req, values)
     req.status, req.responded_at = RequestStatus.SUBMITTED, utcnow()
     req.response = {"values": clean, "submitted_at": req.responded_at.isoformat()}
     s = req.student
+    ledger.record(db, actor_type=ActorType.USER, actor_id=f"student:{s.roll_number}", action="STUDENT_DATA_SUBMITTED",
+                  entity_type="student_request", entity_id=req.id, drive_id=req.drive_id, details={"fields": list(clean)})
+    if app_settings.get(db, "auto_apply_student_data"):
+        _apply_submission(db, req, "agent:response_reader", None)
+        req.status, req.reviewed_at = RequestStatus.APPLIED, utcnow()
+        ledger.record(db, actor_type=ActorType.AGENT, actor_id="agent:response_reader", action="STUDENT_DATA_APPLIED",
+                      entity_type="student_request", entity_id=req.id, drive_id=req.drive_id,
+                      details={"roll_number": s.roll_number, "fields": list(clean), "self_reported": True})
+        if req.drive is not None and current_criteria(db, req.drive_id) is not None:
+            req.response = {**req.response, "recheck": recheck_student(db, s, req.drive)}
+        db.commit()
+        return req
     exceptions.raise_exception(
         db, kind=ExceptionKind.DATA_SUBMITTED, severity=Severity.WARNING,
         title=f"{s.roll_number} submitted missing details — verify and apply",
         dedupe_key=f"data-submitted:{req.id}",
         detail={"request_id": req.id, "roll_number": s.roll_number, "submitted": clean,
-                "current": {f: getattr(s, f) for f in clean}},
+                "current": {f: getattr(s, f) for f in clean if f in DATA_FIELDS}},
         drive_id=req.drive_id, student_id=s.id,
     )
-    ledger.record(db, actor_type=ActorType.USER, actor_id=f"student:{s.roll_number}", action="STUDENT_DATA_SUBMITTED",
-                  entity_type="student_request", entity_id=req.id, details={"fields": list(clean)})
     db.commit()
     return req
 
 
 def review_data(db: Session, request_id: int, user: User, apply: bool, note: str | None = None) -> StudentRequest:
-    from app.services.students import update_student
-
     req = db.get(StudentRequest, request_id)
     if req is None or req.kind != RequestKind.DATA_REQUEST:
         raise NotFound("Data request not found")
     if req.status != RequestStatus.SUBMITTED:
         raise Conflict(f"Request is {req.status}; only submitted details can be reviewed")
     if apply:
-        update_student(db, req.student, dict(req.response.get("values", {})), user)
+        _apply_submission(db, req, f"user:{user.id}", user)
     req.status = RequestStatus.APPLIED if apply else RequestStatus.REJECTED
     req.reviewed_by_id, req.reviewed_at = user.id, utcnow()
     exc = exceptions.get_by_key(db, f"data-submitted:{req.id}")
@@ -342,15 +443,40 @@ def notify_upload(db: Session, op: UploadOperation, actor: str) -> dict[str, Any
     for s in rows:
         student_msgs.append(mailer.send(
             db, category=EmailCategory.PROFILE_SUBMITTED, to_address=s.email, to_name=s.full_name,
-            subject=f"You are registered for {drive.title}",
-            body=(f"Dear {_first_name(s)},\n\nYour profile has been sent to {employer.name} for {drive.title}.\n\n"
-                  f"  Date & time: {_slot(drive)}\n  Venue: {drive.location or 'to be announced'}\n\n"
-                  f"Please carry your college ID card. Your attendance will be marked on the day.\n\n— Placement Cell"),
+            subject=f"Shortlisted for {drive.title} — your profile was sent to {employer.name}",
+            body=(f"Dear {_first_name(s)},\n\nYou are shortlisted for {drive.title}: your profile has been sent to "
+                  f"{employer.name}.\n\n  Date & time: {_slot(drive)}\n  Venue: {drive.location or 'to be announced'}\n\n"
+                  f"Please carry your college ID card. Your attendance will be marked on the day. "
+                  f"You will get a reminder before the drive.\n\n— Placement Cell"),
             dedupe_key=f"profile-submitted:{op.id}:{s.id}", sent_by=actor, student_id=s.id, drive_id=drive.id,
             upload_id=op.id))
+    not_shortlisted = notify_not_shortlisted(db, drive, actor) if op.proposal.kind != "SUPPLEMENT" else 0
     db.commit()
     return {"employer_email": employer_msg.status, "employer_address": employer.contact_email,
-            "students_notified": sum(m.status != "SKIPPED" for m in student_msgs), "emails": len(student_msgs) + 1}
+            "students_notified": sum(m.status != "SKIPPED" for m in student_msgs), "emails": len(student_msgs) + 1,
+            "not_shortlisted_notified": not_shortlisted}
+
+
+def notify_not_shortlisted(db: Session, drive: Drive, actor: str) -> int:
+    """Tell students who said YES to this drive's consent form but do not meet the criteria, with the reason."""
+    criteria = current_criteria(db, drive.id)
+    if criteria is None or criteria.required_consent_scope != "DRIVE_REGISTRATION":
+        return 0
+    sent = 0
+    for o in evaluate_drive(db, drive).outcomes:
+        if o.decision != Decision.INELIGIBLE or not o.consent_ok:
+            continue
+        s = db.get(Student, o.student_id)
+        reasons = "\n".join(f"  - {r}" for r in o.reasons if "invitation" not in r.lower()) or "  - Eligibility criteria not met"
+        msg = mailer.send(
+            db, category=EmailCategory.NOT_SHORTLISTED, to_address=s.email, to_name=s.full_name,
+            subject=f"Not shortlisted for {drive.title}",
+            body=(f"Dear {_first_name(s)},\n\nThank you for registering for {drive.title}. Your profile was not sent to "
+                  f"{drive.employer.name} because it does not meet the company's criteria:\n\n{reasons}\n\n"
+                  f"If your record is wrong, contact the Placement Cell. Keep an eye on upcoming drives.\n\n— Placement Cell"),
+            dedupe_key=f"not-shortlisted:{drive.id}:{s.id}", sent_by=actor, student_id=s.id, drive_id=drive.id)
+        sent += msg.status != "SKIPPED"
+    return sent
 
 
 # --------------------------------------------------------------------------- selection results

@@ -10,7 +10,7 @@ from app.core.errors import Conflict, PreconditionFailed, ValidationFailed
 from app.db.base import utcnow
 from app.models.entities import DriveCriteria, EmailMessage, ExceptionItem, Student, StudentRequest
 from app.models.enums import RunStatus
-from app.services import approvals, outreach
+from app.services import app_settings, approvals, outreach
 from app.services.sandbox import ist
 
 
@@ -69,7 +69,9 @@ def test_invitations_drive_registration_consent(sb, people, registration_drive):
     assert outreach.invite_eligible(sb.db, d, people["officer"])["sent"] == []
 
 
-def test_missing_data_request_requires_officer_verification(sb, people):
+def test_missing_data_request_requires_officer_verification_when_auto_apply_is_off(sb, people):
+    app_settings.set_value(sb.db, "auto_apply_student_data", False)
+    sb.db.commit()
     s = sb.student("M001", "Missing Cgpa", "CSE", None, 0)
     d = sb.drive("Data Drive", ist(2026, 12, 21, 10), ist(2026, 12, 21, 12))
     run = graph.start_run(sb.db, f"Email students with missing data for drive #{d.id}", people["officer"])
@@ -133,7 +135,7 @@ def test_failed_smtp_email_can_be_retried(sb, monkeypatch):
     def unreachable(msg):
         raise socket.gaierror(8, "nodename nor servname provided, or not known")
 
-    monkeypatch.setattr(mailer, "transport_name", lambda: "SMTP")
+    monkeypatch.setattr(mailer, "transport_name", lambda db=None: "SMTP")
     monkeypatch.setattr(mailer, "_deliver_smtp", unreachable)
     msg = mailer.send(sb.db, category="DATA_REQUEST", to_address="s@example.edu", to_name="S", subject="Hi",
                       body="Body", dedupe_key="retry-test", sent_by="user:1")

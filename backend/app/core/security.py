@@ -52,3 +52,41 @@ def create_access_token(user_id: int, role: str) -> str:
 def decode_access_token(token: str) -> dict:
     settings = get_settings()
     return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"], issuer="placementos")
+
+
+def _fernet():
+    from cryptography.fernet import Fernet
+
+    key = hashlib.sha256(f"placementos-credentials:{get_settings().jwt_secret}".encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+
+def encrypt_secret(value: str) -> str:
+    """Encrypt a stored credential (e.g. a Google refresh token) with a key derived from JWT_SECRET."""
+    return _fernet().encrypt(value.encode()).decode()
+
+
+def decrypt_secret(token: str) -> str:
+    """Raises ValueError when the secret was encrypted under a different JWT_SECRET."""
+    from cryptography.fernet import InvalidToken
+
+    try:
+        return _fernet().decrypt(token.encode()).decode()
+    except InvalidToken as exc:
+        raise ValueError("Stored credential cannot be decrypted (JWT_SECRET changed?)") from exc
+
+
+def create_state_token(user_id: int, purpose: str, minutes: int = 10) -> str:
+    """Short-lived signed token for OAuth `state` (binds the callback to the user who started it)."""
+    now = utcnow()
+    payload = {"sub": str(user_id), "purpose": purpose, "nonce": base64.urlsafe_b64encode(os.urandom(12)).decode(),
+               "iat": int(now.timestamp()), "exp": int((now + timedelta(minutes=minutes)).timestamp()),
+               "iss": "placementos"}
+    return jwt.encode(payload, get_settings().jwt_secret, algorithm="HS256")
+
+
+def read_state_token(token: str, purpose: str) -> int:
+    payload = jwt.decode(token, get_settings().jwt_secret, algorithms=["HS256"], issuer="placementos")
+    if payload.get("purpose") != purpose:
+        raise jwt.InvalidTokenError("wrong purpose")
+    return int(payload["sub"])

@@ -33,9 +33,16 @@ def emit(
     status: str | None = None,
     duration_ms: int | None = None,
 ) -> AgentEvent:
+    from app.agent.crew import CURRENT_AGENT, agent_for_node
+
     seq = (db.scalar(select(func.max(AgentEvent.seq)).where(AgentEvent.run_id == run.id)) or 0) + 1
+    payload = dict(payload or {})
+    agent = CURRENT_AGENT.get() or agent_for_node(node)
+    if agent is not None:
+        payload.setdefault("agent", agent.key)
+        payload.setdefault("agent_name", agent.name)
     ev = AgentEvent(run_id=run.id, seq=seq, event_type=event_type, node=node, message=message,
-                    payload=_compact(payload or {}), tool_name=tool_name, status=status, duration_ms=duration_ms)
+                    payload=_compact(payload), tool_name=tool_name, status=status, duration_ms=duration_ms)
     db.add(ev)
     db.flush()
     return ev

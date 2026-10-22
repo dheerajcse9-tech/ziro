@@ -19,7 +19,7 @@ ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 def load_env_file(path: Path = ENV_FILE) -> None:
     """Populate os.environ from a simple KEY=VALUE file without overriding existing variables."""
-    if not path.is_file():
+    if not path.is_file() or os.getenv("PLACEMENTOS_IGNORE_ENV_FILE"):
         return
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
@@ -62,11 +62,26 @@ class Settings:
     )
     default_timezone: str = field(default_factory=lambda: os.getenv("DEFAULT_TIMEZONE", "Asia/Kolkata"))
 
-    # LLM planner. The key is optional: without it the agent runs its
-    # deterministic fallback planner and labels every run accordingly.
+    # AI model used by the Goal Planner and Email Reader agents. Keys are optional: without one the agents
+    # use their rule-based fallbacks and label every run accordingly. LLM_PROVIDER=auto picks Gemini when
+    # GEMINI_API_KEY is set, otherwise Claude when ANTHROPIC_API_KEY is set.
+    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "auto").strip().lower())
     llm_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
     llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "claude-opus-5-5"))
+    gemini_api_key: str = field(default_factory=lambda: os.getenv("GEMINI_API_KEY", ""))
+    gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-3.8-flash"))
+    gemini_base_url: str = field(default_factory=lambda: os.getenv(
+        "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"))
     llm_timeout_seconds: float = field(default_factory=lambda: float(os.getenv("LLM_TIMEOUT_SECONDS", "60")))
+
+    # Google sign-in for the placement mailbox (Gmail API: read company emails, send all outgoing email).
+    google_client_id: str = field(default_factory=lambda: os.getenv("GOOGLE_CLIENT_ID", ""))
+    google_client_secret: str = field(default_factory=lambda: os.getenv("GOOGLE_CLIENT_SECRET", ""))
+    google_redirect_uri: str = field(default_factory=lambda: os.getenv("GOOGLE_REDIRECT_URI", ""))
+
+    # Autopilot: background agents (mailbox, deadlines, reminders) every N seconds.
+    autopilot_enabled: bool = field(default_factory=lambda: _bool("AUTOPILOT", True))
+    autopilot_interval_seconds: int = field(default_factory=lambda: max(30, int(os.getenv("AUTOPILOT_INTERVAL_SECONDS", "120"))))
 
     # Destination integration. Only hosts in this allowlist may receive rosters.
     mock_portal_base_url: str = field(
@@ -110,8 +125,33 @@ class Settings:
         return self.database_url.startswith("sqlite")
 
     @property
+    def active_llm(self) -> str:
+        """'gemini', 'anthropic' or 'none'."""
+        if self.llm_provider == "gemini":
+            return "gemini" if self.gemini_api_key else "none"
+        if self.llm_provider == "anthropic":
+            return "anthropic" if self.llm_api_key else "none"
+        if self.llm_provider == "none":
+            return "none"
+        if self.gemini_api_key:
+            return "gemini"
+        return "anthropic" if self.llm_api_key else "none"
+
+    @property
+    def active_llm_model(self) -> str | None:
+        return {"gemini": self.gemini_model, "anthropic": self.llm_model}.get(self.active_llm)
+
+    @property
     def llm_enabled(self) -> bool:
-        return bool(self.llm_api_key)
+        return self.active_llm != "none"
+
+    @property
+    def google_configured(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
+
+    @property
+    def google_callback_url(self) -> str:
+        return self.google_redirect_uri or f"{self.public_app_url.rstrip('/')}/api/integrations/google/callback"
 
     def destination_host_allowed(self, url: str) -> bool:
         parsed = urlparse(url)

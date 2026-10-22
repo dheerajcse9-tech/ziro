@@ -10,7 +10,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api import serializers as S
-from app.api.deps import ANY_ROLE, OFFICER_ROLES, SESSION_COOKIE, current_user, require_roles
+from app.api.deps import ANY_ROLE, DRIVE_ROLES, OFFICER_ROLES, SESSION_COOKIE, current_user, require_roles
 from app.audit import ledger
 from app.core.config import get_settings
 from app.core.errors import NotFound
@@ -99,7 +99,7 @@ def health(db: Session = Depends(get_db)):
         "status": "ok" if db_ok else "degraded", "database": "ok" if db_ok else "unreachable",
         "database_dialect": db.get_bind().dialect.name, "environment": settings.environment, "demo_mode": settings.demo_mode,
         "planner": "LLM" if settings.llm_enabled else "DETERMINISTIC_FALLBACK",
-        "llm_model": settings.llm_model if settings.llm_enabled else None, "time": utcnow().isoformat(),
+        "llm_provider": settings.active_llm, "llm_model": settings.active_llm_model, "time": utcnow().isoformat(),
     }
 
 
@@ -349,7 +349,7 @@ def list_employers(db: Session = Depends(get_db), _: User = Depends(require_role
 
 
 @router.post("/employers", tags=["drives"], status_code=201)
-def create_employer(body: EmployerIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*OFFICER_ROLES))):
+def create_employer(body: EmployerIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*DRIVE_ROLES))):
     e = drive_svc.create_employer(db, body.model_dump(), user)
     db.commit()
     return S.employer(e)
@@ -456,7 +456,7 @@ def list_drives(status: str | None = None, db: Session = Depends(get_db), _: Use
 
 
 @router.post("/drives", tags=["drives"], status_code=201)
-def create_drive(body: DriveIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*OFFICER_ROLES))):
+def create_drive(body: DriveIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*DRIVE_ROLES))):
     data = body.model_dump()
     data["criteria"] = body.criteria.model_dump()
     d = drive_svc.create_drive(db, data, user)
@@ -474,11 +474,18 @@ def get_drive(drive_id: int, db: Session = Depends(get_db), _: User = Depends(re
         .order_by(ApprovalRequest.id.desc()))]
     uploads = [S.upload(u) for u in db.scalars(select(UploadOperation).where(UploadOperation.drive_id == d.id)
                                                  .order_by(UploadOperation.id.desc()))]
-    return {**S.drive(d, current_criteria(db, d.id)), "runs": runs, "approvals": approvals, "uploads": uploads}
+    from app.models.entities import InboundEmail
+    from app.services import consent_forms
+
+    source = db.scalar(select(InboundEmail).where(InboundEmail.drive_id == d.id).limit(1))
+    return {**S.drive(d, current_criteria(db, d.id)), "runs": runs, "approvals": approvals, "uploads": uploads,
+            "consent_form": consent_forms.summary(db, d.id),
+            "source_email": None if source is None else {"id": source.id, "from_address": source.from_address,
+                                                          "subject": source.subject}}
 
 
 @router.patch("/drives/{drive_id}", tags=["drives"])
-def patch_drive(drive_id: int, body: DrivePatch, db: Session = Depends(get_db), user: User = Depends(require_roles(*OFFICER_ROLES))):
+def patch_drive(drive_id: int, body: DrivePatch, db: Session = Depends(get_db), user: User = Depends(require_roles(*DRIVE_ROLES))):
     d = drive_svc.get_drive(db, drive_id)
     data = body.model_dump(exclude_unset=True)  # naive datetimes = wall-clock in the drive's timezone
     result = drive_svc.update_drive(db, d, data, user)
@@ -494,7 +501,7 @@ def criteria_versions(drive_id: int, db: Session = Depends(get_db), _: User = De
 
 
 @router.post("/drives/{drive_id}/criteria", tags=["drives"], status_code=201)
-def add_criteria(drive_id: int, body: CriteriaIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*OFFICER_ROLES))):
+def add_criteria(drive_id: int, body: CriteriaIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*DRIVE_ROLES))):
     d = drive_svc.get_drive(db, drive_id)
     row = drive_svc.add_criteria_version(db, d, body.model_dump(), user)
     db.commit()

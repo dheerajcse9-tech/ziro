@@ -14,6 +14,14 @@ DEFAULTS: dict[str, Any] = {
     "schedule_buffer_minutes": 0,
     "attendance_retention_days": 180,
     "attendance_fields": ["roll_number", "full_name", "branch"],
+    # Company email addresses whose recruitment emails are processed without a sender review.
+    "trusted_company_senders": [],
+    # Response Reader Agent applies values students submit on their personal form (marked self-reported).
+    # When false, an officer verifies each submission before it is applied.
+    "auto_apply_student_data": True,
+    # Reminder Agent timing (hours before a form closes / before the drive starts).
+    "reminder_hours_before_deadline": 24,
+    "reminder_hours_before_drive": 24,
 }
 
 

@@ -79,6 +79,8 @@ class Student(TimestampMixin, Base):
     active_backlogs: Mapped[int | None] = mapped_column(Integer)
     graduation_year: Mapped[int | None] = mapped_column(Integer)
     data_issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    # Values the student supplied through a personal form (field, value, request, time); shown to approvers.
+    self_reported: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, default=list)
     record_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
     last_import_id: Mapped[int | None] = mapped_column(ForeignKey("roster_imports.id"))
@@ -537,3 +539,37 @@ class InboundEmail(TimestampMixin, Base):
     note: Mapped[str | None] = mapped_column(Text)
 
     drive: Mapped[Drive | None] = relationship()
+
+
+class OAuthCredential(TimestampMixin, Base):
+    """A connected external account (Google/Gmail). The refresh token is stored encrypted."""
+
+    __tablename__ = "oauth_credentials"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    account_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    refresh_token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    scopes: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # CONNECTED / ERROR
+    last_error: Mapped[str | None] = mapped_column(Text)
+    connected_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    connected_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class ConsentForm(TimestampMixin, Base):
+    """The consent form for one drive. Every student gets a personal link to it (a DRIVE_INVITATION request)."""
+
+    __tablename__ = "consent_forms"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    drive_id: Mapped[int] = mapped_column(ForeignKey("drives.id", ondelete="CASCADE"), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    questions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    audience: Mapped[str] = mapped_column(String(20), nullable=False)  # ALL_STUDENTS / ELIGIBLE
+    closes_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # OPEN / CLOSED
+    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_by: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    drive: Mapped[Drive] = relationship()

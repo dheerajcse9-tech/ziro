@@ -83,7 +83,14 @@ def drive(d: Drive, current_criteria: DriveCriteria | None = None) -> dict[str, 
         "status": d.status, "schedule_version": d.schedule_version, "source_reference": d.source_reference,
         "notes": d.notes, "destination": destination(d.destination),
         "criteria": criteria(current_criteria), "updated_at": iso(d.updated_at),
+        "registration_deadline": iso(d.registration_deadline), "roster_due_at": iso(d.roster_due_at),
+        "registration_deadline_local": _local(d.registration_deadline, d.timezone),
+        "roster_due_at_local": _local(d.roster_due_at, d.timezone),
     }
+
+
+def _local(value, tz: str) -> str | None:
+    return to_local(value, tz).replace(tzinfo=None).isoformat(timespec="minutes") if value else None
 
 
 def run(r: AgentRun, include_state: bool = True) -> dict[str, Any]:

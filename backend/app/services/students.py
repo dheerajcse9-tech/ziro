@@ -249,7 +249,8 @@ def errors_csv(imp: RosterImport) -> str:
 EDITABLE = ("full_name", "email", "phone", "branch", "cgpa", "active_backlogs", "graduation_year")
 
 
-def update_student(db: Session, student: Student, data: dict[str, Any], user: User) -> dict[str, Any]:
+def update_student(db: Session, student: Student, data: dict[str, Any], user: User | None,
+                   actor: str | None = None) -> dict[str, Any]:
     changes: dict[str, Any] = {}
     for key in EDITABLE:
         if key not in data:
@@ -284,7 +285,8 @@ def update_student(db: Session, student: Student, data: dict[str, Any], user: Us
     student.record_version += 1
     student.data_issues = [i for i in (student.data_issues or []) if i.get("field") not in changes]
     db.flush()
-    ledger.record(db, actor_type=ActorType.USER, actor_id=_actor(user), action="STUDENT_UPDATED",
+    ledger.record(db, actor_type=ActorType.AGENT if (actor or "").startswith("agent") else ActorType.USER,
+                  actor_id=actor or _actor(user), action="STUDENT_UPDATED",
                   entity_type="student", entity_id=student.id,
                   details={"roll_number": student.roll_number, "changes": changes, "record_version": student.record_version})
     # Data-quality warnings raised against the old record version are now outdated; the next
@@ -295,7 +297,7 @@ def update_student(db: Session, student: Student, data: dict[str, Any], user: Us
     )):
         item.status, item.resolution = ExceptionStatus.RESOLVED, "RECORD_UPDATED"
         item.resolution_note = f"Student record updated ({', '.join(changes)}) to v{student.record_version}"
-        item.resolved_by_id, item.resolved_at = user.id, utcnow()
+        item.resolved_by_id, item.resolved_at = (user.id if user else None), utcnow()
     invalidated = revalidate_open_approvals(db, f"Student {student.roll_number} record changed")
     return {"changes": changes, "invalidated_proposals": invalidated}
 
@@ -308,7 +310,8 @@ def set_consent(db: Session, student: Student, granted: bool, evidence_ref: str 
                         source=source, evidence_ref=evidence_ref, recorded_by_id=user.id if user else None)
     db.add(rec)
     db.flush()
-    ledger.record(db, actor_type=ActorType.USER if user else ActorType.SYSTEM, actor_id=actor or _actor(user),
+    actor_type = ActorType.USER if user else (ActorType.AGENT if (actor or "").startswith("agent") else ActorType.SYSTEM)
+    ledger.record(db, actor_type=actor_type, actor_id=actor or _actor(user),
                   action="CONSENT_GRANTED" if granted else "CONSENT_REVOKED", entity_type="student",
                   entity_id=student.id, details={"roll_number": student.roll_number, "scope": rec.scope,
                                                  "evidence_ref": evidence_ref})

@@ -37,6 +37,7 @@ from app.models.enums import (
     InboundSource,
     InboundStatus,
 )
+from app.services import app_settings
 from app.services import drives as drive_svc
 
 FREE_MAIL = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "live.com", "rediffmail.com", "icloud.com",
@@ -105,58 +106,91 @@ def _body_text(msg: email.message.EmailMessage) -> str:
     return re.sub(r"\n{3,}", "\n\n", text.replace("\r", "")).strip()
 
 
-def fetch_mailbox(db: Session, user: User | None, imap_factory: Callable[..., Any] | None = None,
-                  limit: int = 50) -> dict[str, Any]:
-    """Read recent emails whose subject matches the filter. Read-only: nothing is marked, moved or deleted."""
+def mailbox_status(db: Session) -> dict[str, Any]:
+    from app.integrations import gmail
+
     s = get_settings()
-    if not s.inbox_imap_host:
-        return {"configured": False, "fetched": 0, "new": 0, "message": "No mailbox configured (INBOX_IMAP_HOST is empty)"}
+    if gmail.connected(db):
+        return {"source": "GMAIL", "address": gmail.account_email(db), "filter": s.inbox_subject_filter}
+    if s.inbox_imap_host:
+        return {"source": "IMAP", "address": s.inbox_imap_user, "filter": s.inbox_subject_filter}
+    return {"source": None, "address": s.inbox_address, "filter": s.inbox_subject_filter}
+
+
+def _raw_from_imap(imap_factory: Callable[..., Any] | None, limit: int) -> list[bytes]:
+    s = get_settings()
     factory = imap_factory or (lambda host, port: imaplib.IMAP4_SSL(host, port, timeout=20))
     since = (datetime.now(timezone.utc) - timedelta(days=s.inbox_lookback_days)).strftime("%d-%b-%Y")
-    created, seen = [], 0
+    criteria = ["SINCE", since] + (["SUBJECT", f'"{s.inbox_subject_filter}"'] if s.inbox_subject_filter else [])
+    out: list[bytes] = []
+    conn = factory(s.inbox_imap_host, s.inbox_imap_port)
     try:
-        conn = factory(s.inbox_imap_host, s.inbox_imap_port)
+        conn.login(s.inbox_imap_user, s.inbox_imap_password)
+        conn.select(s.inbox_imap_folder, readonly=True)
+        typ, data = conn.search(None, *criteria)
+        for num in ((data[0] or b"").split()[-limit:] if typ == "OK" else []):
+            typ, parts = conn.fetch(num, "(BODY.PEEK[])")
+            raw = next((p[1] for p in parts or [] if isinstance(p, tuple)), None)
+            if typ == "OK" and raw is not None:
+                out.append(raw)
+    finally:
         try:
-            conn.login(s.inbox_imap_user, s.inbox_imap_password)
-            conn.select(s.inbox_imap_folder, readonly=True)
-            typ, data = conn.search(None, "SINCE", since, "SUBJECT", f'"{s.inbox_subject_filter}"')
-            ids = (data[0] or b"").split()[-limit:] if typ == "OK" else []
-            for num in ids:
-                typ, parts = conn.fetch(num, "(BODY.PEEK[])")
-                raw = next((p[1] for p in parts or [] if isinstance(p, tuple)), None)
-                if typ != "OK" or raw is None:
-                    continue
-                seen += 1
-                msg = email.message_from_bytes(raw, policy=email.policy.default)
-                name, addr = parseaddr(str(msg.get("From", "")))
-                try:
-                    received = parsedate_to_datetime(str(msg.get("Date"))).astimezone(timezone.utc)
-                except (TypeError, ValueError):
-                    received = utcnow()
-                body = _body_text(msg)
-                if not body or "@" not in addr:
-                    continue
-                row, new = ingest(db, source=InboundSource.IMAP, from_address=addr, from_name=name or None,
-                                  to_address=s.inbox_imap_user, subject=str(msg.get("Subject", "")), body=body,
-                                  message_id=str(msg.get("Message-ID") or "") or None, received_at=received,
-                                  actor=_actor(user))
-                if new:
-                    created.append(row.id)
-        finally:
-            try:
-                conn.logout()
-            except Exception:  # noqa: BLE001 - closing is best effort
-                pass
-    except (imaplib.IMAP4.error, OSError) as exc:
-        db.rollback()
-        raise ValidationFailed(f"Could not read the mailbox {s.inbox_imap_user} at {s.inbox_imap_host}: "
-                               f"{type(exc).__name__}: {exc}") from exc
-    ledger.record(db, actor_type=ActorType.USER if user else ActorType.SYSTEM, actor_id=_actor(user),
-                  action="MAILBOX_CHECKED", details={"host": s.inbox_imap_host, "filter": s.inbox_subject_filter,
-                                                      "matched": seen, "new": len(created)})
+            conn.logout()
+        except Exception:  # noqa: BLE001 - closing is best effort
+            pass
+    return out
+
+
+def gmail_query() -> str:
+    s = get_settings()
+    subject = f' subject:"{s.inbox_subject_filter}"' if s.inbox_subject_filter else ""
+    return f"in:inbox -from:me newer_than:{s.inbox_lookback_days}d{subject}"
+
+
+def fetch_mailbox(db: Session, user: User | None, imap_factory: Callable[..., Any] | None = None,
+                  limit: int = 50, actor: str | None = None) -> dict[str, Any]:
+    """Mailbox Agent: read recent company emails. Read-only: nothing is marked, moved or deleted."""
+    from app.integrations import gmail
+
+    s = get_settings()
+    box = mailbox_status(db)
+    if box["source"] is None:
+        return {"configured": False, "fetched": 0, "new": 0, "new_ids": [],
+                "message": "No mailbox connected. Connect Gmail in Settings (or set INBOX_IMAP_HOST)."}
+    actor = actor or _actor(user)
+    try:
+        raws = gmail.search_raw_messages(db, gmail_query(), limit) if box["source"] == "GMAIL" else _raw_from_imap(imap_factory, limit)
+    except (gmail.GmailError, imaplib.IMAP4.error, OSError) as exc:
+        db.commit()  # keep a recorded credential error
+        raise ValidationFailed(f"Could not read the mailbox {box['address']}: {exc}") from exc
+    created, seen = [], 0
+    for raw in raws:
+        msg = email.message_from_bytes(raw, policy=email.policy.default)
+        name, addr = parseaddr(str(msg.get("From", "")))
+        subject = str(msg.get("Subject", ""))
+        if s.inbox_subject_filter and s.inbox_subject_filter.lower() not in subject.lower():
+            continue
+        seen += 1
+        try:
+            received = parsedate_to_datetime(str(msg.get("Date"))).astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            received = utcnow()
+        body = _body_text(msg)
+        if not body or "@" not in addr or (box["address"] and addr.lower() == box["address"].lower()):
+            continue
+        row, new = ingest(db, source=InboundSource.IMAP if box["source"] == "IMAP" else InboundSource.GMAIL,
+                          from_address=addr, from_name=name or None, to_address=box["address"], subject=subject,
+                          body=body, message_id=str(msg.get("Message-ID") or "") or None, received_at=received,
+                          actor=actor)
+        if new:
+            created.append(row.id)
+    ledger.record(db, actor_type=ActorType.AGENT if actor.startswith("agent") else (ActorType.USER if user else ActorType.SYSTEM),
+                  actor_id=actor, action="MAILBOX_CHECKED",
+                  details={"source": box["source"], "mailbox": box["address"], "filter": s.inbox_subject_filter,
+                           "matched": seen, "new": len(created)})
     db.commit()
-    return {"configured": True, "fetched": seen, "new": len(created), "new_ids": created,
-            "message": f"{seen} matching email(s), {len(created)} new"}
+    return {"configured": True, "source": box["source"], "fetched": seen, "new": len(created), "new_ids": created,
+            "message": f"{seen} matching email(s) in {box['address']}, {len(created)} new"}
 
 
 # --------------------------------------------------------------------------- reading
@@ -195,18 +229,25 @@ def check(db: Session, row: InboundEmail) -> list[dict[str, Any]]:
     issues = email_intake.validate(data, now_local)
     issue = email_intake.issue
     employer = find_employer(db, data.get("company"))
-    sender = _domain(row.from_address)
-    if employer is None:
+    sender, address = _domain(row.from_address), row.from_address.lower().strip()
+    trusted = {x.lower().strip() for x in app_settings.get(db, "trusted_company_senders") or []}
+    if address in trusted:
+        issues.append(issue("sender", "TRUSTED", f"{row.from_address} is on the trusted company senders list", "INFO"))
+    elif employer is None:
         free = " from a personal email address" if sender in FREE_MAIL else ""
         issues.append(issue("sender", "NEW_COMPANY",
                             f"{data.get('company') or 'This company'} is not in the recruiter list and wrote{free} "
                             f"({row.from_address}). Confirm the email is genuine before students are contacted.", "REVIEW"))
-    elif employer.contact_email and _domain(employer.contact_email) != sender:
-        issues.append(issue("sender", "SENDER_MISMATCH",
-                            f"Sent from {row.from_address}, but {employer.name}'s registered contact is "
-                            f"{employer.contact_email}. Confirm the email is genuine.", "REVIEW"))
     else:
-        issues.append(issue("sender", "VERIFIED", f"Sender matches {employer.name}'s registered recruiter contact", "INFO"))
+        contact = (employer.contact_email or "").lower().strip()
+        # Anyone can open a Gmail account, so personal-mail senders must match the registered address exactly.
+        known = contact and (address == contact if sender in FREE_MAIL else _domain(contact) == sender)
+        if known:
+            issues.append(issue("sender", "VERIFIED", f"Sender matches {employer.name}'s registered recruiter contact", "INFO"))
+        else:
+            issues.append(issue("sender", "SENDER_MISMATCH",
+                                f"Sent from {row.from_address}, but {employer.name}'s registered contact is "
+                                f"{employer.contact_email or 'not set'}. Confirm the email is genuine.", "REVIEW"))
     interval = None
     try:
         interval = email_intake.drive_interval(data)
@@ -266,6 +307,7 @@ def create_drive(db: Session, row: InboundEmail, user: User | None, actor: str) 
     drive.registration_deadline = to_utc(datetime.fromisoformat(data["registration_deadline"]), tz)
     if data.get("roster_due"):
         drive.roster_due_at = to_utc(datetime.fromisoformat(data["roster_due"]), tz)
+    drive.destination_id = _stand_in_form(db, drive, data, row)
     row.drive_id, row.status = drive.id, InboundStatus.DRIVE_CREATED
     row.processed_by_id, row.processed_at = user.id if user else None, utcnow()
     db.flush()
@@ -274,6 +316,42 @@ def create_drive(db: Session, row: InboundEmail, user: User | None, actor: str) 
                   details={"drive_id": drive.id, "registration_deadline": data["registration_deadline"],
                            "roster_due": data.get("roster_due"), "extraction_mode": (row.extraction or {}).get("mode")})
     return drive
+
+
+def _published_text(data: dict[str, Any]) -> str:
+    parts = [f"CGPA >= {data['min_cgpa']}" if data.get("min_cgpa") is not None else "No minimum CGPA"]
+    policy = data.get("backlog_policy")
+    if policy == BacklogPolicy.NO_ACTIVE_BACKLOGS:
+        parts.append("no active backlogs")
+    elif policy == BacklogPolicy.MAX_ALLOWED:
+        parts.append(f"maximum {data.get('max_active_backlogs')} active backlogs")
+    branches = ", ".join(data.get("allowed_branches") or []) or "All"
+    return f"Eligibility: {', '.join(parts)}.\nBranches eligible: {branches}."
+
+
+def _stand_in_form(db: Session, drive: Drive, data: dict[str, Any], row: InboundEmail) -> int | None:
+    """The company asked for the list by email, so there is no company web form to upload to. The LOCAL MOCK
+    portal hosts a clearly labelled stand-in form, so the upload -> read-back verification -> receipt pipeline
+    still applies; the verified list is then emailed to the company by the Employer Update Agent."""
+    from app.integrations.registry import mock_admin
+    from app.models.entities import Destination
+    from app.models.enums import DestinationKind
+
+    s = get_settings()
+    form_ref = f"EMAIL-{row.id}-DRIVE-{drive.id}"
+    start = to_local(drive.starts_at, drive.timezone)
+    try:
+        mock_admin().upsert_form(form_ref=form_ref, employer_name=drive.employer.name, drive_title=drive.title,
+                                 published_criteria=_published_text(data),
+                                 schedule_text=f"{start:%d %b %Y}, {start:%H:%M}-{to_local(drive.ends_at, drive.timezone):%H:%M} ({drive.timezone})")
+    except Exception:  # noqa: BLE001 - the drive is still valid; the officer can configure a destination later
+        return None
+    dest = Destination(name=f"{drive.employer.name} drive form (LOCAL MOCK stand-in)", kind=DestinationKind.LOCAL_MOCK_FORM,
+                       base_url=s.mock_portal_base_url.rstrip("/"), form_ref=form_ref)
+    db.add(dest)
+    db.flush()
+    drive.source_reference = f"{dest.base_url}/forms/{form_ref}"
+    return dest.id
 
 
 def update_details(db: Session, row: InboundEmail, values: dict[str, Any], user: User) -> InboundEmail:

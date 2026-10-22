@@ -3,18 +3,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import ANY_ROLE, OFFICER_ROLES, require_roles
+from app.api.deps import ANY_ROLE, DRIVE_ROLES, OFFICER_ROLES, require_roles
 from app.core.config import get_settings
 from app.core.errors import NotFound
 from app.db.session import get_db
 from app.models.entities import EmailMessage, StudentRequest, User
+from app.models.enums import Role
 from app.services import drives as drive_svc
-from app.services import mailer, outreach
+from app.integrations import gmail
+from app.services import mailer, outreach, roster_refresh
 from app.services import students as student_svc
 
 router = APIRouter(prefix="/api")
@@ -33,7 +35,7 @@ def email_dict(m: EmailMessage, with_body: bool = False) -> dict[str, Any]:
 # --------------------------------------------------------------------------- invitations & data requests
 
 @router.post("/drives/{drive_id}/invitations", tags=["outreach"])
-def send_invitations(drive_id: int, db: Session = Depends(get_db), user: User = Depends(require_roles(*OFFICER_ROLES))):
+def send_invitations(drive_id: int, db: Session = Depends(get_db), user: User = Depends(require_roles(*DRIVE_ROLES))):
     return outreach.invite_eligible(db, drive_svc.get_drive(db, drive_id), user)
 
 
@@ -48,7 +50,8 @@ def list_invitations(drive_id: int, db: Session = Depends(get_db), _: User = Dep
 
 
 @router.post("/drives/{drive_id}/missing-data-requests", tags=["outreach"])
-def request_missing_for_drive(drive_id: int, db: Session = Depends(get_db), user: User = Depends(require_roles(*OFFICER_ROLES))):
+def request_missing_for_drive(drive_id: int, db: Session = Depends(get_db),
+                              user: User = Depends(require_roles(*OFFICER_ROLES, Role.APPROVER))):
     return outreach.request_missing_for_drive(db, drive_svc.get_drive(db, drive_id), user)
 
 
@@ -129,7 +132,7 @@ def list_emails(category: str | None = None, status: str | None = None, student_
     items = db.scalars(stmt.order_by(EmailMessage.id.desc()).offset((page - 1) * page_size).limit(page_size))
     settings = get_settings()
     return {"items": [email_dict(m) for m in items], "total": total, "page": page, "page_size": page_size,
-            "transport": "SMTP" if settings.smtp_host else "LOCAL_MAILBOX"}
+            "transport": mailer.transport_name(db), "sender": gmail.account_email(db) or settings.smtp_user or None}
 
 
 @router.get("/emails/{email_id}", tags=["outreach"])
@@ -153,6 +156,7 @@ def retry_failed_emails(email_id: int | None = None, db: Session = Depends(get_d
 
 class InvitationAnswer(BaseModel):
     accept: bool
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class DataAnswer(BaseModel):
@@ -165,13 +169,17 @@ def public_request(token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/public/requests/{token}/invitation", tags=["public"])
-def public_answer_invitation(token: str, body: InvitationAnswer, db: Session = Depends(get_db)):
-    req = outreach.respond_invitation(db, outreach.get_by_token(db, token), body.accept)
+def public_answer_invitation(token: str, body: InvitationAnswer, background: BackgroundTasks, db: Session = Depends(get_db)):
+    req = outreach.respond_invitation(db, outreach.get_by_token(db, token), body.accept, body.comment)
+    if body.accept:  # a late YES may add the student to an already-prepared roster
+        background.add_task(roster_refresh.after_student_answer, req.id)
     return outreach.public_view(db, req)
 
 
 @router.post("/public/requests/{token}/data", tags=["public"])
-def public_submit_data(token: str, body: DataAnswer, db: Session = Depends(get_db)):
+def public_submit_data(token: str, body: DataAnswer, background: BackgroundTasks, db: Session = Depends(get_db)):
     req = outreach.submit_data(db, outreach.get_by_token(db, token), body.values)
+    if ((req.response or {}).get("recheck") or {}).get("now_qualifies"):
+        background.add_task(roster_refresh.after_student_answer, req.id)
     return outreach.public_view(db, req)
 

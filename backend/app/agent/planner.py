@@ -6,8 +6,9 @@ call READ tools (list drives, roster summary, drive requirements, what-if).
 It cannot propose, approve, upload or change data, and its output is
 validated by the backend before the workflow graph acts on it.
 
-Without ANTHROPIC_API_KEY the deterministic fallback planner is used and every
-run is labelled DETERMINISTIC_FALLBACK.
+The AI model is Gemini (GEMINI_API_KEY) or Claude (ANTHROPIC_API_KEY). Without
+a key the deterministic fallback planner is used and every run is labelled
+DETERMINISTIC_FALLBACK.
 """
 from __future__ import annotations
 
@@ -220,6 +221,42 @@ def llm_plan(ctx: ToolContext, objective: str, client: Any | None = None) -> Pla
     raise RuntimeError("Planner exceeded its turn budget")
 
 
+def gemini_plan(ctx: ToolContext, objective: str, client: Any | None = None) -> Plan:
+    """Same contract as llm_plan, over the Gemini API (function calling, forced with mode ANY)."""
+    from app.agent import gemini
+
+    client = client or gemini.GeminiClient()
+    declarations = [gemini.declaration(n, TOOLS[n].description, TOOLS[n].json_schema()) for n in sorted(LLM_ALLOWED_TOOLS)]
+    declarations.append(gemini.declaration(SUBMIT_PLAN_TOOL["name"], SUBMIT_PLAN_TOOL["description"],
+                                           SUBMIT_PLAN_TOOL["input_schema"]))
+    contents: list[dict[str, Any]] = [{"role": "user", "parts": [{"text": f"Officer request:\n<request>\n{objective}\n</request>"}]}]
+    for turn in range(8):
+        content = gemini.first_content(client.generate(system=SYSTEM_PROMPT, contents=contents,
+                                                       declarations=declarations, mode="ANY"))
+        text = gemini.text_of(content)
+        if text:
+            emit(ctx.db, ctx.run, "LLM_MESSAGE", node="interpret_goal", message=text[:2000], payload={"turn": turn})
+        calls = gemini.function_calls(content)
+        if not calls:
+            raise RuntimeError("Model ended without submitting a plan")
+        contents.append(content)  # unchanged, so thought signatures go back to the API
+        responses = []
+        for call in calls:
+            args = dict(call.get("args") or {})
+            if call["name"] == "submit_plan":
+                emit(ctx.db, ctx.run, "TOOL_CALL", node="interpret_goal", tool_name="submit_plan", status="OK",
+                     message="LLM submitted plan", payload={"input": args, "invoked_by": "llm"})
+                args.setdefault("candidate_drive_ids", [])
+                return _plan_from_llm(ctx, args)
+            try:
+                out = call_tool(ctx, call["name"], args, node="interpret_goal", invoked_by="llm", allowed=LLM_ALLOWED_TOOLS)
+                responses.append(gemini.function_response(call, {"result": json.loads(json.dumps(out, default=str))}))
+            except ToolFailure as exc:
+                responses.append(gemini.function_response(call, {"error": exc.message}))
+        contents.append({"role": "function", "parts": responses})
+    raise RuntimeError("Planner exceeded its turn budget")
+
+
 def _plan_from_llm(ctx: ToolContext, data: dict[str, Any]) -> Plan:
     intent = data.get("intent")
     if intent not in INTENTS:
@@ -243,7 +280,8 @@ def make_plan(ctx: ToolContext, objective: str, client: Any | None = None) -> Pl
     settings = get_settings()
     if client is not None or (settings.llm_enabled and not FORCE_DETERMINISTIC.get()):
         try:
-            plan = llm_plan(ctx, objective, client=client)
+            use_gemini = hasattr(client, "generate") if client is not None else settings.active_llm == "gemini"
+            plan = gemini_plan(ctx, objective, client=client) if use_gemini else llm_plan(ctx, objective, client=client)
             plan.planner_mode = "LLM"
             return plan
         except Exception as exc:  # noqa: BLE001 - any LLM failure falls back, and is recorded

@@ -25,6 +25,7 @@ DEMO_PASSWORD = "Demo@2026"
 
 USERS = [
     ("admin@placementos.demo", "Aditi Rao (Admin)", Role.ADMIN),
+    ("drives@placementos.demo", "Neha Kapoor (Drive Upload Officer)", Role.COORDINATOR),
     ("officer@placementos.demo", "Kiran Mehta (Placement Officer)", Role.OFFICER),
     ("approver@placementos.demo", "Dr. Sunita Iyer (Head of Placements)", Role.APPROVER),
     ("viewer@placementos.demo", "Rohan Das (Viewer)", Role.VIEWER),
@@ -73,6 +74,11 @@ EMPLOYERS = [
     ("Helios Analytics", "Analytics", "https://helios.example"),
     ("Bluepeak Motors", "Automotive", "https://bluepeak.example"),
     ("Crestline Infra", "Construction", "https://crestline.example"),
+]
+# Registered recruiter contacts without a drive yet: their emails pass the sender check (see the sample inbox).
+PARTNERS = [
+    ("Orbitra Technologies", "Software", "campus@orbitra.example"),
+    ("Kestrel Finance", "Financial services", "careers@kestrelfinance.example"),
 ]
 
 
@@ -160,6 +166,8 @@ def seed(db: Session) -> dict:
         db.add(e)
         db.flush()
         employers[name] = e
+    for name, industry, contact in PARTNERS:
+        db.add(Employer(name=name, industry=industry, contact_email=contact))
     base_url = settings.mock_portal_base_url.rstrip("/")
     for d in _drives(tz, base_url):
         dest = Destination(name=f"{d['employer']} drive form (LOCAL MOCK)", kind=DestinationKind.LOCAL_MOCK_FORM,
