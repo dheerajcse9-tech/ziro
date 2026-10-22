@@ -31,7 +31,7 @@ from app.models.entities import (
     User,
 )
 from app.models.enums import ApprovalStatus, ExceptionKind, Role, RunStatus
-from app.services import approvals, mailer, students, uploads
+from app.services import approvals, mailer, students, test_stories, uploads
 from app.services.roster import drive_pair_conflicts
 from app.services.sandbox import Sandbox, ist
 
@@ -43,10 +43,12 @@ class Checks:
         self.items: list[dict[str, Any]] = []
 
     def eq(self, name: str, expected: Any, actual: Any) -> None:
-        self.items.append({"name": name, "expected": expected, "actual": actual, "passed": expected == actual})
+        self.items.append({"name": name, "expected": expected, "actual": actual, "passed": expected == actual,
+                           "why": test_stories.why(name)})
 
     def true(self, name: str, actual: bool, detail: Any = None) -> None:
-        self.items.append({"name": name, "expected": True, "actual": bool(actual), "passed": bool(actual), "detail": detail})
+        self.items.append({"name": name, "expected": True, "actual": bool(actual), "passed": bool(actual), "detail": detail,
+                           "why": test_stories.why(name)})
 
     @property
     def passed(self) -> bool:
@@ -505,7 +507,8 @@ def run_scenario(db: Session, test_id: str, user: User | None) -> TestRun:
     if failure is None and checks is not None and not checks.passed:
         failure = "; ".join(f"{i['name']}: expected {i['expected']!r}, got {i['actual']!r}" for i in checks.items if not i["passed"])
     tr = TestRun(
-        test_id=test_id, title=title, description=description, input_fixture=_jsonable(result.get("input", {})),
+        test_id=test_id, title=title, description=description,
+        input_fixture=_jsonable({"story": test_stories.STORIES.get(test_id), **result.get("input", {})}),
         expected=_jsonable(result.get("expected", {})), actual=_jsonable(result.get("actual", {})), passed=passed,
         checks=_jsonable(checks.items if checks else []), evidence=_jsonable(result.get("evidence", {})),
         failure_details=failure, environment=ENVIRONMENT, executed_at=utcnow(),

@@ -230,7 +230,7 @@ export interface AuditEvent {
   drive_id: number | null; details: any; prev_hash: string; hash: string;
 }
 
-export interface TestCheck { name: string; expected: unknown; actual: unknown; passed: boolean; detail?: unknown }
+export interface TestCheck { name: string; expected: unknown; actual: unknown; passed: boolean; detail?: unknown; why?: string | null }
 
 export interface TestRun {
   id: number; test_id: string; title: string; description: string; input_fixture: any; expected: any; actual: any;

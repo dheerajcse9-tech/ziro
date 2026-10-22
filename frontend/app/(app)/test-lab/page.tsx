@@ -21,6 +21,72 @@ function fmtVal(v: unknown) {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
+interface Story { goal: string; setup: { columns: string[]; rows: string[][] }; steps: string[] }
+
+/** Why a scenario passed: what it proves, its data, what it did, and the rule behind every check. */
+function Explained({ l }: { l: TestRun }) {
+  const story: Story | undefined = l.input_fixture?.story;
+  const passed = l.checks.filter((c) => c.passed).length;
+  return (
+    <div className="space-y-5 border-t border-line p-4">
+      <Banner tone={l.passed ? "ok" : "bad"} title={l.passed
+        ? `PASS — all ${l.checks.length} checks matched`
+        : `FAIL — ${l.checks.length - passed} of ${l.checks.length} checks did not match`}>
+        {l.passed
+          ? "The test ran the real code in a fresh sandbox, then read the results back from the database and the company's form. Every value it read equals what the rules say it must be (table below)."
+          : "At least one value read back differs from what the rules require; see the red rows below."}
+      </Banner>
+      {l.failure_details && <Banner tone="bad" title="Failure details"><pre className="whitespace-pre-wrap font-mono text-[11.5px]">{l.failure_details}</pre></Banner>}
+      {story && (
+        <>
+          <section>
+            <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">What this test proves</p>
+            <p className="text-[13.5px] leading-relaxed text-ink">{story.goal}</p>
+          </section>
+          <section>
+            <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-faint">Test data</p>
+            <div className="overflow-x-auto rounded-md border border-line">
+              <table className="data-table w-full text-[12.5px]">
+                <thead><tr>{story.setup.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+                <tbody>{story.setup.rows.map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j} className={cn(j === 0 && "font-mono text-[12px]")}>{v}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+          </section>
+          <section>
+            <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-faint">What the test did</p>
+            <ol className="list-decimal space-y-1 pl-5 text-[13px] text-ink-2">{story.steps.map((s) => <li key={s}>{s}</li>)}</ol>
+          </section>
+        </>
+      )}
+      <section>
+        <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-faint">Why it passed — every check</p>
+        <div className="overflow-x-auto rounded-md border border-line">
+          <table className="data-table w-full">
+            <thead><tr><th className="w-6" /><th>Check</th><th>Why this is the right answer</th><th>Expected</th><th>Actual (read back)</th></tr></thead>
+            <tbody>{l.checks.map((c, i) => (
+              <tr key={i} className={cn(!c.passed && "bg-bad-soft/40")}>
+                <td>{c.passed ? <CheckCircle2 className="size-4 text-ok" /> : <XCircle className="size-4 text-bad" />}</td>
+                <td className="text-[12.5px] font-medium">{c.name}</td>
+                <td className="min-w-64 text-[12.5px] text-ink-2">{c.why ?? "—"}</td>
+                <td className="max-w-xs break-words font-mono text-[11.5px] text-muted">{fmtVal(c.expected)}</td>
+                <td className={cn("max-w-xs break-words font-mono text-[11.5px]", c.passed ? "text-ink-2" : "text-bad")}>{fmtVal(c.actual)}</td>
+              </tr>))}</tbody>
+          </table>
+        </div>
+      </section>
+      <details className="rounded-md border border-line p-3">
+        <summary className="cursor-pointer text-[12.5px] font-medium text-muted">Raw data (technical): input, expected, actual, evidence</summary>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <JsonView value={l.input_fixture} label="Input" />
+          <JsonView value={l.expected} label="Expected result" />
+          <JsonView value={l.actual} label="Actual result" />
+          <JsonView value={l.evidence} label="Evidence (agent run, upload, verification, attendance)" />
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export default function TestLabPage() {
   const me = useMe();
   const qc = useQueryClient();
@@ -70,30 +136,7 @@ export default function TestLabPage() {
                       onClick={() => run.mutate([t.test_id])} icon={<FlaskConical className="size-3.5" />}>Run</Button>}
                   </div>
                 </div>
-                {expanded && l && (
-                  <div className="space-y-4 border-t border-line p-4">
-                    {l.failure_details && <Banner tone="bad" title="Failure details"><pre className="whitespace-pre-wrap font-mono text-[11.5px]">{l.failure_details}</pre></Banner>}
-                    <div>
-                      <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-faint">Checks (expected vs actual)</p>
-                      <table className="data-table w-full rounded-md border border-line">
-                        <thead><tr><th className="w-6" /><th>Check</th><th>Expected</th><th>Actual</th></tr></thead>
-                        <tbody>{l.checks.map((c, i) => (
-                          <tr key={i}>
-                            <td>{c.passed ? <CheckCircle2 className="size-4 text-ok" /> : <XCircle className="size-4 text-bad" />}</td>
-                            <td className="text-[12.5px]">{c.name}</td>
-                            <td className="max-w-xs break-words font-mono text-[11.5px] text-muted">{fmtVal(c.expected)}</td>
-                            <td className={cn("max-w-xs break-words font-mono text-[11.5px]", c.passed ? "text-ink-2" : "text-bad")}>{fmtVal(c.actual)}</td>
-                          </tr>))}</tbody>
-                      </table>
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      <JsonView value={l.input_fixture} label="Input fixture" defaultOpen />
-                      <JsonView value={l.expected} label="Expected result" defaultOpen />
-                      <JsonView value={l.actual} label="Actual result" defaultOpen />
-                      <JsonView value={l.evidence} label="Evidence (agent run, proposal hash, upload, verification, attendance)" defaultOpen />
-                    </div>
-                  </div>
-                )}
+                {expanded && l && <Explained l={l} />}
               </Card>
             );
           })}

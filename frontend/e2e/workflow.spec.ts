@@ -144,6 +144,9 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await page.getByRole("button", { name: "Run all scenarios" }).click();
     await expect(page.getByText("6/6 scenarios passed").first()).toBeVisible({ timeout: 60_000 });
     await page.getByRole("button", { name: "Details" }).first().click();
+    await expect(page.getByText(/PASS — all \d+ checks matched/).first()).toBeVisible();
+    await expect(page.getByText("What this test proves")).toBeVisible();
+    await expect(page.getByText(/The rule is "at least 7.00"/)).toBeVisible();
     await shot(page, "14-test-lab");
   });
 
