@@ -53,8 +53,11 @@ export default function HomePage() {
         {STEPS.map((s) => {
           const mine = role === s.who;
           return (
-            <Link key={s.n} href={s.href} className={cn("group rounded-[var(--radius-card)] border p-4 transition-colors",
-              mine ? "border-accent bg-accent-soft/60" : "border-line bg-surface hover:bg-subtle")}>
+            // Only your own step (or every step for the admin) opens its page; the others just explain the workflow.
+            <Link key={s.n} href={mine || role === "admin" ? s.href : "#"} aria-disabled={!(mine || role === "admin")}
+              onClick={(e) => { if (!(mine || role === "admin")) e.preventDefault(); }}
+              className={cn("group rounded-[var(--radius-card)] border p-4 transition-colors",
+              mine ? "border-accent bg-accent-soft/60" : role === "admin" ? "border-line bg-surface hover:bg-subtle" : "cursor-default border-line bg-surface")}>
               <div className="flex items-center gap-2 text-[12px] font-semibold text-muted">
                 <span className={cn("flex size-6 items-center justify-center rounded-full text-[12px]", mine ? "bg-accent text-white" : "bg-subtle text-ink ring-1 ring-line")}>{s.n}</span>
                 {ROLE_LABEL[s.who]}{mine && <span className="text-accent">· you</span>}

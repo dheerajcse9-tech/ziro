@@ -262,8 +262,8 @@ test.describe.serial("PlacementOS end-to-end", () => {
   test("viewer cannot act", async ({ page }) => {
     await login(page, "viewer@placementos.demo");
     await page.goto("/agent");
-    await expect(page.getByText("Only the Placement Officer runs drives.").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Run agent" })).toBeDisabled();
+    await expect(page.getByText(/Running a drive is Step 2/).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Run agent" })).toHaveCount(0);
     await page.goto("/settings");
     await shot(page, "15-settings-viewer");
   });

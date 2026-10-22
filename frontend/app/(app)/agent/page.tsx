@@ -7,10 +7,10 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/layout";
 import { Button, Card, CardHeader, Field, Select, Textarea } from "@/components/ui/primitives";
-import { EmptyState, LoadingRows } from "@/components/ui/states";
+import { Banner, EmptyState, LoadingRows } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status";
 import { api } from "@/lib/api";
-import { can, useMe } from "@/lib/auth";
+import { can, ROLE_LABEL, useMe } from "@/lib/auth";
 import { toastError } from "@/lib/errors";
 import { fmtDateTime, relTime } from "@/lib/format";
 import type { AgentRun, Drive } from "@/lib/types";
@@ -72,6 +72,12 @@ function AgentInner() {
     <>
       <PageHeader title="Run a drive"
         description="Pick a drive. The agents keep only students who said YES on the consent form and meet the company's criteria, check for clashes, and send the list to the Approver." />
+      {me.data && !allowed ? (
+        <Banner tone="info" title="Running a drive is Step 2 — the Placement Officer's job">
+          You are signed in as <strong>{ROLE_LABEL[me.data.role]}</strong>. To run a drive, sign out and sign in as the Placement Officer
+          (<code className="font-mono">officer@placementos.demo</code>). You can follow the progress of every drive below.
+        </Banner>
+      ) : (
       <Card>
         <CardHeader title="Start" />
         <div className="space-y-4 p-4">
@@ -95,9 +101,9 @@ function AgentInner() {
             <Button type="submit" size="sm" icon={<Send className="size-3.5" />} loading={start.isPending && start.variables === objective.trim()}
               disabled={!allowed || objective.trim().length < 3}>Run agent</Button>
           </form>
-          {!allowed && <p className="text-[12px] text-muted">Only the Placement Officer runs drives. You can follow progress below.</p>}
         </div>
       </Card>
+      )}
 
       <Card className="mt-4">
         <CardHeader title="Recent tasks" />
