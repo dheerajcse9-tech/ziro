@@ -256,7 +256,10 @@ def check(db: Session, row: InboundEmail) -> list[dict[str, Any]]:
     employer = find_employer(db, data.get("company"))
     sender, address = _domain(row.from_address), row.from_address.lower().strip()
     trusted = {x.lower().strip() for x in app_settings.get(db, "trusted_company_senders") or []}
-    if address in trusted:
+    staff = db.scalar(select(User).where(func.lower(User.email) == address)) if row.source == InboundSource.STAFF else None
+    if staff is not None:
+        issues.append(issue("sender", "STAFF", f"Entered in PlacementOS by {staff.name}", "INFO"))
+    elif address in trusted:
         issues.append(issue("sender", "TRUSTED", f"{row.from_address} is on the trusted company senders list", "INFO"))
     elif employer is None:
         free = " from a personal email address" if sender in FREE_MAIL else ""

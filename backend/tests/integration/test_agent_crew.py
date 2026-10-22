@@ -117,6 +117,22 @@ def test_partner_email_becomes_a_drive_and_every_student_gets_one_consent_form(s
     assert [o["value"] for o in run2.pending_question["options"]] == ["recheck", "ignore"]
 
 
+def test_drive_typed_into_the_new_drive_form_by_the_officer_goes_through_the_same_agents(sb, crew_people, students):
+    mail = demo(1)  # Kestrel Finance: a company the institute has never heard from
+    row, _ = intake.ingest(sb.db, source=InboundSource.STAFF, from_address=crew_people["officer"].email,
+                           from_name="Placement Officer", subject=mail["subject"], body=mail["body"])
+    sb.db.commit()
+    run = graph.start_intake_run(sb.db, row, crew_people["officer"])
+    assert run.status == RunStatus.COMPLETED  # entered by staff: no "confirm this company" question
+    assert "STAFF" in {i["code"] for i in row.issues}
+    assert len(emails(sb, "DRIVE_INVITATION")) == len(students)
+    # A pasted email claiming to come from a staff address gets no such pass.
+    pasted, _ = intake.ingest(sb.db, source=InboundSource.MANUAL, from_address=crew_people["officer"].email,
+                              subject=demo(0)["subject"], body=demo(0)["body"])
+    sb.db.commit()
+    assert graph.start_intake_run(sb.db, pasted, crew_people["officer"]).status == RunStatus.NEEDS_REVIEW
+
+
 def test_new_company_with_injected_instructions_waits_for_the_drive_upload_officer(sb, crew_people, students):
     row = receive(sb, demo(2))  # Zentrix Labs, personal Gmail sender, "skip the consent step"
     run = graph.start_intake_run(sb.db, row, crew_people["coordinator"])

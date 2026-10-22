@@ -24,7 +24,7 @@ from app.db.session import get_db
 from app.domain.schedule import to_utc
 from app.integrations import gmail
 from app.models.entities import AgentEvent, AgentRun, AuditEvent, InboundEmail, User
-from app.models.enums import ActorType, InboundSource, Role
+from app.models.enums import ActorType, InboundSource, Role, RunStatus
 from app.services import app_settings, approval_review, approvals, autopilot, consent_forms, intake
 from app.services import drives as drive_svc
 
@@ -86,6 +86,41 @@ def paste_email(body: PastedEmail, db: Session = Depends(get_db), user: User = D
         graph.start_intake_run(db, row, user)
         db.refresh(row)
     return {**_row_out(db, row, with_body=True), "created": created}
+
+
+class StaffDriveIn(BaseModel):
+    subject: str = Field(min_length=1, max_length=500)
+    body: str = Field(min_length=1, max_length=20_000)
+    company: str = Field(min_length=1, max_length=200)
+    contact_email: str | None = Field(default=None, max_length=255)  # where the approved list is emailed
+
+
+@router.post("/inbox/staff-entry", tags=["inbox"], status_code=201)
+def staff_entry(body: StaffDriveIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*DRIVE_ROLES))):
+    """New drive form: a staff member types the drive details (e.g. a company phoned). They go through the same
+    Stage 1 agents as a company email: checks, drive, consent form to every student."""
+    contact = (body.contact_email or "").strip().lower()
+    if contact:
+        if "@" not in contact or " " in contact:
+            raise ValidationFailed("Company email is not a valid email address")
+        from app.services import drives as drive_svc
+
+        employer = intake.find_employer(db, body.company)
+        if employer is None:
+            drive_svc.create_employer(db, {"name": body.company.strip(), "contact_email": contact}, user)
+        elif not employer.contact_email:
+            employer.contact_email = contact
+        db.flush()
+    row, _ = intake.ingest(db, source=InboundSource.STAFF, from_address=user.email, from_name=user.name,
+                           subject=body.subject, body=body.body, actor=f"user:{user.id}")
+    db.commit()
+    run = graph.start_intake_run(db, row, user)
+    db.refresh(row)
+    out = {**_row_out(db, row, with_body=True), "run_status": run.status}
+    if row.drive_id is None and run.status == RunStatus.NEEDS_REVIEW:
+        # The form shows these problems; the person corrects them and submits again.
+        graph.answer(db, run, user, "ignore")
+    return out
 
 
 @router.post("/inbox/check", tags=["inbox"])

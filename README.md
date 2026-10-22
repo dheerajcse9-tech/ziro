@@ -69,7 +69,7 @@ Sign in (password `Demo@2026`):
 | Step | Login | Role | Does |
 |---|---|---|---|
 | 1 | `driveuploadtesting@gmail.com` | Drive upload officer | Reads company emails, checks details and deadline, creates the drive, sends the consent form to all students |
-| 2 | `officer@placementos.demo` | Placement officer | After students answer, runs the drive (YES + criteria + clashes), fixes records, sends the list to the approver |
+| 2 | `officer@placementos.demo` | Placement officer | After students answer, runs the drive (YES + criteria + clashes), fixes records, sends the list to the approver; can also add a drive with **New drive** (same agents and checks as a company email) |
 | 3 | `approver@placementos.demo` | Approver (Head of Placements) | Checks the list, sends forms for missing details, approves or rejects; approval sends the list to the company |
 | Setup | `admin@placementos.demo` | Admin | Connects Gmail, AI key, trusted senders, students, Test Lab, audit log; can help with steps 1–2 but **cannot approve** |
 

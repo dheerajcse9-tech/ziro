@@ -118,7 +118,7 @@ function EmailDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const editable = canAct && e && !["DRIVE_CREATED", "PUBLISHED", "IGNORED"].includes(e.status);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} wide title={e?.subject ?? "Company email"}
-      description={e ? `From ${e.from_name ? `${e.from_name} ` : ""}<${e.from_address}> · ${relTime(e.received_at)} · ${e.source === "GMAIL" ? "Gmail" : e.source === "MANUAL" ? "pasted" : e.source.toLowerCase()}` : undefined}>
+      description={e ? `From ${e.from_name ? `${e.from_name} ` : ""}<${e.from_address}> · ${relTime(e.received_at)} · ${e.source === "GMAIL" ? "Gmail" : e.source === "MANUAL" ? "pasted" : e.source === "STAFF" ? "entered with New drive" : e.source.toLowerCase()}` : undefined}>
       {q.isError ? <ErrorState error={q.error} /> : !e ? <LoadingRows rows={6} /> : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">

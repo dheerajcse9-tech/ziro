@@ -259,6 +259,23 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await shot(page, "24-agent-crew");
   });
 
+  test("placement officer adds a drive with the New drive form", async ({ page }) => {
+    const iso = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    await login(page, "officer@placementos.demo");
+    await page.goto("/drives");
+    await page.getByRole("button", { name: "New drive" }).click();
+    await page.getByLabel("Company", { exact: true }).fill("Acme Labs");
+    await page.getByLabel(/Company email/).fill("hr@acme.example");
+    await page.getByLabel("Role", { exact: true }).fill("Software Intern");
+    await page.getByLabel("Drive date").fill(iso(30));
+    await page.getByLabel("Students must answer by (date)").fill(iso(20));
+    await page.getByLabel("Computer Science & Engineering").check();
+    await page.getByRole("button", { name: "Create drive and send consent forms" }).click();
+    await expect(page.getByRole("heading", { name: /Acme Labs — Software Intern/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/said YES/).first()).toBeVisible();
+    await shot(page, "17-new-drive-by-officer");
+  });
+
   test("viewer cannot act", async ({ page }) => {
     await login(page, "viewer@placementos.demo");
     await page.goto("/agent");

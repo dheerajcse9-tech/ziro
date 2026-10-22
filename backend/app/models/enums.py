@@ -214,6 +214,7 @@ class InboundSource(StrEnum):
     GMAIL = "GMAIL"  # fetched from the connected Gmail account (Google sign-in)
     IMAP = "IMAP"  # fetched from the placement mailbox over IMAP
     MANUAL = "MANUAL"  # pasted by the drive upload officer
+    STAFF = "STAFF"  # typed into the New drive form; the sender is the signed-in staff member
 
 
 class InboundStatus(StrEnum):

@@ -81,7 +81,7 @@ export interface IntakeDetails {
 }
 
 export interface InboundEmail {
-  id: number; source: "DEMO" | "GMAIL" | "IMAP" | "MANUAL"; from_address: string; from_name: string | null;
+  id: number; source: "DEMO" | "GMAIL" | "IMAP" | "MANUAL" | "STAFF"; from_address: string; from_name: string | null;
   to_address: string | null; subject: string; received_at: string; received_at_local: string;
   status: "NEW" | "PROCESSING" | "NEEDS_REVIEW" | "DRIVE_CREATED" | "PUBLISHED" | "IGNORED";
   drive_id: number | null; drive_title: string | null; run_id: number | null; extraction_mode: string | null;
