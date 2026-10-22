@@ -363,10 +363,17 @@ def _persist(db: Session, drive: Drive, ev: RosterEvaluation, run_id: int | None
                 detail={"roll_number": o.roll_number, "missing": o.missing_evidence, "reasons": o.reasons},
                 drive_id=drive.id, student_id=o.student_id, run_id=run_id,
             )
-        if o.decision == Decision.ELIGIBLE and not o.consent_ok:
+        per_drive = ev.criteria.required_consent_scope == ConsentScope.DRIVE_REGISTRATION
+        if o.decision == Decision.ELIGIBLE and o.consent_ok:
+            exceptions.auto_resolve(db, f"consent:{drive.id}:{o.student_id}", "The student said YES")
+        elif o.decision == Decision.ELIGIBLE and per_drive and o.consent:
+            # Said NO: the student's own choice, nothing for anyone to fix.
+            exceptions.auto_resolve(db, f"consent:{drive.id}:{o.student_id}", "The student said NO")
+        elif o.decision == Decision.ELIGIBLE:
             exceptions.raise_exception(
                 db, kind=ExceptionKind.MISSING_CONSENT, severity=Severity.INFO,
-                title=f"{o.roll_number}: eligible for {drive.title} but excluded (no employer-sharing consent)",
+                title=(f"{o.roll_number}: qualifies for {drive.title} but has not answered the consent form yet" if per_drive
+                       else f"{o.roll_number}: eligible for {drive.title} but excluded (no employer-sharing consent)"),
                 dedupe_key=f"consent:{drive.id}:{o.student_id}",
                 detail={"roll_number": o.roll_number, "consent": o.consent},
                 drive_id=drive.id, student_id=o.student_id, run_id=run_id,

@@ -21,7 +21,7 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
     mutationFn: (resolution: string) => api.post<ExceptionItem>(`/api/exceptions/${item!.id}/resolve`, {
       resolution, note: note || null, preferred_drive_id: resolution === "PREFER_DRIVE" ? preferred : null,
     }),
-    onSuccess: () => { toast.success("Exception resolved; affected approvals were re-validated"); setNote(""); setPreferred(null); onClose(); qc.invalidateQueries(); },
+    onSuccess: () => { toast.success("Issue closed"); setNote(""); setPreferred(null); onClose(); qc.invalidateQueries(); },
     onError: toastError,
   });
   const review = useMutation({
@@ -55,8 +55,8 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
         <Button variant="primary" disabled={!preferred} loading={resolve.isPending} onClick={() => resolve.mutate("PREFER_DRIVE")}>Assign to selected drive</Button>
       </> : <>
         <Button onClick={onClose}>Cancel</Button>
-        <Button disabled={note.trim().length < 3} loading={resolve.isPending && resolve.variables === "DISMISSED"} onClick={() => resolve.mutate("DISMISSED")}>Dismiss</Button>
-        <Button variant="primary" disabled={note.trim().length < 3} loading={resolve.isPending && resolve.variables === "ACKNOWLEDGED"} onClick={() => resolve.mutate("ACKNOWLEDGED")}>Acknowledge</Button>
+        <Button disabled={note.trim().length < 3} loading={resolve.isPending && resolve.variables === "DISMISSED"} onClick={() => resolve.mutate("DISMISSED")}>Not an issue</Button>
+        <Button variant="primary" disabled={note.trim().length < 3} loading={resolve.isPending && resolve.variables === "ACKNOWLEDGED"} onClick={() => resolve.mutate("ACKNOWLEDGED")}>Mark as handled</Button>
       </>}>
       <div className="space-y-4">
         {item.status !== "OPEN" && <Banner tone="ok" title={`${item.status}: ${item.resolution ?? ""}`}>{item.resolution_note}</Banner>}
@@ -85,10 +85,15 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
         )}
         {!isClash && !isSubmission && item.status === "OPEN" && (
           <>
-            {isData && item.student_id && <Banner tone="info" title="Fix the source record" action={(d.missing ?? []).length > 0 ? <Button size="sm" loading={emailStudent.isPending} onClick={() => emailStudent.mutate()}>Email student for missing data</Button> : undefined}>Email the student a personal link to provide the missing details, or correct the record yourself: <Link className="underline" href={`/students/${item.student_id}`}>open student record</Link>. Acknowledge only if the data cannot be obtained before the drive.</Banner>}
+            {isData && item.student_id && <Banner tone="info" title="Fix the source record" action={(d.missing ?? []).length > 0 ? <Button size="sm" loading={emailStudent.isPending} onClick={() => emailStudent.mutate()}>Email student for missing data</Button> : undefined}>Email the student a personal link to provide the missing details, or correct the record yourself: <Link className="underline" href={`/students/${item.student_id}`}>open student record</Link>. Use "Mark as handled" only if the data cannot be obtained before the drive.</Banner>}
             {item.kind === "INTAKE_REVIEW" && <Banner tone="info" title="Resolve in the Company Inbox">Open the email in the <Link className="underline" href="/inbox">Company Inbox</Link>: correct the details or confirm them, and the agents continue (this item resolves automatically).</Banner>}
             {item.kind === "CRITERIA_MISMATCH" && item.drive_id && <Banner tone="info" title="Resolve by updating criteria">Create a new criteria version on <Link className="underline" href={`/drives/${item.drive_id}`}>the drive</Link> (auto-resolves this item), or answer the agent run&apos;s question.</Banner>}
-            <Field label="Resolution note (required)" htmlFor="exc_note"><Textarea id="exc_note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+            <Banner tone="info" title="What these buttons do">
+              Both only close this issue and record your note in the audit log. They do <strong>not</strong> change the student list or the
+              student&apos;s record.{item.kind === "MISSING_CONSENT" ? " Only the student's own YES puts them on the list; the Approver can send them a personal form to ask again." : ""}
+              <span className="mt-1 block"><strong>Mark as handled</strong>: you have dealt with it (e.g. called the student). <strong>Not an issue</strong>: nothing needs doing (e.g. the student is not interested).</span>
+            </Banner>
+            <Field label="Note (required, at least 3 letters)" htmlFor="exc_note"><Textarea id="exc_note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
           </>
         )}
         <JsonView value={item.detail} label="Evidence" />
