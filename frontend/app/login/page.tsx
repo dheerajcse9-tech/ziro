@@ -2,7 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, PlayCircle, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useForm } from "react-hook-form";
@@ -62,6 +63,14 @@ function LoginForm() {
         </div>
 
         <div className="space-y-4">
+          <Link href="/tour" className="group block rounded-[var(--radius-card)] border-2 border-accent bg-accent-soft/60 p-4 transition-colors hover:bg-accent-soft">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-accent">Hackathon evaluators — start here</p>
+            <p className="mt-1 flex items-center gap-2 text-[16px] font-semibold text-ink">
+              <PlayCircle className="size-5 text-accent" />Guided walkthrough: a whole drive in 10 steps
+              <ArrowRight className="size-4 text-accent transition-transform group-hover:translate-x-0.5" /></p>
+            <p className="mt-1 text-[12.5px] text-ink-2">No login. You press &quot;Yes, continue&quot;; the real agents run each step in a private sandbox, show the
+              emails they write, and prove every test case.</p>
+          </Link>
           <Card className="p-4">
             <p className="text-[12px] font-semibold uppercase tracking-wide text-faint">How a drive works</p>
             <ol className="mt-3 grid gap-2 text-[12.5px] sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">

@@ -2,6 +2,10 @@
 
 **Ziro Digital Agentic AI Hackathon 2026 · Problem statement: Placement Drive Coordinator**
 
+> **Evaluators:** open the app and click **"Guided walkthrough"** on the login page (or go to `/tour`). No login; you
+> press "Yes, continue" and the real agents run a whole drive in 10 steps, ending with every test scenario.
+> See [docs/EVALUATOR_GUIDE.md](docs/EVALUATOR_GUIDE.md).
+
 A crew of 21 named agents runs the placement process in three stages, each owned by a person:
 
 1. **Drive upload officer:** a company emails the placement Gmail. Agents read the email (Gemini + rules), check every
@@ -92,6 +96,8 @@ cd frontend && CHROMIUM_PATH=... npx playwright test   # browser e2e against run
 
 | Document | Contents |
 |---|---|
+| [EVALUATOR_GUIDE](docs/EVALUATOR_GUIDE.md) | For evaluators: the guided walkthrough, test cases, accounts, what is simulated on the deployed link |
+| [TEST_SCENARIOS](docs/TEST_SCENARIOS.md) | The 16 test students and 6 company emails, with the expected result of each |
 | [AGENT_CREW](docs/AGENT_CREW.md) | The 21 agents, the three stages, who each agent works for |
 | [SETUP_GMAIL_GEMINI](docs/SETUP_GMAIL_GEMINI.md) | Step-by-step: Gemini key, Google sign-in for Gmail, trusted senders |
 | [PRODUCT_SPEC](docs/PRODUCT_SPEC.md) | Users, problems, MVP scope, features |

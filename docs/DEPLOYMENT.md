@@ -48,6 +48,12 @@ See the README quick start (SQLite). For a local PostgreSQL, create the database
 `DATABASE_URL=postgresql://user:password@localhost:5432/placementos` in `backend/.env` (read automatically at
 startup; real environment variables take precedence). Then `alembic upgrade head` and `python -m app.cli seed`.
 
+## Evaluator walkthrough on the deployed link
+`/tour` needs nothing extra: every step builds its own in-memory sandbox (and replays the earlier steps), so it works on
+serverless hosts and never touches the main database or sends email. The last step (all test scenarios) takes a few
+seconds; `backend/vercel.json` already allows longer functions. Give evaluators the web URL and point them to the
+"Guided walkthrough" link on the login page.
+
 ## Operations
 - Health: `GET /api/health` (database connectivity, dialect, planner mode).
 - Logs: structured stdout logging; unhandled errors are logged with stack traces and return a generic 500.

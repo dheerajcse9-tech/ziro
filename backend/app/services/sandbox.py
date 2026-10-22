@@ -47,21 +47,32 @@ class Sandbox:
         self.db: Session = self.Session()
         self._tokens: list = []
 
-    def __enter__(self) -> "Sandbox":
+    def activate(self) -> None:
+        """Route the destination adapter, mock-portal admin and planner to this sandbox (context-local)."""
         self._tokens = [
             (_factory_override, _factory_override.set(lambda dest: HtmlDriveFormAdapter("http://mockportal", client=self.portal))),
             (_admin_override, _admin_override.set(lambda: MockPortalAdmin("http://mockportal", TOKEN, client=self.portal))),
             (FORCE_DETERMINISTIC, FORCE_DETERMINISTIC.set(True)),
         ]
-        return self
 
-    def __exit__(self, *exc) -> None:
+    def deactivate(self) -> None:
         for var, token in reversed(self._tokens):
             var.reset(token)
+        self._tokens = []
+
+    def close(self) -> None:
         self.db.close()
         self.portal.close()
         self.engine.dispose()
         self.portal_engine.dispose()
+
+    def __enter__(self) -> "Sandbox":
+        self.activate()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.deactivate()
+        self.close()
 
     # ------------------------------------------------------------------ fixtures
     def admin(self) -> MockPortalAdmin:

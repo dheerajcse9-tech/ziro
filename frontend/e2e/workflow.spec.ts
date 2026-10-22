@@ -276,6 +276,20 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await shot(page, "17-new-drive-by-officer");
   });
 
+  test("evaluator walkthrough: press Yes through every step, no login", async ({ page }) => {
+    await page.context().clearCookies();
+    await page.goto("/login");
+    await page.getByRole("link", { name: /Guided walkthrough/ }).click();
+    await page.getByRole("button", { name: "Start the walkthrough" }).click();
+    await expect(page.getByText("Step 1 of 10")).toBeVisible({ timeout: 30_000 });
+    for (let i = 2; i <= 10; i++) {
+      await page.getByRole("button", { name: "Yes, continue" }).click();
+      await expect(page.getByText(`Step ${i} of 10`)).toBeVisible({ timeout: 60_000 });
+    }
+    await expect(page.getByRole("heading", { name: "Every check passed" })).toBeVisible();
+    await shot(page, "18-evaluator-walkthrough");
+  });
+
   test("viewer cannot act", async ({ page }) => {
     await login(page, "viewer@placementos.demo");
     await page.goto("/agent");
