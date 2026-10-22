@@ -44,8 +44,8 @@ function LoginForm() {
           <div className="mb-6 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-ink text-white"><ShieldCheck className="size-5" /></div>
             <div>
-              <h1 className="text-lg font-semibold text-ink">PlacementOS</h1>
-              <p className="text-[13px] text-muted">Placement drives, run by agents and approved by people</p>
+              <h1 className="text-lg font-semibold text-ink">PlaceCrew</h1>
+              <p className="text-[13px] text-muted">A crew of agents runs your placement drives. People approve.</p>
             </div>
           </div>
           <Card className="p-5">

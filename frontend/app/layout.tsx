@@ -3,7 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: { default: "PlacementOS", template: "%s · PlacementOS" },
+  title: { default: "PlaceCrew", template: "%s · PlaceCrew" },
   description: "Agentic placement drive coordinator — deterministic eligibility, human approval, verified uploads.",
 };
 

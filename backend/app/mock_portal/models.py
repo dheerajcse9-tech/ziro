@@ -1,6 +1,6 @@
 """Tables owned exclusively by the LOCAL MOCK employer drive portal.
 
-They share the database with PlacementOS only for deployment simplicity. The
+They share the database with PlaceCrew only for deployment simplicity. The
 core application never reads or writes these tables directly: it can only see
 the portal through the HTTP adapter, exactly like an external system.
 """

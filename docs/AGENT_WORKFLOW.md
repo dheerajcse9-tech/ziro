@@ -99,7 +99,7 @@ yet sent (e.g. a student whose missing CGPA was obtained after the deadline-driv
 sent are listed and bound into the proposal hash but never re-sent. Verification then expects the employer's full
 list = all earlier uploads + this one, and the attendance sheet covers the whole roster. If nothing new is eligible
 the run completes with "already sent". A previously sent student who is no longer eligible (e.g. consent withdrawn)
-raises a WITHDRAWAL_REQUIRED exception — PlacementOS never deletes from an employer form automatically.
+raises a WITHDRAWAL_REQUIRED exception — PlaceCrew never deletes from an employer form automatically.
 
 ## Recovery
 - Transient retrieval errors: bounded retries (3 attempts, backoff).

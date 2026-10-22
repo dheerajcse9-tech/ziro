@@ -1,4 +1,4 @@
-"""ORM entities for PlacementOS.
+"""ORM entities for PlaceCrew.
 
 Design notes
 - Students are identified by an internal integer id and a unique, normalised

@@ -258,7 +258,7 @@ def check(db: Session, row: InboundEmail) -> list[dict[str, Any]]:
     trusted = {x.lower().strip() for x in app_settings.get(db, "trusted_company_senders") or []}
     staff = db.scalar(select(User).where(func.lower(User.email) == address)) if row.source == InboundSource.STAFF else None
     if staff is not None:
-        issues.append(issue("sender", "STAFF", f"Entered in PlacementOS by {staff.name}", "INFO"))
+        issues.append(issue("sender", "STAFF", f"Entered in PlaceCrew by {staff.name}", "INFO"))
     elif address in trusted:
         issues.append(issue("sender", "TRUSTED", f"{row.from_address} is on the trusted company senders list", "INFO"))
     elif employer is None:

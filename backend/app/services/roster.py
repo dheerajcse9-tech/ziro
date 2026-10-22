@@ -344,7 +344,7 @@ def _persist(db: Session, drive: Drive, ev: RosterEvaluation, run_id: int | None
             title=f"{o.roll_number} was already sent to {drive.title} but is no longer eligible",
             dedupe_key=f"withdrawal:{drive.id}:{o.student_id}:v{o.record_version}:c{ev.criteria.version}",
             detail={"roll_number": o.roll_number, "reasons": o.reasons,
-                    "action": "Ask the employer to remove this student; PlacementOS never deletes from an employer form automatically."},
+                    "action": "Ask the employer to remove this student; PlaceCrew never deletes from an employer form automatically."},
             drive_id=drive.id, student_id=o.student_id, run_id=run_id,
         )
     for o in ev.outcomes:

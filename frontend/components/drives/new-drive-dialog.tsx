@@ -24,7 +24,7 @@ function longDate(iso: string) {
 function compose(v: typeof EMPTY) {
   const backlog = v.backlogs === "none" ? ", no active backlogs" : v.backlogs === "max" ? `, maximum ${v.maxBacklogs} active backlog${v.maxBacklogs === "1" ? "" : "s"}` : "";
   const lines = [
-    "Drive entered in PlacementOS by the placement office.", "",
+    "Drive entered in PlaceCrew by the placement office.", "",
     `Company: ${v.company.trim()}`, `Role: ${v.role.trim()}`, ...(v.ctc ? [`CTC: ${v.ctc}`] : []),
     `Drive date: ${longDate(v.date)}`, `Time: ${v.start} to ${v.end}`, ...(v.venue ? [`Venue: ${v.venue}`] : []),
     `Eligibility: ${v.cgpa ? `Minimum CGPA of ${v.cgpa}` : "No minimum CGPA"}${backlog}.`,

@@ -1,6 +1,6 @@
-# PlacementOS: guide for hackathon evaluators
+# PlaceCrew: guide for hackathon evaluators
 
-PlacementOS runs a college's placement drives with a crew of AI agents, from a company's email to the verified student
+PlaceCrew runs a college's placement drives with a crew of AI agents, from a company's email to the verified student
 list sent back to the company. People stay in charge: agents do the routine work, and only the Approver can approve.
 
 ## Fastest way: the guided walkthrough (about 5 minutes, no login)

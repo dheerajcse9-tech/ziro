@@ -1,7 +1,7 @@
 """Google sign-in (OAuth 2.0 web-server flow) and the Gmail API for the placement mailbox.
 
 The placement officer signs in once with the Google account that receives
-company emails (for example the drive upload officer's Gmail). PlacementOS
+company emails (for example the drive upload officer's Gmail). PlaceCrew
 stores only the refresh token, encrypted, and asks for two permissions:
 
   gmail.readonly  read company emails (nothing is marked read, moved or deleted)
@@ -107,12 +107,12 @@ def complete_sign_in(db: Session, code: str, user_id: int) -> OAuthCredential:
     tokens = _token_request({"code": code, "grant_type": "authorization_code", "redirect_uri": get_settings().google_callback_url})
     refresh = tokens.get("refresh_token")
     if not refresh:
-        raise GmailError("Google did not return a refresh token. Remove PlacementOS from your Google account's "
+        raise GmailError("Google did not return a refresh token. Remove PlaceCrew from your Google account's "
                          "third-party access and connect again.")
     granted = set((tokens.get("scope") or "").split())
     missing = [sc for sc in SCOPES if sc not in granted]
     if missing:
-        raise GmailError("Google gave only part of the access PlacementOS needs "
+        raise GmailError("Google gave only part of the access PlaceCrew needs "
                          f"(missing: {', '.join(m.rsplit('/', 1)[-1] for m in missing)}). Click Connect Gmail again and, on "
                          "Google's permission screen, tick BOTH boxes (read and send email) or 'Select all'.")
     _access_cache.clear()

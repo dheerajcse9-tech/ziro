@@ -3,7 +3,7 @@
 ## Slide outline (8 slides)
 1. **The problem** — a placement drive is 11 manual steps with silent failure modes: the wrong Rahul Kumar, students
    shared without consent, clashes found on the day, uploads that half-succeed, nobody can prove who approved what.
-2. **PlacementOS in one sentence** — delegate the drive workflow to an agent, inspect its evidence, approve the exact
+2. **PlaceCrew in one sentence** — delegate the drive workflow to an agent, inspect its evidence, approve the exact
    operation, verify the result.
 3. **Live architecture** — one coordinator agent, durable graph, typed tools with permission tiers; deterministic rules
    decide eligibility; humans approve; an adapter executes; the system re-reads the destination. (ARCHITECTURE diagram)

@@ -120,7 +120,7 @@ export default function TourPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-lg bg-ink text-white"><ShieldCheck className="size-5" /></div>
-            <div><p className="text-[15px] font-semibold text-ink">PlacementOS</p><p className="text-[12px] text-muted">Guided walkthrough for evaluators</p></div>
+            <div><p className="text-[15px] font-semibold text-ink">PlaceCrew</p><p className="text-[12px] text-muted">Guided walkthrough for evaluators</p></div>
           </div>
           <ButtonLink size="sm" href="/login">Open the full app</ButtonLink>
         </div>

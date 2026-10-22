@@ -1,4 +1,4 @@
-"""PlacementOS API entrypoint."""
+"""PlaceCrew API entrypoint."""
 from __future__ import annotations
 
 import logging
@@ -50,7 +50,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     lifespan=lifespan,
-    title="PlacementOS API",
+    title="PlaceCrew API",
     version="1.0.0",
     description="Agentic placement drive coordinator: deterministic eligibility, consent enforcement, "
                 "version-bound human approval, idempotent upload and independent verification.",
@@ -88,7 +88,7 @@ app.include_router(routes_ops.router)
 app.include_router(routes_outreach.router)
 app.include_router(routes_intake.router)
 app.include_router(routes_tour.router)
-# The LOCAL MOCK employer portal is a separate ASGI app; PlacementOS reaches it only over HTTP.
+# The LOCAL MOCK employer portal is a separate ASGI app; PlaceCrew reaches it only over HTTP.
 app.mount("/mock-portal", create_mock_portal_app(SessionLocal, mock_admin_token()))
 
 # Optional: serve the statically exported frontend from the same origin (single-service deploys).

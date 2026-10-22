@@ -139,7 +139,7 @@ def execute(db: Session, approval_id: int, *, actor: str, run_id: int | None = N
         db.commit()
         try:
             receipt = adapter.submit(destination.form_ref, payload, client_reference=op.operation_key,
-                                     submitted_by=f"PlacementOS ({actor})")
+                                     submitted_by=f"PlaceCrew ({actor})")
         except DestinationUncertain as exc:
             _log(op, "uncertain", attempt=op.attempts, error=str(exc))
             op.status, op.error = UploadStatus.UNCERTAIN, str(exc)

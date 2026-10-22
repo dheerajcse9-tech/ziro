@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex h-14 items-center gap-2 border-b border-white/10 px-4">
         <div className="flex size-7 items-center justify-center rounded-md bg-white/10 ring-1 ring-white/15"><ShieldCheck className="size-4 text-white" /></div>
         <div className="leading-tight">
-          <div className="text-[14px] font-semibold text-white">PlacementOS</div>
+          <div className="text-[14px] font-semibold text-white">PlaceCrew</div>
           <div className="max-w-[10rem] truncate text-[10.5px] text-white/55">{settingsQ.data?.institution_name ?? "Placement operations"}</div>
         </div>
       </div>

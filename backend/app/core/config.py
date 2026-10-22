@@ -49,7 +49,7 @@ def _list(name: str, default: str) -> list[str]:
 
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = "PlacementOS"
+    app_name: str = "PlaceCrew"
     environment: str = field(default_factory=lambda: os.getenv("APP_ENV", "development"))
     demo_mode: bool = field(default_factory=lambda: _bool("DEMO_MODE", True))
     # What `seed` / Demo reset loads: "institute" (student list in app/data, staff logins, company senders, no drives)
@@ -107,7 +107,7 @@ class Settings:
     smtp_port: int = field(default_factory=lambda: int(os.getenv("SMTP_PORT", "587")))
     smtp_user: str = field(default_factory=lambda: os.getenv("SMTP_USER", ""))
     smtp_password: str = field(default_factory=lambda: os.getenv("SMTP_PASSWORD", ""))
-    smtp_from: str = field(default_factory=lambda: os.getenv("SMTP_FROM", "PlacementOS <placements@example.edu>"))
+    smtp_from: str = field(default_factory=lambda: os.getenv("SMTP_FROM", "PlaceCrew <placements@example.edu>"))
     smtp_starttls: bool = field(default_factory=lambda: _bool("SMTP_STARTTLS", True))
     # Base URL students open from emailed links (the frontend).
     public_app_url: str = field(default_factory=lambda: os.getenv("PUBLIC_APP_URL", "http://localhost:3000"))

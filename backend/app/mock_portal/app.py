@@ -2,7 +2,7 @@
 
 Stands in for the organiser's official mock drive form, which was not
 available to this project. It is a separate ASGI app with its own routes and
-tables; PlacementOS reaches it only over HTTP through the destination adapter.
+tables; PlaceCrew reaches it only over HTTP through the destination adapter.
 Every page is visibly labelled as a local mock.
 
 Pages (HTML, as a person or browser automation would see them):
@@ -53,7 +53,7 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
     return HTMLResponse(
         f"<!doctype html><html><head><meta charset='utf-8'><title>{html.escape(title)} | LOCAL MOCK portal</title>"
         f"<style>{_STYLE}</style></head><body><header><strong>LOCAL MOCK</strong> employer drive portal — "
-        f"simulated destination for PlacementOS demos. Not an external system.</header><main>{body}</main></body></html>",
+        f"simulated destination for PlaceCrew demos. Not an external system.</header><main>{body}</main></body></html>",
         status_code=status,
     )
 

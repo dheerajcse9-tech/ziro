@@ -1,6 +1,6 @@
 # The Agent Crew
 
-PlacementOS splits the placement process into three stages, one per person. Each stage is carried out by a few named agents. Each agent does one job and may call only its own tools; any other call is refused and logged as `TOOL_DENIED`. No agent can approve anything. Source: `backend/app/agent/crew.py`; the live list is in the app under **Agent Crew**.
+PlaceCrew splits the placement process into three stages, one per person. Each stage is carried out by a few named agents. Each agent does one job and may call only its own tools; any other call is refused and logged as `TOOL_DENIED`. No agent can approve anything. Source: `backend/app/agent/crew.py`; the live list is in the app under **Agent Crew**.
 
 ```mermaid
 flowchart LR

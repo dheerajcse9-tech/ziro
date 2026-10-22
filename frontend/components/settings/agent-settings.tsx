@@ -45,7 +45,7 @@ export function GmailCard() {
   return (
     <Card>
       <CardHeader title={<span className="flex items-center gap-2"><Mail className="size-4 text-faint" />Placement mailbox (Gmail)</span>}
-        description="The drive upload officer's Gmail: company emails are read from it, and every email PlacementOS sends goes out from it."
+        description="The drive upload officer's Gmail: company emails are read from it, and every email PlaceCrew sends goes out from it."
         actions={g && canConnect ? (g.connected
           ? <Button size="sm" loading={disconnect.isPending} onClick={() => disconnect.mutate()} icon={<LogOut className="size-3.5" />}>Disconnect</Button>
           : <Button size="sm" variant="primary" disabled={!g.configured} loading={connect.isPending} onClick={() => connect.mutate()} icon={<Link2 className="size-3.5" />}>Connect Gmail</Button>) : undefined} />

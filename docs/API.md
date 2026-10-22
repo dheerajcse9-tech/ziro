@@ -141,7 +141,7 @@ Errors use `{"detail": str, "code": str, "details": {...}}` with 401 (no session
 | POST | `/api/uploads/{upload_id}/retry` | Reconcile-then-retry an UNCERTAIN/FAILED upload. Never creates a duplicate submission. |
 | GET | `/api/uploads/{upload_id}/receipt` | Upload Receipt |
 
-## LOCAL MOCK portal (separate app at `/mock-portal`, not part of the PlacementOS API)
+## LOCAL MOCK portal (separate app at `/mock-portal`, not part of the PlaceCrew API)
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/forms/{ref}` | Drive form page: published criteria, schedule, field list |

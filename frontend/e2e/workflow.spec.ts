@@ -14,7 +14,7 @@ async function login(page: Page, email: string) {
   await expect(page.getByRole("heading", { name: /^Hello/ })).toBeVisible();
 }
 
-test.describe.serial("PlacementOS end-to-end", () => {
+test.describe.serial("PlaceCrew end-to-end", () => {
   let approvalUrl = "";
   let supplementUrl = "";
 

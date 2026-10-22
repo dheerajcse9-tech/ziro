@@ -98,7 +98,7 @@ def step_setup(t: Tour) -> dict[str, Any]:
     students = list(t.sb.db.scalars(select(Student).order_by(Student.roll_number)))
     return {
         "role": "Setup", "title": "The institute: 16 test students and 4 staff accounts",
-        "explain": "A fresh, private copy of PlacementOS was just created for you. It holds the institute's 16 test students "
+        "explain": "A fresh, private copy of PlaceCrew was just created for you. It holds the institute's 16 test students "
                    "(each one stands for one test case) and the staff accounts. Company emails from the three test company "
                    "mailboxes are trusted senders.",
         "blocks": [

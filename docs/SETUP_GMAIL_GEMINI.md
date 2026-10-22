@@ -2,7 +2,7 @@
 
 This guide connects:
 
-* **The placement mailbox** (for example `driveuploadtesting@gmail.com`). The Mailbox Agent reads company emails from it, and every email PlacementOS sends goes out from it.
+* **The placement mailbox** (for example `driveuploadtesting@gmail.com`). The Mailbox Agent reads company emails from it, and every email PlaceCrew sends goes out from it.
 * **Gemini.** The Email Reader Agent and the Goal Planner Agent use it. Everything works without Gemini, but then emails are read by fixed rules only.
 
 You need about 20 minutes. Everything happens in your browser, in `backend/.env`, and in two terminals.
@@ -38,12 +38,12 @@ Nothing breaks while this is wrong: the email is still read by the rules and the
 
 ### 2.1 Create a Google Cloud project and turn on the Gmail API
 1. Open **https://console.cloud.google.com** and sign in. You can use your own account; it does not have to be the mailbox account.
-2. At the top, open the project picker and choose **New project**. Name it `PlacementOS` and click **Create**, then select it.
+2. At the top, open the project picker and choose **New project**. Name it `PlaceCrew` and click **Create**, then select it.
 3. Search for **Gmail API** in the top search bar, open it, and click **Enable**.
 
 ### 2.2 Configure the consent screen
 1. Go to **APIs & Services → OAuth consent screen**. It may also be called **Google Auth Platform**.
-2. Fill in **App name** `PlacementOS`, a **support email**, and a **developer contact email**.
+2. Fill in **App name** `PlaceCrew`, a **support email**, and a **developer contact email**.
 3. For **Audience / User type** choose **External**. Leave the publishing status as **Testing**.
 4. Under **Test users**, add **`driveuploadtesting@gmail.com`**, the mailbox you will connect.
 5. Save.
@@ -51,7 +51,7 @@ Nothing breaks while this is wrong: the email is still read by the rules and the
 ### 2.3 Create the OAuth client
 1. Go to **APIs & Services → Credentials**, or **Google Auth Platform → Clients**.
 2. Click **Create credentials → OAuth client ID** (or **Create client**).
-3. **Application type: Web application.** Name: `PlacementOS local`.
+3. **Application type: Web application.** Name: `PlaceCrew local`.
 4. Under **Authorised redirect URIs**, add exactly this, with no trailing slash:
    ```
    http://localhost:3000/api/integrations/google/callback
@@ -66,7 +66,7 @@ INBOX_SUBJECT_FILTER=Campus Drive
 ```
 Save, then restart the backend.
 
-* You can delete the old `SMTP_...` lines. Once Gmail is connected, PlacementOS sends through Gmail and does not use SMTP.
+* You can delete the old `SMTP_...` lines. Once Gmail is connected, PlaceCrew sends through Gmail and does not use SMTP.
 * `INBOX_SUBJECT_FILTER` means only emails whose subject contains "Campus Drive" are read. To read every email in a mailbox that only receives company emails, set it to empty: `INBOX_SUBJECT_FILTER=`.
 
 ### 2.5 Connect the mailbox
@@ -79,7 +79,7 @@ Save, then restart the backend.
 7. Allow both permissions: **read email** and **send email**.
 8. You return to Settings and it shows **Connected: driveuploadtesting@gmail.com**.
 
-**What PlacementOS can and cannot do with the mailbox:**
+**What PlaceCrew can and cannot do with the mailbox:**
 
 * It reads emails (read-only).
 * It never marks emails as read, moves them or deletes them.
@@ -97,7 +97,7 @@ Click **Connect Gmail** again to fix it. Removing the 7-day limit requires publi
 
 ## Part 3: Trusted company senders
 
-PlacementOS treats a company it doesn't know, writing from a personal Gmail address, as **"confirm before students are contacted"**. Anyone can send an email that claims to be a company.
+PlaceCrew treats a company it doesn't know, writing from a personal Gmail address, as **"confirm before students are contacted"**. Anyone can send an email that claims to be a company.
 
 Your test companies write from `companytestmailone@gmail.com`, `companytestmailtwo@gmail.com` and `companytestmailthree@gmail.com`. Add those addresses under **Settings → Trusted company senders** (as the drive upload officer or admin), one per line, and click **Save**. Their emails then go straight through. Every other check still applies: dates, deadline, criteria, duplicates and suspicious text.
 

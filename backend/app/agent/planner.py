@@ -44,7 +44,7 @@ class Plan:
     planner_mode: str = "DETERMINISTIC_FALLBACK"
 
 
-SYSTEM_PROMPT = """You are the planning component of PlacementOS, a university placement operations platform.
+SYSTEM_PROMPT = """You are the planning component of PlaceCrew, a university placement operations platform.
 Your job: interpret the placement officer's request, identify the single drive it concerns, and submit a plan.
 
 Rules you must follow:

@@ -70,7 +70,7 @@ def test_full_workflow_over_http(server):
     csv_resp = officer.get(f"/api/attendance/{sheet_id}/download?format=csv")
     assert csv_resp.status_code == 200 and csv_resp.text.count("\n") == receipt["counts"]["eligible_uploaded"] + 1
     assert officer.get(f"/api/attendance/{sheet_id}/download?format=xlsx").content[:2] == b"PK"
-    # Destination page really contains the uploaded roster (independent of PlacementOS).
+    # Destination page really contains the uploaded roster (independent of PlaceCrew).
     page = httpx.get(f"{server}/mock-portal/forms/{receipt['destination']['form_ref']}/roster").text
     assert all(f"data-roll='{r}'" in page for r in receipt["uploaded_roll_numbers"])
     events = officer.get(f"/api/agent/runs/{run['id']}/events").json()

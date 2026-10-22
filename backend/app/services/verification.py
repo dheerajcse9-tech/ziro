@@ -135,7 +135,7 @@ def build_receipt(db: Session, op: UploadOperation, verification: VerificationRe
         for r in row.get("reasons", []):
             reasons[r] = reasons.get(r, 0) + 1
     return {
-        "receipt_type": "PlacementOS upload receipt",
+        "receipt_type": "PlaceCrew upload receipt",
         "environment_note": "Destination is the LOCAL MOCK portal" if op.destination.kind == "LOCAL_MOCK_FORM" else "Organiser destination",
         "operation_key": op.operation_key,
         "drive": {"id": drive.id, "title": drive.title, "employer": drive.employer.name,

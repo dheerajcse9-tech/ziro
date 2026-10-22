@@ -1,4 +1,4 @@
-# PlacementOS — Agentic Placement Operations Platform
+# PlaceCrew — a crew of AI agents that runs placement drives; people approve
 
 **Ziro Digital Agentic AI Hackathon 2026 · Problem statement: Placement Drive Coordinator**
 
