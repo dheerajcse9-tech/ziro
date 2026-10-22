@@ -135,7 +135,7 @@ def invite_eligible(db: Session, drive: Drive, user: User | None, actor: str | N
                 + f"\n\nAnswer the consent form (YES or NO) with your personal link:\n\n  {_link(req.token)}\n\n"
                 f"Please answer by {closes:%d %b %Y, %H:%M}. — Placement Cell")
         mailer.send(db, category=EmailCategory.DRIVE_INVITATION, to_address=s.email, to_name=s.full_name,
-                    subject=f"Consent form: {drive.title} — answer by {closes:%d %b}",
+                    subject=f"Consent form: {drive.title} — answer by {closes:%d %b} {ref(req)}",
                     body=body, dedupe_key=f"invite:{req.id}", sent_by=actor, student_id=s.id, drive_id=drive.id,
                     request_id=req.id)
         sent.append(s.roll_number)
@@ -188,7 +188,8 @@ def request_missing_data(db: Session, student: Student, fields: list[str], user:
             f"The form closes on {to_local(req.expires_at, tz):%d %b %Y at %H:%M}. "
             f"After that it can no longer be submitted.\n\n— Placement Cell")
     mailer.send(db, category=EmailCategory.DATA_REQUEST, to_address=student.email, to_name=student.full_name,
-                subject="Action needed: missing details in your placement record", body=body,
+                subject=(f"Action needed: {'your answer for ' + drive.title if drive else 'missing details in your placement record'} {ref(req)}"),
+                body=body,
                 dedupe_key=f"data-request:{req.id}", sent_by=actor or _actor(user), student_id=student.id,
                 drive_id=drive.id if drive else None, request_id=req.id)
     ledger.record(db, actor_type=ActorType.USER if user else ActorType.AGENT, actor_id=actor or _actor(user),
@@ -213,10 +214,17 @@ def request_missing_for_drive(db: Session, drive: Drive, user: User | None) -> d
 
 # --------------------------------------------------------------------------- public (student) side
 
+def ref(req: StudentRequest) -> str:
+    """A short code in the subject, unique per link, so mail apps never merge an email (or an old one from
+    before a data reset) into another conversation with the same subject."""
+    return f"[ref {req.token[:6]}]"
+
+
 def get_by_token(db: Session, token: str) -> StudentRequest:
     req = db.scalar(select(StudentRequest).where(StudentRequest.token == token))
     if req is None:
-        raise NotFound("This link is not valid")
+        raise NotFound("This link is not valid. It may be from an older email: please open the most recent "
+                       "email from the Placement Cell and use the link in that one.")
     if req.status == RequestStatus.SENT and req.expires_at <= utcnow():
         req.status = RequestStatus.EXPIRED
         db.commit()

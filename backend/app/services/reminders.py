@@ -19,7 +19,7 @@ from app.db.base import utcnow
 from app.domain.schedule import to_local
 from app.models.entities import Drive, DriveAssignment, StudentRequest
 from app.models.enums import ActorType, AssignmentStatus, DriveStatus, EmailCategory, RequestKind, RequestStatus
-from app.services import app_settings, mailer
+from app.services import app_settings, mailer, outreach
 from app.services.outreach import FIELD_LABEL, _first_name, _link, _slot
 
 ACTOR = "agent:reminder"
@@ -46,7 +46,8 @@ def run(db: Session) -> dict[str, Any]:
             subject = f"Reminder: your placement form closes on {closes:%d %b %H:%M}"
             what = f"we still need: {fields}" + (f" (for {drive.title})" if drive else "")
             key, bucket = f"reminder:details:{req.id}", "details"
-        msg = mailer.send(db, category=EmailCategory.REMINDER, to_address=s.email, to_name=s.full_name, subject=subject,
+        msg = mailer.send(db, category=EmailCategory.REMINDER, to_address=s.email, to_name=s.full_name,
+                          subject=f"{subject} {outreach.ref(req)}",
                           body=(f"Dear {_first_name(s)},\n\nA reminder that {what}.\n\n  {_link(req.token)}\n\n"
                                 f"The form closes on {closes:%d %b %Y at %H:%M}. After that it can no longer be "
                                 f"submitted.\n\n— Placement Cell"),
