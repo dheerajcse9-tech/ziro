@@ -14,6 +14,11 @@ const PERMISSIONS: Record<string, Role[]> = {
   approve: ["approver", "admin"],
   admin: ["admin"],
   download: ["officer", "admin", "approver"],
+  // Drive upload officer (coordinator): company inbox, drives, consent forms
+  manageDrives: ["coordinator", "officer", "admin"],
+  connectMailbox: ["coordinator", "admin"],
+  // Approver-side follow-ups (missing details / consent forms)
+  followUp: ["approver", "officer", "admin"],
 };
 
 export function can(user: User | undefined, action: keyof typeof PERMISSIONS | string): boolean {
@@ -25,4 +30,5 @@ export const ROLE_LABEL: Record<Role, string> = {
   officer: "Placement officer",
   approver: "Approver (Head of Placements)",
   viewer: "Viewer",
+  coordinator: "Drive upload officer",
 };

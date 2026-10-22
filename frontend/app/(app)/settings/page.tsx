@@ -2,8 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ExternalLink, RotateCcw, Save, Trash2, Zap } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { AgentPolicyCard, GmailCard, TrustedSendersCard } from "@/components/settings/agent-settings";
 import { DefinitionList, PageHeader } from "@/components/ui/layout";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { Button, Card, CardHeader, Field, Input, Select } from "@/components/ui/primitives";
@@ -19,7 +20,7 @@ interface Integrations {
   official_organiser_target: { available: boolean; note: string };
   destinations: (Destination & { status: string; detail: string | null })[];
   allowed_destination_hosts: string[];
-  llm: { enabled: boolean; model: string | null; mode: string };
+  llm: { enabled: boolean; provider: string; model: string | null; mode: string };
   mock_portal_base_url: string;
   demo_mode: boolean;
   email: { transport: string; note: string };
@@ -81,7 +82,7 @@ export default function SettingsPage() {
             { label: "API", value: <StatusBadge status={health.data.status === "ok" ? "VERIFIED" : "FAILED"} label={health.data.status} /> },
             { label: "Database", value: `${health.data.database} (${health.data.database_dialect})` },
             { label: "Environment", value: health.data.environment },
-            { label: "Planner", value: health.data.planner === "LLM" ? `LLM · ${health.data.llm_model}` : "Deterministic fallback" },
+            { label: "AI model", value: health.data.llm_provider && health.data.llm_provider !== "none" ? `${health.data.llm_provider === "gemini" ? "Gemini" : "Claude"} · ${health.data.llm_model}` : "Rule-based fallback (no AI key)" },
             { label: "Server time", value: fmtDateTime(health.data.time, undefined, { second: "2-digit" }) },
             { label: "Allowed destination hosts", value: integ.data?.allowed_destination_hosts.join(", ") ?? "—" },
           ]} /></div>}
@@ -91,10 +92,18 @@ export default function SettingsPage() {
           <div className="space-y-3 p-4">
             {integ.data && <Banner tone="warn" title="Organiser mock drive form not configured">{integ.data.official_organiser_target.note}</Banner>}
             <p className="text-[12.5px] text-muted">The destination adapter interface (<span className="font-mono">DriveFormAdapter</span>) is the only integration point. Adding the organiser&apos;s form means configuring an allowlisted destination of kind ORGANISER_FORM — no domain code changes.</p>
-            {integ.data && <p className="text-[12.5px]">LLM: <strong>{integ.data.llm.mode}</strong></p>}
-            {integ.data && <p className="text-[12.5px]">Email: <strong>{integ.data.email.transport === "SMTP" ? "SMTP" : "Local mailbox"}</strong> — {integ.data.email.note}</p>}
+            {integ.data && <p className="text-[12.5px]">AI: <strong>{integ.data.llm.mode}</strong></p>}
+            {integ.data && <p className="text-[12.5px]">Email: <strong>{{ GMAIL_API: "Gmail", SMTP: "SMTP", LOCAL_MAILBOX: "Local mailbox" }[integ.data.email.transport] ?? integ.data.email.transport}</strong> — {integ.data.email.note}</p>}
           </div>
         </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <Suspense fallback={<Card><LoadingRows rows={3} /></Card>}><GmailCard /></Suspense>
+        <div className="space-y-4">
+          <TrustedSendersCard />
+          <AgentPolicyCard />
+        </div>
       </div>
 
       <Card className="mt-4">
@@ -139,7 +148,7 @@ export default function SettingsPage() {
             <table className="data-table w-full"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead>
               <tbody>{users.data.map((u) => <tr key={u.id}><td>{u.name}</td><td className="font-mono text-[12px]">{u.email}</td><td><Tag tone={u.role === "approver" ? "accent" : u.role === "admin" ? "bad" : "neutral"}>{ROLE_LABEL[u.role]}</Tag></td></tr>)}</tbody></table>
           )}
-          <div className="border-t border-line p-4 text-[12.5px] text-muted">Officers run the agent and manage data · Approvers decide approval requests · Admins configure the system · Viewers read only. The agent has no user identity and cannot approve.</div>
+          <div className="border-t border-line p-4 text-[12.5px] text-muted">Drive upload officers turn company emails into drives and consent forms · Placement officers run drives and manage student data · Approvers review rosters and follow up on missing details · Admins configure the system · Viewers read only. Agents have no user identity and cannot approve.</div>
         </Card>
       </div>
 

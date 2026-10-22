@@ -216,7 +216,7 @@ def list_agents(db: Session = Depends(get_db), _: User = Depends(require_roles(*
                                  .order_by(AgentEvent.id.desc()).limit(5)):
                 recent.append({"at": ev.created_at.isoformat(), "run_id": ev.run_id, "what": ev.node})
         for au in db.scalars(select(AuditEvent).where(AuditEvent.actor_id == a["actor"]).order_by(AuditEvent.seq.desc()).limit(5)):
-            recent.append({"at": au.created_at.isoformat(), "action": au.action, "drive_id": au.drive_id})
+            recent.append({"at": au.occurred_at.isoformat(), "action": au.action, "drive_id": au.drive_id})
         recent.sort(key=lambda x: x["at"], reverse=True)
         out.append({**a, "recent": recent[:5]})
     waiting = db.scalar(select(AgentRun.id).where(AgentRun.status.notin_(list(TERMINAL_RUN_STATES))).limit(1))

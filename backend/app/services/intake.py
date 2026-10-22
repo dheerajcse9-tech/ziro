@@ -11,6 +11,7 @@ import email
 import email.policy
 import hashlib
 import imaplib
+import logging
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -307,9 +308,12 @@ def create_drive(db: Session, row: InboundEmail, user: User | None, actor: str) 
     drive.registration_deadline = to_utc(datetime.fromisoformat(data["registration_deadline"]), tz)
     if data.get("roster_due"):
         drive.roster_due_at = to_utc(datetime.fromisoformat(data["roster_due"]), tz)
-    drive.destination_id = _stand_in_form(db, drive, data, row)
     row.drive_id, row.status = drive.id, InboundStatus.DRIVE_CREATED
     row.processed_by_id, row.processed_at = user.id if user else None, utcnow()
+    db.flush()
+    # Commit before calling the mock portal: on SQLite it shares this database and would wait on our write lock.
+    db.commit()
+    drive.destination_id = _stand_in_form(db, drive, data, row)
     db.flush()
     ledger.record(db, actor_type=ActorType.AGENT if actor.startswith("agent") else ActorType.USER, actor_id=actor,
                   action="DRIVE_CREATED_FROM_EMAIL", entity_type="inbound_email", entity_id=row.id, drive_id=drive.id,
@@ -345,6 +349,7 @@ def _stand_in_form(db: Session, drive: Drive, data: dict[str, Any], row: Inbound
                                  published_criteria=_published_text(data),
                                  schedule_text=f"{start:%d %b %Y}, {start:%H:%M}-{to_local(drive.ends_at, drive.timezone):%H:%M} ({drive.timezone})")
     except Exception:  # noqa: BLE001 - the drive is still valid; the officer can configure a destination later
+        logging.getLogger("placementos.intake").warning("Could not register stand-in form %s", form_ref, exc_info=True)
         return None
     dest = Destination(name=f"{drive.employer.name} drive form (LOCAL MOCK stand-in)", kind=DestinationKind.LOCAL_MOCK_FORM,
                        base_url=s.mock_portal_base_url.rstrip("/"), form_ref=form_ref)

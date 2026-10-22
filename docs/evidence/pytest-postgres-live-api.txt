@@ -1,14 +1,15 @@
 ============================= test session starts ==============================
-platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python
 cachedir: .pytest_cache
-rootdir: backend
+rootdir: /home/user/ziro/backend
 configfile: pytest.ini
 plugins: anyio-4.15.1
-collecting ... collected 4 items
+collecting ... collected 5 items
 
-tests/integration/test_api_live.py::test_auth_required_and_roles PASSED  [ 25%]
-tests/integration/test_api_live.py::test_full_workflow_over_http PASSED  [ 50%]
-tests/integration/test_api_live.py::test_test_lab_endpoint PASSED        [ 75%]
-tests/integration/test_api_live.py::test_invitation_link_round_trip_over_http PASSED [100%]
+tests/integration/test_api_live.py::test_auth_required_and_roles PASSED  [ 20%]
+tests/integration/test_api_live.py::test_full_workflow_over_http PASSED  [ 40%]
+tests/integration/test_api_live.py::test_test_lab_endpoint PASSED        [ 60%]
+tests/integration/test_api_live.py::test_invitation_link_round_trip_over_http PASSED [ 80%]
+tests/integration/test_api_live.py::test_company_inbox_and_crew_over_http PASSED [100%]
 
-============================== 4 passed in 5.40s ===============================
+============================== 5 passed in 7.78s ===============================

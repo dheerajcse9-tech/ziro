@@ -158,8 +158,8 @@ test.describe.serial("PlacementOS end-to-end", () => {
     const link = await page.getByRole("link", { name: /\/respond\// }).getAttribute("href");
     const student = await context.newPage();
     await student.goto(link!.replace(/^https?:\/\/[^/]+/, ""));
-    await student.getByRole("button", { name: /Accept/ }).click();
-    await expect(student.getByText("You are registered")).toBeVisible();
+    await student.getByRole("button", { name: /Yes, register me/ }).click();
+    await expect(student.getByText("You said YES")).toBeVisible();
     await shot(student, "17-student-invitation-accepted");
     await student.close();
 
@@ -182,11 +182,9 @@ test.describe.serial("PlacementOS end-to-end", () => {
     if (await select.count()) await select.selectOption("CSE");
     await student2.getByRole("button", { name: "Submit details" }).click();
     await expect(student2.getByText(/your details were received/)).toBeVisible();
+    // The Response Reader Agent applied the answer at once (marked self-reported).
+    await expect(student2.getByText("Your placement record has been updated.")).toBeVisible();
     await student2.close();
-    await page.goto("/exceptions?kind=DATA_SUBMITTED");
-    await page.getByRole("button", { name: "Resolve" }).first().click();
-    await page.getByRole("button", { name: /Verify & apply/ }).click();
-    await expect(page.getByText(/Verified details applied/).first()).toBeVisible();
 
     // Selection result on the verified Northwind roster.
     await page.goto("/drives/1");
@@ -195,10 +193,67 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await page.getByRole("button", { name: "Save results" }).click();
     await expect(page.getByText(/1 result\(s\) saved/).first()).toBeVisible();
     await page.goto("/students?q=21AD001");
-    await expect(page.getByText("Northwind Systems").first()).toBeVisible();
+    await expect(page.getByRole("table").getByText("Northwind Systems").first()).toBeVisible();
     await page.getByRole("link", { name: "21AD001" }).click();
     await expect(page.getByText("Placement history")).toBeVisible();
     await shot(page, "19-student-placement-history");
+  });
+
+  test("three stages: company email -> consent forms -> roster -> approver follow-up form -> re-proposal", async ({ page, context }) => {
+    // Stage 1 — drive upload officer
+    await login(page, "drives@placementos.demo");
+    await page.goto("/inbox");
+    await page.getByRole("button", { name: "Load sample emails" }).click();
+    await expect(page.getByText(/3 sample email\(s\) added/).first()).toBeVisible();
+    await page.getByRole("button", { name: "Check mailbox now" }).click();
+    await expect(page.getByText("Consent forms sent").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Needs you").first()).toBeVisible();
+    await shot(page, "20-company-inbox");
+    await page.getByRole("row", { name: /Zentrix/ }).getByRole("button", { name: "Review" }).click();
+    await expect(page.getByText("The agents need you")).toBeVisible();
+    await expect(page.getByText(/instruction-like text, which was ignored/).first()).toBeVisible();
+    await shot(page, "21-intake-review");
+    await page.getByRole("button", { name: /Details are correct/ }).click();
+    await expect(page.getByText(/Consent form sent to \d+ student/).first()).toBeVisible({ timeout: 30_000 });
+    await page.keyboard.press("Escape");
+
+    // A student answers the Orbitra consent form from the emailed link.
+    // 3 drives x 34 students = 102 consent emails; find an Orbitra one through the outbox API.
+    const outbox = await (await page.request.get("/api/emails?category=DRIVE_INVITATION&page_size=200")).json();
+    // Aarav Sharma (21CS001, CSE, 8.72) meets Orbitra's criteria.
+    const orbitra = outbox.items.find((m: { subject: string; to_address: string }) => m.subject.includes("Orbitra") && m.to_address.startsWith("21cs001"));
+    const mail = await (await page.request.get(`/api/emails/${orbitra.id}`)).json();
+    const link = mail.body_text.match(/https?:\/\/\S+\/respond\/\S+/)[0];
+    const student = await context.newPage();
+    await student.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+    await expect(student.getByText(/Consent form — Orbitra Technologies/)).toBeVisible();
+    await shot(student, "22-consent-form");
+    await student.getByRole("button", { name: /Yes, register me/ }).click();
+    await expect(student.getByText("You said YES")).toBeVisible();
+    await student.close();
+
+    // Stage 2 — placement officer runs the drive; filters the registry for it
+    await login(page, "officer@placementos.demo");
+    await page.goto("/agent");
+    await page.getByLabel("Objective").fill("Prepare the eligible roster for the Orbitra drive");
+    await page.getByRole("button", { name: "Run agent" }).click();
+    await expect(page.getByText("Waiting for human approval").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Consent Agent").first()).toBeVisible();
+    await page.getByRole("link", { name: "Open in Approval Center" }).click();
+    await page.waitForURL(/\/approvals\/\d+$/);
+    const approval = page.url();
+
+    // Stage 3 — approver: agent review, then personal forms for missing details / consent
+    await login(page, "approver@placementos.demo");
+    await page.goto(approval);
+    await expect(page.getByText(/Approval Review Agent: ready/).first()).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: /Email \d+ student\(s\) a personal form/ }).click();
+    await page.getByRole("button", { name: "Send personal forms" }).click();
+    await expect(page.getByText(/Personal forms emailed to \d+ student/).first()).toBeVisible({ timeout: 30_000 });
+    await shot(page, "23-approval-review-agent");
+    await page.goto("/agents");
+    await expect(page.getByText("Email Reader Agent")).toBeVisible();
+    await shot(page, "24-agent-crew");
   });
 
   test("viewer cannot act", async ({ page }) => {

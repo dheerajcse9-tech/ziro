@@ -537,7 +537,7 @@ def node_check_email(ctx: ToolContext) -> Step:
     options += [{"value": "recheck", "label": "I corrected the details in the Company Inbox — check again"},
                 {"value": "ignore", "label": "Ignore this email"}]
     question = ("This company email needs the drive upload officer: "
-                + "; ".join(i["message"] for i in stopping)
+                + "; ".join(i["message"].rstrip(".") for i in stopping)
                 + (". Correct the details in the Company Inbox, then choose 'check again'." if errors else "."))
     run.pending_question = {"type": "intake_review", "email_id": row.id, "question": question,
                             "issues": stopping, "options": options}

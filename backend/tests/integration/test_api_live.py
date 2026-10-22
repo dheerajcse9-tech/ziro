@@ -102,3 +102,38 @@ def test_invitation_link_round_trip_over_http(server):
     assert anon.post(f"/api/public/requests/{token}/invitation", json={"accept": True}).json()["status"] == "ACCEPTED"
     assert anon.get("/api/public/requests/not-a-real-token").status_code == 404
     assert anon.get("/api/emails").status_code == 401
+
+
+def test_company_inbox_and_crew_over_http(server):
+    """Stage 1 over HTTP: the drive upload officer loads sample company emails, the agents process them."""
+    coordinator, approver, viewer = login("drives@placementos.demo"), login("approver@placementos.demo"), login("viewer@placementos.demo")
+    assert viewer.post("/api/inbox/demo").status_code == 403
+    assert coordinator.post("/api/inbox/demo").json()["added"] == 3
+    result = coordinator.post("/api/inbox/check").json()
+    assert result["mailbox"]["configured"] is False  # no Gmail in tests: nothing fetched, but new emails are processed
+    statuses = sorted(p["status"] for p in result["processed"])
+    assert statuses == ["COMPLETED", "COMPLETED", "NEEDS_REVIEW"], result
+    inbox = coordinator.get("/api/inbox").json()
+    zentrix = next(e for e in inbox["items"] if "Zentrix" in e["subject"])
+    assert zentrix["status"] == "NEEDS_REVIEW" and {i["code"] for i in zentrix["issues"]} >= {"NEW_COMPANY", "SUSPICIOUS"}
+    answered = coordinator.post(f"/api/agent/runs/{zentrix['run']['id']}/answer", json={"value": "confirm"})
+    assert answered.status_code == 200 and answered.json()["status"] == "COMPLETED"
+    drive = coordinator.get(f"/api/drives/{answered.json()['drive_id']}").json()
+    assert drive["consent_form"]["audience"] == "ALL_STUDENTS" and drive["consent_form"]["sent"] == 34
+    assert drive["registration_deadline"] and drive["destination"]["is_local_mock"] is True
+
+    crew = viewer.get("/api/agents").json()
+    assert len(crew["agents"]) == 21 and crew["ai"]["provider"] == "none"
+    assert any(a["recent"] for a in crew["agents"] if a["key"] == "email_reader")
+    assert approver.get("/api/integrations/google").json()["connected"] is False
+    assert approver.post("/api/integrations/google/connect").status_code == 403  # only coordinator/admin connect
+    assert coordinator.post("/api/integrations/google/connect").status_code == 412  # not configured in tests
+    # Approver review + follow-up endpoints on a fresh proposal
+    officer = login("officer@placementos.demo")
+    run = officer.post("/api/agent/runs", json={"objective": f"Prepare the eligible roster for drive #{drive['id']}"}).json()
+    assert run["status"] == "AWAITING_APPROVAL", run
+    review = approver.get(f"/api/approvals/{run['state']['approval_id']}/review").json()
+    assert review["verdict"] in ("READY", "READY_WITH_NOTES") and review["followup_candidates"] > 0
+    assert viewer.get(f"/api/approvals/{run['state']['approval_id']}/review").status_code == 403
+    students = officer.get(f"/api/students?drive_id={drive['id']}&drive_status=consent_pending&page_size=200").json()
+    assert students["total"] == 34 and students["items"][0]["drive"]["consent"] is None

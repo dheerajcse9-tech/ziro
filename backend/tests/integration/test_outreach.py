@@ -59,7 +59,7 @@ def test_invitations_drive_registration_consent(sb, people, registration_drive):
     proposal = approvals.get_approval(sb.db, run.state["approval_id"]).proposal
     assert proposal.included_roll_numbers == ["R001"]
     declined = next(x for x in proposal.excluded if x["roll_number"] == "R002")
-    assert "Declined this drive's invitation" in declined["reasons"]
+    assert "Said NO on this drive's consent form" in declined["reasons"]
 
     run = approve_latest(sb, people, run)
     assert run.status == RunStatus.VERIFIED and run.state["notifications"]["students_notified"] == 1

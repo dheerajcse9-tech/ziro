@@ -1,6 +1,6 @@
 # Data Model
 
-Source: `backend/app/models/entities.py`, migration `backend/migrations/versions/0001_initial_schema.py`.
+Source: `backend/app/models/entities.py`, migrations `backend/migrations/versions/0001`–`0005`.
 PostgreSQL schema verified identical to the models with `alembic check`.
 
 ```mermaid
@@ -28,11 +28,11 @@ erDiagram
 | Table | Purpose | Integrity |
 |---|---|---|
 | `users` | Accounts and role (admin/officer/approver/viewer) | unique email; PBKDF2 password hash |
-| `students` | Roster; **roll_number is the business key**, name is never used to match | unique roll_number; CHECK cgpa 0–10, backlogs ≥ 0; `record_version` increments on change |
+| `students` | Roster; **roll_number is the business key**, name is never used to match; `self_reported` lists values a student supplied through a personal form | unique roll_number; CHECK cgpa 0–10, backlogs ≥ 0; `record_version` increments on change |
 | `consent_records` | Append-only consent history per scope; latest wins | FK student; index (student, scope, id) |
 | `roster_imports` | File hash, mapping, normalised preview rows, per-row issues, outcome counts | commit applies exactly the previewed rows |
 | `employers`, `destinations` | Employer and allowlisted upload targets | unique employer name; destination `config_version` |
-| `drives` | Title, UTC start/end, IANA timezone, status, destination, `schedule_version` | CHECK ends_at > starts_at |
+| `drives` | Title, UTC start/end, IANA timezone, status, destination, `schedule_version`, `registration_deadline` (consent form closes), `roster_due_at` (company wants the list) | CHECK ends_at > starts_at |
 | `drive_criteria` | Immutable criteria versions (min CGPA inclusive, backlog policy, branches, batches, consent scope, source text) | unique (drive, version) |
 | `drive_assignments` | PROPOSED / CONFIRMED / HELD_CONFLICT / WITHDRAWN per student per drive | unique (student, drive) |
 | `agent_runs` | Objective, planner mode, intent, status, plan, durable state incl. `next_node`, pending question | |
@@ -49,6 +49,9 @@ erDiagram
 | `student_requests` | Personal tokenised links: DRIVE_INVITATION (accept/decline → per-drive consent `DRIVE:<id>`) or DATA_REQUEST (student-submitted values await officer review); status, expiry, response | unique token (256-bit) |
 | `email_messages` | Outbox: category, recipient, subject, body, status (DELIVERED_LOCAL / SENT / FAILED / SKIPPED), transport, links to student/drive/upload/request | unique dedupe_key (no duplicate sends) |
 | `drive_results` | Employer outcome per sent student: SELECTED / NOT_SELECTED / ABSENT / WITHDRAWN | unique (drive, student) |
+| `inbound_emails` | Company recruitment emails (Gmail / IMAP / pasted / demo): sender, subject, body (untrusted), extraction (AI or rules, with source lines), officer corrections, issues, status, resulting drive and agent run | unique message_id (each email stored once) |
+| `consent_forms` | One consent form per drive: description, questions, audience (all students / eligible), closing time, status | unique drive_id |
+| `oauth_credentials` | The connected Google account for the placement mailbox; refresh token encrypted (key derived from JWT_SECRET) | unique provider |
 | `test_runs` | Test Lab results: fixture, expected, actual, checks, evidence | |
 | `app_settings` | Configurable institutional policy | |
 | `mock_portal_*` | Owned by the LOCAL MOCK portal only; core code never touches them | |

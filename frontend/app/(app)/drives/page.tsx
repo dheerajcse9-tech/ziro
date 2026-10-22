@@ -89,7 +89,7 @@ export default function DrivesPage() {
     onError: toastError,
   });
 
-  const editable = can(me.data, "editData");
+  const editable = can(me.data, "manageDrives");
   const errs = form.formState.errors;
 
   return (

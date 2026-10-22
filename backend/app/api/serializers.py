@@ -41,7 +41,7 @@ def student(s: Student, consent: dict | None = None) -> dict[str, Any]:
         "id": s.id, "roll_number": s.roll_number, "full_name": s.full_name, "email": s.email, "phone": s.phone,
         "branch": s.branch, "branch_label": BRANCH_LABELS.get(s.branch or "", None), "branch_raw": s.branch_raw,
         "cgpa": s.cgpa, "active_backlogs": s.active_backlogs, "graduation_year": s.graduation_year,
-        "data_issues": s.data_issues or [], "record_version": s.record_version,
+        "data_issues": s.data_issues or [], "record_version": s.record_version, "self_reported": s.self_reported or [],
         "consent": consent, "consent_granted": bool(consent and consent.get("granted")),
         "updated_at": iso(s.updated_at), "created_at": iso(s.created_at),
     }

@@ -86,6 +86,7 @@ export function ResolveDialog({ item, onClose }: { item: ExceptionItem | null; o
         {!isClash && !isSubmission && item.status === "OPEN" && (
           <>
             {isData && item.student_id && <Banner tone="info" title="Fix the source record" action={(d.missing ?? []).length > 0 ? <Button size="sm" loading={emailStudent.isPending} onClick={() => emailStudent.mutate()}>Email student for missing data</Button> : undefined}>Email the student a personal link to provide the missing details, or correct the record yourself: <Link className="underline" href={`/students/${item.student_id}`}>open student record</Link>. Acknowledge only if the data cannot be obtained before the drive.</Banner>}
+            {item.kind === "INTAKE_REVIEW" && <Banner tone="info" title="Resolve in the Company Inbox">Open the email in the <Link className="underline" href="/inbox">Company Inbox</Link>: correct the details or confirm them, and the agents continue (this item resolves automatically).</Banner>}
             {item.kind === "CRITERIA_MISMATCH" && item.drive_id && <Banner tone="info" title="Resolve by updating criteria">Create a new criteria version on <Link className="underline" href={`/drives/${item.drive_id}`}>the drive</Link> (auto-resolves this item), or answer the agent run&apos;s question.</Banner>}
             <Field label="Resolution note (required)" htmlFor="exc_note"><Textarea id="exc_note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
           </>

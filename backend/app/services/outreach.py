@@ -467,7 +467,7 @@ def notify_not_shortlisted(db: Session, drive: Drive, actor: str) -> int:
         if o.decision != Decision.INELIGIBLE or not o.consent_ok:
             continue
         s = db.get(Student, o.student_id)
-        reasons = "\n".join(f"  - {r}" for r in o.reasons if "invitation" not in r.lower()) or "  - Eligibility criteria not met"
+        reasons = "\n".join(f"  - {r}" for r in o.reasons if "consent form" not in r.lower()) or "  - Eligibility criteria not met"
         msg = mailer.send(
             db, category=EmailCategory.NOT_SHORTLISTED, to_address=s.email, to_name=s.full_name,
             subject=f"Not shortlisted for {drive.title}",

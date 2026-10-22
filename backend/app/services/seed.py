@@ -118,7 +118,8 @@ def reset_database(db: Session) -> None:
     try:
         if db.get_bind().dialect.name == "postgresql":
             names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
-            db.execute(text("SET LOCAL session_replication_role = replica"))  # bypass audit trigger for reset only
+            # TRUNCATE does not fire the row-level append-only trigger on audit_events, and needs only
+            # table ownership (no superuser), so a normal application role can reset demo data.
             db.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
         else:
             for table in reversed(Base.metadata.sorted_tables):

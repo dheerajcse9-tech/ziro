@@ -22,6 +22,13 @@
 | Student links abused or guessed | 256-bit random tokens, expiry (7–14 days, never after the drive starts), single purpose; public page shows only first name, roll number and drive details | `services/outreach.py` |
 | Students self-reporting false data | Submitted values never touch the record; an officer must verify against official records and click Apply (audited) | `outreach.review_data` |
 | Email spam / duplicates | Every email has a dedupe key; re-running steps never re-sends | `services/mailer.py` |
+| Forged company emails | New companies and personal-mail senders need the drive upload officer's confirmation before students are contacted; personal-mail senders must match a registered contact exactly (not just the domain); trusted-sender list is explicit | `services/intake.check` |
+| Instructions hidden in company emails | Email body is untrusted data; the AI reader has one reporting tool and is told to ignore instructions; rule-based scanner flags phrases like "skip the consent step"; nothing in an email can change criteria, consent or approval | `agent/email_reader.py`, `domain/email_intake.py` |
+| AI reading an email wrongly | The rule-based reading always runs too; disagreements on dates, deadline or criteria stop for a person; deterministic validation of every value | `email_reader._from_llm`, `email_intake.validate` |
+| Mailbox access | Google sign-in with only `gmail.readonly` + `gmail.send`; read-only use (nothing marked, moved or deleted); subject filter; refresh token encrypted at rest; OAuth `state` is a signed, 10-minute token bound to the user | `integrations/gmail.py` |
+| An agent overstepping | Each agent may call only its own tools (enforced in `call_tool`, logged as TOOL_DENIED); no agent has an approve tool | `agent/crew.py` |
+| Students submitting false data | Values are validated, marked self-reported and shown to the approver by the Approval Review Agent; admins can require officer verification instead | `outreach.submit_data`, `approval_review` |
+| Late answers | The Deadline Agent closes consent and personal forms at their closing time; closed forms refuse answers | `consent_forms.close_due` |
 | OTP / CAPTCHA | Not bypassed; adapter only performs plain form submission. A destination that requires them must use a manual step | design |
 
 ## Known gaps (honest list)
@@ -29,3 +36,4 @@
 - No CSRF token; mitigated by SameSite=Lax cookies and JSON-only mutating endpoints (except the multipart import upload, which also requires the session cookie).
 - Single-institution; no per-tenant isolation.
 - Demo accounts share a known password and are only shown when `DEMO_MODE=true`.
+- Google sign-ins for an OAuth app in "Testing" status expire after 7 days; the mailbox must be reconnected (shown in Settings).

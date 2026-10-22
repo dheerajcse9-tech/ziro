@@ -24,29 +24,29 @@ export function InvitationsPanel({ drive }: { drive: Drive }) {
   const q = useQuery({ queryKey: ["invitations", drive.id], queryFn: () => api.get<{ items: StudentRequest[]; counts: Record<string, number> }>(`/api/drives/${drive.id}/invitations`) });
   const send = useMutation({
     mutationFn: () => api.post<{ sent: string[]; already_invited: string[] }>(`/api/drives/${drive.id}/invitations`),
-    onSuccess: (r) => { setConfirm(false); toast.success(`Invitations emailed to ${r.sent.length} student(s)`, { description: r.already_invited.length ? `${r.already_invited.length} were already invited` : undefined }); qc.invalidateQueries(); },
+    onSuccess: (r) => { setConfirm(false); toast.success(`Consent form emailed to ${r.sent.length} student(s)`, { description: r.already_invited.length ? `${r.already_invited.length} already had it` : undefined }); qc.invalidateQueries(); },
     onError: (e) => { setConfirm(false); toastError(e); },
   });
   const perDrive = drive.criteria?.required_consent_scope === "DRIVE_REGISTRATION";
   const c = q.data?.counts ?? {};
   return (
     <div className="space-y-4">
-      <Banner tone="info" title={perDrive ? "This drive only shares students who accept its invitation" : "This drive uses the consent already on file"}>
+      <Banner tone="info" title={perDrive ? "This drive only shares students who say YES on its consent form" : "This drive uses the consent already on file"}>
         {perDrive
-          ? "Each eligible student receives a personal link to accept or decline. Only students who accept are included when the roster is prepared."
-          : "Invitations still tell eligible students about the drive and record their answer; declining excludes them from this drive."}
+          ? "Each student gets one personal link to the drive's consent form. Only students who say YES (and meet the criteria) are included when the roster is prepared."
+          : "The consent form still tells students about the drive and records their answer; saying NO excludes them from this drive."}
       </Banner>
       <div className="grid gap-3 sm:grid-cols-4">
-        <KpiCard label="Invited" value={q.data?.items.length ?? "—"} />
-        <KpiCard label="Accepted" value={c.ACCEPTED ?? 0} tone="ok" />
-        <KpiCard label="Declined" value={c.DECLINED ?? 0} />
+        <KpiCard label="Consent forms sent" value={q.data?.items.length ?? "—"} />
+        <KpiCard label="Said YES" value={c.ACCEPTED ?? 0} tone="ok" />
+        <KpiCard label="Said NO" value={c.DECLINED ?? 0} />
         <KpiCard label="No answer yet" value={(c.SENT ?? 0) + (c.EXPIRED ?? 0)} tone={(c.SENT ?? 0) ? "warn" : "neutral"} hint={c.EXPIRED ? `${c.EXPIRED} expired` : undefined} />
       </div>
       <Card>
-        <CardHeader title="Invitations" description="Sent to students who meet the current criteria. Re-sending only invites newly eligible students."
-          actions={can(me.data, "runAgent") ? <Button variant="primary" size="sm" icon={<Send className="size-4" />} onClick={() => setConfirm(true)}>Invite eligible students</Button> : undefined} />
+        <CardHeader title="Consent form answers" description="One personal link per student per drive. Sending again only reaches students who do not have one yet."
+          actions={can(me.data, "manageDrives") ? <Button variant="primary" size="sm" icon={<Send className="size-4" />} onClick={() => setConfirm(true)}>Send consent form</Button> : undefined} />
         {!q.data ? <LoadingRows rows={4} /> : (
-          <DataTable data={q.data.items} pageSize={40} empty={<EmptyState icon={<Mail className="size-5" />} title="No invitations sent yet" />}
+          <DataTable data={q.data.items} pageSize={40} empty={<EmptyState icon={<Mail className="size-5" />} title="No consent forms sent yet" />}
             columns={[
               { accessorKey: "roll_number", header: "Roll", cell: ({ row }) => <Link className="font-mono text-[12px] text-accent hover:underline" href={`/students/${row.original.student_id}`}>{row.original.roll_number}</Link> },
               { accessorKey: "full_name", header: "Name" },
@@ -57,8 +57,8 @@ export function InvitationsPanel({ drive }: { drive: Drive }) {
             ]} />
         )}
       </Card>
-      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Invite eligible students?" confirmLabel="Send invitations" loading={send.isPending} onConfirm={() => send.mutate()}
-        description={`Every student who currently meets the criteria for ${drive.title} and has not been invited yet gets an email with a personal accept/decline link.`} />
+      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Send the consent form?" confirmLabel="Send consent form" loading={send.isPending} onConfirm={() => send.mutate()}
+        description={`Students who do not have a consent form for ${drive.title} yet get an email with a personal yes/no link. Drives created from company emails send it to every student; other drives to students who meet the criteria.`} />
     </div>
   );
 }

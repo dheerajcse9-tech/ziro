@@ -503,7 +503,7 @@ def create_drive_from_email(ctx: ToolContext, args: InboundInput) -> dict[str, A
     return {"drive_id": drive.id, "title": drive.title, "employer": drive.employer.name,
             "starts_at_local": to_local(drive.starts_at, drive.timezone).isoformat(timespec="minutes"),
             "registration_deadline_local": to_local(drive.registration_deadline, drive.timezone).isoformat(timespec="minutes"),
-            "criteria_version": crit.version if crit else None, "consent": "Students must accept this drive's invitation"}
+            "criteria_version": crit.version if crit else None, "consent": "Students must say YES on this drive's consent form"}
 
 
 def record_audit_event(ctx: ToolContext, args: AuditNoteInput) -> dict[str, Any]:

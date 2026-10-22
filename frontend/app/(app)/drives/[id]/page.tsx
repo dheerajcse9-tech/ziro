@@ -89,7 +89,7 @@ export default function DriveWorkspace() {
   if (!drive.data) return <LoadingRows />;
   const d = drive.data;
   const c = d.criteria;
-  const editable = can(me.data, "editData");
+  const editable = can(me.data, "manageDrives");
   const counts = elig.data?.counts;
 
   function openCriteria() {
@@ -119,7 +119,7 @@ export default function DriveWorkspace() {
 
       <Tabs value={tab} onValueChange={setTab} tabs={[
         { value: "overview", label: "Overview" }, { value: "eligibility", label: "Eligibility", count: counts?.total },
-        { value: "conflicts", label: "Conflicts" }, { value: "invitations", label: "Invitations" }, { value: "results", label: "Results" },
+        { value: "conflicts", label: "Conflicts" }, { value: "invitations", label: "Consent form" }, { value: "results", label: "Results" },
         { value: "criteria", label: "Criteria versions" }, { value: "whatif", label: "What-if simulator" },
       ]}>
         <TabPanel value="overview">
@@ -139,13 +139,30 @@ export default function DriveWorkspace() {
                   { label: "Starts (UTC)", value: <span className="font-mono text-[12px]">{d.starts_at.replace("+00:00", "Z")}</span> },
                   { label: "Timezone", value: d.timezone },
                   { label: "Criteria", value: c ? `CGPA ≥ ${c.min_cgpa ?? "—"} · ${c.backlog_policy.replace(/_/g, " ").toLowerCase()}${c.max_active_backlogs ? ` (${c.max_active_backlogs})` : ""} · ${c.allowed_branches.join(", ") || "all branches"}` : <Tag tone="bad">Not configured</Tag> },
-                  { label: "Consent required", value: c?.required_consent_scope.replace(/_/g, " ").toLowerCase() ?? "—" },
+                  { label: "Consent required", value: c?.required_consent_scope === "DRIVE_REGISTRATION" ? "YES on this drive's consent form" : c?.required_consent_scope.replace(/_/g, " ").toLowerCase() ?? "—" },
+                  { label: "Students register by", value: d.registration_deadline_local ? d.registration_deadline_local.replace("T", " ") : "—" },
+                  { label: "Company wants the list by", value: d.roster_due_at_local ? d.roster_due_at_local.replace("T", " ") : "—" },
+                  ...(d.source_email ? [{ label: "Created from", value: <Link className="text-accent hover:underline" href="/inbox">{d.source_email.from_address}: {d.source_email.subject}</Link> }] : []),
                   { label: "Destination", value: d.destination ? <span className="flex flex-wrap items-center gap-1.5">{d.destination.name}
                     <a className="inline-flex items-center gap-0.5 text-accent hover:underline" target="_blank" rel="noreferrer" href={`/mock-portal/forms/${d.destination.form_ref}`}>open form <ExternalLink className="size-3" /></a></span> : <Tag tone="bad">None</Tag> },
                   { label: "Live proposal hash", value: <HashValue value={elig.data?.live_proposal_hash} /> },
                 ]} />
               </div>
             </Card>
+            {d.consent_form && (
+              <Card className="lg:col-span-2">
+                <CardHeader title={d.consent_form.title}
+                  description={`${d.consent_form.audience === "ALL_STUDENTS" ? "Sent to every student" : "Sent to eligible students"} · ${d.consent_form.status === "OPEN" ? "closes" : "closed"} ${d.consent_form.closes_at_local.replace("T", " ")} · prepared by the Consent Form Agent`}
+                  actions={<StatusBadge status={d.consent_form.status} />} />
+                <div className="grid gap-3 p-4 sm:grid-cols-5">
+                  <KpiCard label="Sent" value={d.consent_form.sent} />
+                  <KpiCard label="Said YES" value={d.consent_form.accepted} tone="ok" />
+                  <KpiCard label="Said NO" value={d.consent_form.declined} />
+                  <KpiCard label="No answer yet" value={d.consent_form.pending} tone={d.consent_form.pending ? "warn" : "neutral"} />
+                  <KpiCard label="Closed unanswered" value={d.consent_form.expired} />
+                </div>
+              </Card>
+            )}
             <Card>
               <CardHeader title="Activity on this drive" />
               <div className="divide-y divide-line">

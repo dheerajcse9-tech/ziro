@@ -78,6 +78,8 @@ export default function StudentDetailPage() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) return <LoadingRows />;
   const s = q.data;
+  const selfReported = (field: string) => (s.self_reported ?? []).some((x) => x.field === field)
+    ? <Tag tone="info" className="ml-1.5">self-reported</Tag> : null;
   const editable = can(me.data, "editData");
 
   function openEdit() {
@@ -112,8 +114,8 @@ export default function StudentDetailPage() {
             <DefinitionList cols={1} items={[
               { label: "Roll number (stable identifier)", value: <span className="font-mono">{s.roll_number}</span> },
               { label: "Branch", value: s.branch ? `${s.branch} — ${s.branch_label}` : <Tag tone="warn">{s.branch_raw ? `Unrecognised: ${s.branch_raw}` : "Missing"}</Tag> },
-              { label: "CGPA", value: s.cgpa?.toFixed(2) ?? <Tag tone="warn">Missing</Tag> },
-              { label: "Active backlogs", value: s.active_backlogs ?? <Tag tone="warn">Missing</Tag> },
+              { label: "CGPA", value: s.cgpa != null ? <span>{s.cgpa.toFixed(2)}{selfReported("cgpa")}</span> : <Tag tone="warn">Missing</Tag> },
+              { label: "Active backlogs", value: s.active_backlogs != null ? <span>{s.active_backlogs}{selfReported("active_backlogs")}</span> : <Tag tone="warn">Missing</Tag> },
               { label: "Graduation year", value: s.graduation_year ?? "—" },
               { label: "Email", value: s.email ?? "—" },
               { label: "Last updated", value: fmtDateTime(s.updated_at) },

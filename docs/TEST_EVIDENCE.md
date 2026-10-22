@@ -1,16 +1,22 @@
 # Test Evidence
 
-All results below were produced by actually running the commands on 2026-10-20 in the build environment
+All results below were produced by actually running the commands on 2026-10-22 in the build environment
 (Linux, Python 3.13, Node 22, PostgreSQL 16, Chromium 1194). Raw logs are in `docs/evidence/`.
 
 ## Summary
 | Suite | Result | Log |
 |---|---|---|
-| Backend: unit + reliability + official scenarios + live HTTP (SQLite) | **64 passed, 0 failed** | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
-| Live HTTP API tests against **PostgreSQL 16** | **4 passed** | [pytest-postgres-live-api.txt](evidence/pytest-postgres-live-api.txt) |
+| Backend: unit + reliability + official scenarios + agent crew + live HTTP (SQLite) | **99 passed, 0 failed** | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
+| Live HTTP API tests against **PostgreSQL 16** (incl. company inbox → drive → consent forms → review) | **5 passed** | [pytest-postgres-live-api.txt](evidence/pytest-postgres-live-api.txt) |
+| Migrations 0004–0005 on PostgreSQL: upgrade with data, downgrade, re-upgrade, `alembic check` | no drift | — |
 | Official scenarios via CLI on PostgreSQL + `alembic check` | **TC1 9/9, TC2 10/10, TC3 10/10, TC4 10/10**; no schema drift | [testlab-postgres.txt](evidence/testlab-postgres.txt) |
-| Browser end-to-end (Playwright, Chromium) | **9 passed** | [e2e-playwright.txt](evidence/e2e-playwright.txt) |
-| Frontend `tsc --noEmit` + `next build` | clean, 19 routes | — |
+| Browser end-to-end (Playwright, Chromium, PostgreSQL backend) | **10 passed** | [e2e-playwright.txt](evidence/e2e-playwright.txt) |
+| Frontend `tsc --noEmit` + `next build` | clean, 21 routes | — |
+
+**Not tested against live services:** Gemini, Google sign-in and the Gmail API were not reachable from the build
+environment (no key, no OAuth client, and the network policy blocks Google's API hosts). Their code follows Google's
+documented REST shapes (verified against Google's official Gemini cookbook) and is tested with a fake Gemini client
+and an httpx mock of the OAuth token, profile, messages.list/get and messages.send endpoints.
 
 Environment label for scenario runs (stored with every result): *Isolated sandbox: in-memory SQLite + in-process LOCAL
 MOCK portal over the HTTP form adapter; deterministic planner; no external service contacted.* The Test Lab records with
@@ -30,6 +36,9 @@ expected/actual/checks/evidence are exported in [testlab-latest-runs.json](evide
 ## Bugs found by the tests and fixed
 | Found by | Problem | Fix |
 |---|---|---|
+| E2E on PostgreSQL | Demo reset used `SET session_replication_role` (superuser only) and failed for a normal database user | removed: TRUNCATE does not fire the row-level audit trigger |
+| Live HTTP test (SQLite) | Registering the stand-in form called the mock portal while the agent's transaction held SQLite's write lock (10 s timeout) | commit the drive first, then register the form |
+| E2E | Agent Crew API read a non-existent audit timestamp field | use `occurred_at` |
 | Live API test on PostgreSQL | `agent_events.status` VARCHAR(20) too short for `INTERPRETING_CRITERIA` (SQLite ignores lengths) | widened to 40 |
 | Test Lab on PostgreSQL | `test_runs.environment` VARCHAR(120) too short | changed to TEXT |
 | Reliability test | expectation wrong, not code: after raising criteria, the employer's text still said 7.0, so the agent correctly stopped on a criteria mismatch | test updated to answer `use_configured` |
@@ -70,6 +79,11 @@ This is a **local mock** destination served by the same backend — not an exter
 | Student accepts invitation (public link) | ![](evidence/screenshots/17-student-invitation-accepted.png) |
 | Communications (local mailbox) | ![](evidence/screenshots/18-communications.png) |
 | Student placement history | ![](evidence/screenshots/19-student-placement-history.png) |
+| Company Inbox (stage 1) | ![](evidence/screenshots/20-company-inbox.png) |
+| New company + injected text wait for the drive upload officer | ![](evidence/screenshots/21-intake-review.png) |
+| Student's consent form | ![](evidence/screenshots/22-consent-form.png) |
+| Approval Review Agent + personal forms (stage 3) | ![](evidence/screenshots/23-approval-review-agent.png) |
+| Agent Crew | ![](evidence/screenshots/24-agent-crew.png) |
 
 ## How to reproduce
 ```bash

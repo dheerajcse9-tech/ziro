@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity, BadgeCheck, Bot, Building2, CalendarClock, ClipboardCheck, FileSearch, FlaskConical, Gauge,
-  Inbox, LogOut, Mail, Menu, Search, Settings, ShieldCheck, Users, X,
+  Inbox, LogOut, Mail, MailOpen, Menu, Network, Search, Settings, ShieldCheck, Users, X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -19,6 +19,8 @@ type NavItem = { href: string; label: string; icon: React.ComponentType<{ classN
 const NAV: { section: string; items: NavItem[] }[] = [
   { section: "Operate", items: [
     { href: "/", label: "Overview", icon: Gauge },
+    { href: "/inbox", label: "Company Inbox", icon: MailOpen, badge: (d) => d?.metrics.inbox_needs_review },
+    { href: "/agents", label: "Agent Crew", icon: Network },
     { href: "/agent", label: "Agent Control Room", icon: Bot },
     { href: "/approvals", label: "Approval Center", icon: ClipboardCheck, badge: (d) => d?.metrics.pending_approvals },
     { href: "/verification", label: "Verification Center", icon: BadgeCheck, badge: (d) => d?.metrics.verification_attention },

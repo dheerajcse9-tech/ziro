@@ -122,7 +122,7 @@ def put_results(drive_id: int, body: ResultsIn, db: Session = Depends(get_db), u
 @router.get("/emails", tags=["outreach"])
 def list_emails(category: str | None = None, status: str | None = None, student_id: int | None = None,
                 drive_id: int | None = None, page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200),
-                db: Session = Depends(get_db), _: User = Depends(require_roles(*OFFICER_ROLES, "approver"))):
+                db: Session = Depends(get_db), _: User = Depends(require_roles(*OFFICER_ROLES, Role.APPROVER, Role.COORDINATOR))):
     stmt = select(EmailMessage)
     for col, val in ((EmailMessage.category, category), (EmailMessage.status, status),
                      (EmailMessage.student_id, student_id), (EmailMessage.drive_id, drive_id)):
@@ -136,7 +136,7 @@ def list_emails(category: str | None = None, status: str | None = None, student_
 
 
 @router.get("/emails/{email_id}", tags=["outreach"])
-def get_email(email_id: int, db: Session = Depends(get_db), _: User = Depends(require_roles(*OFFICER_ROLES, "approver"))):
+def get_email(email_id: int, db: Session = Depends(get_db), _: User = Depends(require_roles(*OFFICER_ROLES, Role.APPROVER, Role.COORDINATOR))):
     m = db.get(EmailMessage, email_id)
     if m is None:
         raise NotFound("Email not found")

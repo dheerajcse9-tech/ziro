@@ -16,7 +16,11 @@ import { toastError } from "@/lib/errors";
 import { fmtDateTime, relTime, titleCase } from "@/lib/format";
 import type { EmailItem, Paged } from "@/lib/types";
 
-const CATEGORIES = ["DRIVE_INVITATION", "DATA_REQUEST", "PROFILE_SUBMITTED", "EMPLOYER_ROSTER", "SELECTED", "NOT_SELECTED"];
+const CATEGORIES = ["DRIVE_INVITATION", "DATA_REQUEST", "REMINDER", "PROFILE_SUBMITTED", "NOT_SHORTLISTED", "EMPLOYER_ROSTER", "SELECTED", "NOT_SELECTED"];
+const CATEGORY_LABEL: Record<string, string> = {
+  DRIVE_INVITATION: "Consent form", DATA_REQUEST: "Personal form", REMINDER: "Reminder", PROFILE_SUBMITTED: "Shortlisted",
+  NOT_SHORTLISTED: "Not shortlisted", EMPLOYER_ROSTER: "List to company", SELECTED: "Selected", NOT_SELECTED: "Not selected",
+};
 
 /** Renders plain-text email bodies with clickable links (links open the student response page). */
 function Body({ text }: { text: string }) {
@@ -37,7 +41,7 @@ export default function CommunicationsPage() {
   const [openId, setOpenId] = useState<number | null>(null);
   const q = useQuery({
     queryKey: ["emails", category, status, page],
-    queryFn: () => api.get<Paged<EmailItem> & { transport: string }>(`/api/emails${qs({ category, status, page, page_size: 50 })}`),
+    queryFn: () => api.get<Paged<EmailItem> & { transport: string; sender: string | null }>(`/api/emails${qs({ category, status, page, page_size: 50 })}`),
     placeholderData: keepPreviousData, refetchInterval: 10_000,
   });
   const detail = useQuery({ queryKey: ["email", openId], queryFn: () => api.get<EmailItem>(`/api/emails/${openId}`), enabled: openId !== null });
@@ -61,17 +65,17 @@ export default function CommunicationsPage() {
         <div className="mb-4">
           {q.data.transport === "LOCAL_MAILBOX"
             ? <Banner tone="info" title="Local mailbox mode — emails are not leaving this server">No SMTP server is configured, so messages are stored here instead of being delivered. Open an invitation or data request below and click its link to act as the student. Set SMTP_* in backend/.env to deliver real email.</Banner>
-            : <Banner tone="ok" title="Emails are delivered through the configured SMTP server" />}
+            : <Banner tone="ok" title={q.data.transport === "GMAIL_API" ? `Emails are sent from ${q.data.sender} through Gmail` : "Emails are delivered through the configured SMTP server"} />}
         </div>
       )}
       <Card>
         <CardHeader title="Outbox" actions={<>
           <Button size="sm" loading={retry.isPending && retry.variables === undefined} onClick={() => retry.mutate(undefined)} icon={<RotateCw className="size-3.5" />}>Retry failed emails</Button>
           <Select aria-label="Category" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}>
-            <option value="">All types</option>{CATEGORIES.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}
+            <option value="">All types</option>{CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? titleCase(c)}</option>)}
           </Select>
           <Select aria-label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-            <option value="">Any status</option><option value="DELIVERED_LOCAL">In local mailbox</option><option value="SENT">Sent (SMTP)</option>
+            <option value="">Any status</option><option value="DELIVERED_LOCAL">In local mailbox</option><option value="SENT">Sent (Gmail / SMTP)</option>
             <option value="FAILED">Failed</option><option value="SKIPPED">Skipped (no address)</option>
           </Select>
         </>} />
@@ -79,13 +83,13 @@ export default function CommunicationsPage() {
           <>
             <DataTable data={q.data.items} empty={<EmptyState icon={<Mail className="size-5" />} title="No emails yet" description="Invite students to a drive or approve a roster to see messages here." />}
               columns={[
-                { accessorKey: "category", header: "Type", cell: ({ row }) => <Tag tone={row.original.category === "SELECTED" ? "ok" : row.original.category === "NOT_SELECTED" ? "neutral" : row.original.category === "EMPLOYER_ROSTER" ? "accent" : "info"}>{titleCase(row.original.category)}</Tag> },
+                { accessorKey: "category", header: "Type", cell: ({ row }) => <Tag tone={row.original.category === "SELECTED" || row.original.category === "PROFILE_SUBMITTED" ? "ok" : row.original.category === "NOT_SELECTED" || row.original.category === "NOT_SHORTLISTED" ? "neutral" : row.original.category === "EMPLOYER_ROSTER" ? "accent" : row.original.category === "REMINDER" ? "warn" : "info"}>{CATEGORY_LABEL[row.original.category] ?? titleCase(row.original.category)}</Tag> },
                 { accessorKey: "to_name", header: "To", cell: ({ row }) => <span><span className="font-medium">{row.original.to_name ?? "—"}</span><br /><span className="font-mono text-[11.5px] text-muted">{row.original.to_address ?? "no address"}</span></span> },
                 { accessorKey: "subject", header: "Subject", cell: ({ row }) => <button className="text-left hover:underline" onClick={() => setOpenId(row.original.id)}>{row.original.subject}</button> },
                 { id: "ctx", header: "Context", cell: ({ row }) => <span className="flex flex-col text-[12px]">
                   {row.original.drive_id && <Link className="text-accent hover:underline" href={`/drives/${row.original.drive_id}`}>drive #{row.original.drive_id}</Link>}
                   {row.original.student_id && <Link className="text-accent hover:underline" href={`/students/${row.original.student_id}`}>student</Link>}</span> },
-                { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge status={row.original.status} tone={row.original.status === "FAILED" ? "bad" : row.original.status === "SKIPPED" ? "warn" : "ok"} label={row.original.status === "DELIVERED_LOCAL" ? "Local mailbox" : titleCase(row.original.status)} /> },
+                { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge status={row.original.status} tone={row.original.status === "FAILED" ? "bad" : row.original.status === "SKIPPED" ? "warn" : "ok"} label={row.original.status === "DELIVERED_LOCAL" ? "Local mailbox" : row.original.status === "SENT" && row.original.transport === "GMAIL_API" ? "Sent (Gmail)" : titleCase(row.original.status)} /> },
                 { accessorKey: "created_at", header: "When", cell: ({ row }) => <span className="whitespace-nowrap text-[12px] text-muted">{relTime(row.original.created_at)}</span> },
                 { id: "open", header: "", cell: ({ row }) => <Button size="sm" onClick={() => setOpenId(row.original.id)}>Open</Button> },
               ]} />
@@ -97,7 +101,7 @@ export default function CommunicationsPage() {
         )}
       </Card>
       <Dialog open={openId !== null} onOpenChange={(o) => !o && setOpenId(null)} wide title={detail.data?.subject ?? "Email"}
-        description={detail.data ? `To ${detail.data.to_name ?? ""} <${detail.data.to_address ?? "no address"}> · ${fmtDateTime(detail.data.created_at)} · via ${detail.data.transport === "SMTP" ? "SMTP" : "local mailbox"}` : undefined}>
+        description={detail.data ? `To ${detail.data.to_name ?? ""} <${detail.data.to_address ?? "no address"}> · ${fmtDateTime(detail.data.created_at)} · via ${{ SMTP: "SMTP", GMAIL_API: "Gmail" }[detail.data.transport] ?? "local mailbox"}` : undefined}>
         {!detail.data ? <LoadingRows rows={4} /> : (
           <div className="space-y-3">
             {detail.data.error && <Banner tone="bad" title="Not delivered">{detail.data.error}</Banner>}

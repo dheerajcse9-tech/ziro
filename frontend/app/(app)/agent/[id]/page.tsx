@@ -17,7 +17,7 @@ import { api } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
 import { toastError } from "@/lib/errors";
 import { cn, fmtDateTime } from "@/lib/format";
-import type { AgentEvent, AgentRun } from "@/lib/types";
+import type { AgentEvent, AgentRun, CrewResponse } from "@/lib/types";
 
 const TERMINAL = new Set(["VERIFIED", "REJECTED", "FAILED", "FAILED_VERIFICATION", "COMPLETED"]);
 const WAITING = new Set(["NEEDS_REVIEW", "AWAITING_APPROVAL", "PENDING_RECONCILIATION"]);
@@ -61,6 +61,8 @@ export default function RunPage() {
     queryKey: ["run-events", id], queryFn: () => api.get<AgentEvent[]>(`/api/agent/runs/${id}/events`),
     refetchInterval: () => (run.data && (TERMINAL.has(run.data.status) || WAITING.has(run.data.status)) ? false : 1000),
   });
+  const crew = useQuery({ queryKey: ["crew"], queryFn: () => api.get<CrewResponse>("/api/agents"), staleTime: 300_000 });
+  const agentOf = (node?: string | null) => crew.data?.agents.find((a) => node && a.nodes.includes(node))?.name;
   const answer = useMutation({
     mutationFn: (value: string | number) => api.post<AgentRun>(`/api/agent/runs/${id}/answer`, { value }),
     onSuccess: () => qc.invalidateQueries(),
@@ -76,6 +78,8 @@ export default function RunPage() {
   const shown = (events.data ?? []).filter((e) => showTransitions || !["NODE_START", "TRANSITION"].includes(e.type));
   const toolCalls = (events.data ?? []).filter((e) => e.type === "TOOL_CALL").length;
   const src = s.requirements?.retrieved_source;
+  const mayAnswer = can(me.data, "runAgent") || (r.intent === "PROCESS_COMPANY_EMAIL" && can(me.data, "manageDrives"))
+    || (r.intent === "FOLLOW_UP" && can(me.data, "followUp"));
 
   return (
     <>
@@ -98,7 +102,8 @@ export default function RunPage() {
                 {q!.type === "approval" && q!.approval_id && <ButtonLink variant="primary" href={`/approvals/${q!.approval_id}`} icon={<ArrowRight className="size-4" />}>Open in Approval Center</ButtonLink>}
                 {(q!.type === "reconcile" || q!.type === "verification_pending") && q!.upload_id && <ButtonLink variant="primary" href={`/verification/${q!.upload_id}`}>Open Verification Center</ButtonLink>}
                 {q!.type === "criteria_mismatch" && r.drive_id && <ButtonLink href={`/drives/${r.drive_id}`}>Review drive criteria</ButtonLink>}
-                {can(me.data, "runAgent") && q!.options?.map((o) => (
+                {q!.type === "intake_review" && <ButtonLink href="/inbox">Open in Company Inbox</ButtonLink>}
+                {mayAnswer && q!.options?.map((o) => (
                   <Button key={String(o.value)} variant={o.value === "stop" ? "ghost" : "secondary"} loading={answer.isPending && answer.variables === o.value}
                     disabled={answer.isPending} onClick={() => answer.mutate(o.value)}>{o.label}</Button>))}
               </div>
@@ -120,6 +125,7 @@ export default function RunPage() {
                     <div className="flex flex-col items-center"><StepIcon status={p.status} />{i < r.plan.length - 1 && <div className="mt-1 w-px flex-1 bg-line" />}</div>
                     <div className="min-w-0 pb-1">
                       <p className={cn("text-[13px]", p.status === "pending" ? "text-muted" : "text-ink")}>{p.title}</p>
+                      {agentOf(p.node) && <p className="text-[11px] font-medium text-accent">{agentOf(p.node)}</p>}
                       {p.note && <p className="text-[11.5px] text-muted">{p.note}</p>}
                     </div>
                   </li>))}
@@ -129,7 +135,7 @@ export default function RunPage() {
           <Card>
             <CardHeader title="Run facts" />
             <div className="p-4"><DefinitionList cols={1} items={[
-              { label: "Planner", value: r.planner_mode === "LLM" ? `LLM (${r.llm_model})` : r.planner_mode.replace(/_/g, " ").toLowerCase() },
+              { label: r.intent === "PROCESS_COMPANY_EMAIL" ? "Email reading" : "Planner", value: r.planner_mode === "LLM" ? `AI (${r.llm_model})` : r.planner_mode.replace(/_/g, " ").toLowerCase() },
               { label: "Tool calls", value: toolCalls },
               { label: "Started", value: fmtDateTime(r.created_at) },
               { label: "Last update", value: fmtDateTime(r.updated_at) },
@@ -211,7 +217,7 @@ export default function RunPage() {
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{e.type.replace(/_/g, " ")}</span>
                           {e.tool_name && <span className="font-mono text-[12px] text-ink">{e.tool_name}</span>}
-                          {e.node && <Tag>{e.node}</Tag>}
+                          {e.payload?.agent_name ? <Tag tone="accent">{e.payload.agent_name}</Tag> : e.node && <Tag>{e.node}</Tag>}
                           {e.status && !["OK", "STARTED"].includes(e.status) && <StatusBadge status={e.status} />}
                           {e.duration_ms !== null && <span className="text-[11px] text-faint tabular">{e.duration_ms} ms</span>}
                           <span className="ml-auto text-[11px] text-faint tabular">#{e.seq} · {fmtDateTime(e.created_at, undefined, { year: undefined, day: undefined, month: undefined, second: "2-digit" })}</span>

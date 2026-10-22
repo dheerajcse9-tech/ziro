@@ -6,6 +6,7 @@
 | Reliability / integration | pytest + `Sandbox` | `backend/tests/integration/test_reliability.py` | Real services, agent graph and HTTP adapter → in-process LOCAL MOCK portal with its own DB |
 | Official scenarios | pytest + Test Lab runner | `backend/tests/integration/test_official_scenarios.py`, `app/services/test_lab.py` | Same sandbox; full pipeline to destination read-back |
 | Live API | pytest + uvicorn thread | `backend/tests/integration/test_api_live.py` | Real HTTP server, mounted mock portal, SQLite **and** PostgreSQL |
+| Agent crew | pytest + `Sandbox` | `backend/tests/integration/test_agent_crew.py`, `tests/unit/test_email_intake.py` | Stage 1–3 agents; Gemini via a fake client with the same `generate()`; Google OAuth/Gmail via an httpx MockTransport speaking the documented endpoints |
 | End-to-end UI | Playwright (Chromium) | `frontend/e2e/workflow.spec.ts` | `next start` + uvicorn, after an API demo reset |
 | Schema | `alembic check` | — | PostgreSQL 16 |
 
@@ -24,12 +25,17 @@ consent invalidates pending approval · destination change after approval blocks
 duplicate execution returns same operation · timeout after commit reconciled without duplicate · 503 retried safely ·
 partial upload / extra record / duplicate record → FAILED_VERIFICATION and no attendance sheet · unreadable read-back →
 PENDING then recovered · attendance contents & data minimisation · ambiguous goal → clarification · criteria mismatch
-stop · prompt injection flagged not obeyed · what-if writes nothing · conflict resolution invalidates other proposal ·
+stop · prompt injection flagged not obeyed · company email → drive → consent form to every student (one per student per drive) ·
+new company / injected text / missing deadline / duplicate drive stop for the drive upload officer · AI-vs-rules disagreement flagged ·
+Gemini failure falls back to rules (labelled) · Gemini function-calling request shape and thought-signature round trip ·
+Google sign-in, read-only mailbox fetch with subject filter, sending via Gmail, expired sign-in → FAILED email + reconnect ·
+autopilot tick · Consent Agent and Approval Review Agent · personal forms → Response Reader → re-check → re-proposal ·
+shortlisted / not-shortlisted emails · Deadline and Reminder agents (never repeat) · per-agent tool enforcement · role permissions · what-if writes nothing · conflict resolution invalidates other proposal ·
 late student sent as a supplementary upload without re-sending others · previously sent student who becomes ineligible flagged for withdrawal · invitations + per-drive consent (accept included, decline excluded, no duplicate invites) · missing-data request → student submits → not applied until officer verifies · expired links refused · selection results notify once and appear in placement history · public invitation link round trip over HTTP · LLM planner tool permissions (scripted client) · LLM failure fallback labelled · viewer cannot start runs · audit chain
 valid, ORM edit blocked, out-of-band edit detected.
 
 ## What is *not* tested
-- The live Anthropic API (no key available in the build environment).
+- The live Anthropic and Gemini APIs, and live Google sign-in / Gmail (no keys or OAuth client in the build environment).
 - The organiser's official mock form (not provided).
 - `docker compose` (no Docker daemon in the build environment).
 - Cross-browser UI (Chromium only); formal accessibility audit.

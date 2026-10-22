@@ -20,7 +20,11 @@ See [`.env.example`](../.env.example). Required in production:
 | `MOCK_PORTAL_BASE_URL` | API | public URL of the API + `/mock-portal` |
 | `ALLOWED_DESTINATION_HOSTS` | API | must include the API host (and the organiser host, when available) |
 | `CORS_ORIGINS` | API | the web origin (only needed if the browser calls the API directly) |
-| `ANTHROPIC_API_KEY` | API | optional; enables the LLM planner |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | API | optional; Gemini for the Email Reader and Goal Planner agents (`LLM_PROVIDER=auto` prefers it) |
+| `ANTHROPIC_API_KEY` | API | optional alternative (Claude) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | API | Google sign-in for the placement Gmail; the OAuth client's redirect URI must be `PUBLIC_APP_URL/api/integrations/google/callback` |
+| `INBOX_SUBJECT_FILTER`, `INBOX_LOOKBACK_DAYS` | API | which company emails the Mailbox Agent reads |
+| `AUTOPILOT`, `AUTOPILOT_INTERVAL_SECONDS` | API | background agents (mailbox, deadlines, reminders); on serverless hosts call `POST /api/autopilot/run` from a scheduler instead |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | API | optional; without them emails stay in the in-app local mailbox |
 | `PUBLIC_APP_URL` | API | public web URL used in links emailed to students |
 | `BACKEND_URL` | Web | server-side only; target of the `/api` and `/mock-portal` rewrites |

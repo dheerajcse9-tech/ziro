@@ -1,6 +1,6 @@
 // API contract types — mirror backend/app/api/serializers.py.
 
-export type Role = "admin" | "officer" | "approver" | "viewer";
+export type Role = "admin" | "officer" | "approver" | "viewer" | "coordinator";
 
 export interface User { id: number; email: string; name: string; role: Role; is_active: boolean }
 
@@ -13,6 +13,8 @@ export interface Student {
   branch: string | null; branch_label: string | null; branch_raw: string | null; cgpa: number | null;
   active_backlogs: number | null; graduation_year: number | null; data_issues: DataIssue[];
   record_version: number; consent: ConsentInfo | null; consent_granted: boolean; updated_at: string; created_at: string;
+  self_reported?: { field: string; value: unknown; request_id: number; at: string }[];
+  drive?: { decision: Decision; roster_status: RosterStatus; consent: "yes" | "no" | null; reasons: string[] } | null;
 }
 
 export interface StudentDetail extends Student {
@@ -48,10 +50,84 @@ export interface Drive {
   starts_at_local: string; ends_at_local: string; status: string; schedule_version: number;
   source_reference: string | null; notes: string | null; destination: Destination | null;
   criteria: Criteria | null; updated_at: string;
+  registration_deadline: string | null; roster_due_at: string | null;
+  registration_deadline_local: string | null; roster_due_at_local: string | null;
   latest_evaluation?: { included: number; excluded: number; held: number; evaluated_at: string } | null;
 }
 
-export interface DriveDetail extends Drive { runs: AgentRun[]; approvals: Approval[]; uploads: Upload[] }
+export interface DriveDetail extends Drive {
+  runs: AgentRun[]; approvals: Approval[]; uploads: Upload[];
+  consent_form: ConsentFormSummary | null;
+  source_email: { id: number; from_address: string; subject: string } | null;
+}
+
+export interface ConsentQuestion { key: string; type: "yes_no" | "text"; label: string; required: boolean }
+
+export interface ConsentFormSummary {
+  id: number; title: string; description: string; questions: ConsentQuestion[]; audience: "ALL_STUDENTS" | "ELIGIBLE";
+  status: "OPEN" | "CLOSED"; closes_at: string; closes_at_local: string; created_by: string;
+  sent: number; accepted: number; declined: number; pending: number; expired: number;
+}
+
+export type IssueLevel = "ERROR" | "REVIEW" | "INFO";
+export interface IntakeIssue { field: string; code: string; message: string; level: IssueLevel }
+
+export interface IntakeDetails {
+  company: string | null; role: string | null; drive_date: string | null; start_time: string | null; end_time: string | null;
+  venue: string | null; registration_deadline: string | null; roster_due: string | null; ctc: string | null;
+  graduation_years: number[]; min_cgpa: number | null; backlog_policy: BacklogPolicy | null; max_active_backlogs: number | null;
+  allowed_branches: string[]; ambiguities: string[]; suspicious_phrases: string[]; evidence: Record<string, string>;
+  mode?: string; ai_error?: string;
+}
+
+export interface InboundEmail {
+  id: number; source: "DEMO" | "GMAIL" | "IMAP" | "MANUAL"; from_address: string; from_name: string | null;
+  to_address: string | null; subject: string; received_at: string; received_at_local: string;
+  status: "NEW" | "PROCESSING" | "NEEDS_REVIEW" | "DRIVE_CREATED" | "PUBLISHED" | "IGNORED";
+  drive_id: number | null; drive_title: string | null; run_id: number | null; extraction_mode: string | null;
+  details: IntakeDetails; issues: IntakeIssue[]; overrides: string[]; note: string | null; processed_at: string | null;
+  body_text?: string; message_id?: string;
+  run: { id: number; status: string; pending_question: PendingQuestion | null; summary: string | null } | null;
+}
+
+export interface MailboxStatus { source: "GMAIL" | "IMAP" | null; address: string; filter: string }
+
+export interface AutopilotStatus {
+  enabled: boolean; interval_seconds: number; last_tick_at: string | null; last_error: string | null; running: boolean;
+  last_result: any;
+}
+
+export interface InboxResponse {
+  items: InboundEmail[]; counts: Record<string, number>; mailbox: MailboxStatus; autopilot: AutopilotStatus;
+  trusted_senders: string[];
+}
+
+export interface GoogleStatus {
+  configured: boolean; redirect_uri: string; connected: boolean; account_email: string | null; status: string | null;
+  last_error: string | null; scopes: string[]; connected_at: string | null; last_used_at: string | null;
+}
+
+export interface CrewAgent {
+  key: string; name: string; stage: 1 | 2 | 3; stage_label: string; owner: Role; purpose: string; tools: string[];
+  nodes: string[]; trigger: "workflow" | "autopilot" | "event"; uses_ai: boolean; actor: string;
+  recent: { at: string; run_id?: number; what?: string; action?: string; drive_id?: number | null }[];
+}
+
+export interface CrewResponse {
+  agents: CrewAgent[]; stages: Record<string, string>; autopilot: AutopilotStatus;
+  ai: { provider: "gemini" | "anthropic" | "none"; model: string | null }; mailbox: MailboxStatus; has_open_runs: boolean;
+}
+
+export interface ReviewCheck { key: string; label: string; status: "PASS" | "WARN" | "FAIL" | "INFO"; detail: string; items: any[] }
+
+export interface ApprovalReview {
+  approval_id: number; proposal_id: number; drive_id: number; verdict: "READY" | "READY_WITH_NOTES" | "DO_NOT_APPROVE";
+  checks: ReviewCheck[]; followup_candidates: number; reviewed_at: string; live_hash_matches: boolean;
+}
+
+export interface FollowupCandidate {
+  student_id: number; roll_number: string; full_name: string; fields: string[]; form_open: boolean; consent_form_open: boolean;
+}
 
 export interface Employer { id: number; name: string; industry: string | null; website: string | null; contact_email: string | null; drive_count: number }
 
@@ -86,7 +162,7 @@ export interface PlanStep { node: string; title: string; status: string; note?: 
 
 export interface PendingQuestion {
   type: string; question: string; options?: { value: string | number; label: string }[];
-  approval_id?: number; upload_id?: number; evidence_id?: number;
+  approval_id?: number; upload_id?: number; evidence_id?: number; email_id?: number; issues?: IntakeIssue[];
 }
 
 export interface AgentRun {
@@ -175,14 +251,14 @@ export interface Dashboard {
   metrics: {
     total_students: number; upcoming_drives: number; eligible_candidates: number; included_candidates: number;
     excluded_candidates: number; unresolved_exceptions: number; pending_approvals: number; drive_conflicts: number;
-    open_clash_exceptions: number; verification_attention: number;
+    open_clash_exceptions: number; verification_attention: number; inbox_needs_review: number;
   };
   drive_readiness: { drive_id: number; title: string; employer: string; starts_at: string; timezone: string; status: string; stage: string; included: number; excluded: number; held: number; unknown: number; open_exceptions: number; pending_approvals: number }[];
   recent_runs: AgentRun[];
   upcoming_schedule: { drive_id: number; title: string; employer: string; starts_at: string; ends_at: string; timezone: string; location: string | null }[];
 }
 
-export interface Health { status: string; database: string; database_dialect: string; environment: string; demo_mode: boolean; planner: string; llm_model: string | null; time: string }
+export interface Health { status: string; database: string; database_dialect: string; environment: string; demo_mode: boolean; planner: string; llm_provider?: string; llm_model: string | null; time: string }
 
 export interface StudentRequest {
   id: number; kind: "DRIVE_INVITATION" | "DATA_REQUEST"; status: string; student_id: number; roll_number: string;
@@ -211,4 +287,7 @@ export interface PublicRequest {
   kind: "DRIVE_INVITATION" | "DATA_REQUEST"; status: string; first_name: string; roll_number: string; expires_at: string;
   requested_fields: { field: string; label: string }[]; branches: { code: string; label: string }[];
   drive?: { title: string; employer: string; slot: string; location: string | null; criteria: string };
+  form?: { title: string; description: string; questions: ConsentQuestion[]; status: string; closes_at: string };
+  consent_question?: string;
+  recheck?: { drive_title: string; now_qualifies: boolean; decision: Decision; reasons: string[] };
 }

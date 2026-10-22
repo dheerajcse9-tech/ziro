@@ -289,7 +289,7 @@ def evaluate_drive(
         elif not consent_ok:
             status = RosterStatus.EXCLUDED
             if per_drive:
-                reasons.append("Declined this drive's invitation" if consent_info else "Has not accepted this drive's invitation")
+                reasons.append("Said NO on this drive's consent form" if consent_info else "Has not said YES on this drive's consent form")
             else:
                 reasons.append(
                     "Consent to share with employers revoked" if consent_info else "Consent to share with employers not recorded"

@@ -2,9 +2,19 @@
 
 **Ziro Digital Agentic AI Hackathon 2026 · Problem statement: Placement Drive Coordinator**
 
-A placement officer delegates a complete drive-preparation workflow to an AI agent, inspects its evidence and
-proposed action, an approver signs off on the *exact* roster, and the system uploads it and **independently
-verifies** the result at the destination.
+A crew of 21 named agents runs the placement process in three stages, each owned by a person:
+
+1. **Drive upload officer:** a company emails the placement Gmail. Agents read the email (Gemini + rules), check every
+   detail and the deadline, create the drive, prepare its consent form and email it to every student.
+2. **Placement officer:** filters the student registry and runs the drive. Agents apply the criteria, keep only students
+   who said YES, detect clashes and propose the roster.
+3. **Approver:** an agent re-checks the proposal. Students missing details or consent get a personal form with a
+   closing time; their answers are applied, re-checked and added. After human approval the exact roster is uploaded,
+   **independently verified**, and emailed to the company. Shortlisted and not-shortlisted students are told, and
+   reminders go out before deadlines and the drive.
+
+See [docs/AGENT_CREW.md](docs/AGENT_CREW.md) for every agent, and [docs/SETUP_GMAIL_GEMINI.md](docs/SETUP_GMAIL_GEMINI.md) to connect
+Gmail and Gemini.
 
 ```
 "Prepare the eligible roster for the upcoming drive, identify unresolved records,
@@ -20,18 +30,20 @@ verifies** the result at the destination.
 
 | | |
 |---|---|
-| Agent | Durable workflow graph with typed, permissioned tools; LLM tool-use planner (Claude) **or** a clearly labelled deterministic fallback |
+| Agents | 21 named agents in 3 stages; each may call only its own tools; durable workflow graph; Gemini (or Claude) reads goals and company emails, with a labelled rule-based fallback; autopilot runs the mailbox, deadline and reminder agents |
 | Decisions | Deterministic rules engine (CGPA ≥ inclusive, backlog policy, branch, batch) → ELIGIBLE / INELIGIBLE / UNKNOWN with per-rule evidence |
 | Safety | Consent enforced and re-checked before upload · approvals bound to a SHA-256 proposal hash · stale approvals auto-invalidated · destination allowlist · prompt-injection flagging · hash-chained append-only audit ledger |
 | Integration | Replaceable `DriveFormAdapter`; demo target is a **LOCAL MOCK** employer drive portal (HTML form + read-back pages, fault injection) |
-| Outreach | Drive invitations with personal accept/decline links (per-drive consent), missing-data requests answered by students and verified by officers, emails to students and employers (SMTP or in-app local mailbox), selection results and per-student placement history |
-| Evidence | 64 backend tests, 4 official scenarios (TC1–TC4), 9 browser end-to-end tests — see [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md) |
+| Mail | Google sign-in to the placement Gmail: company emails are read (read-only) and all email is sent from it; SMTP or an in-app local mailbox as alternatives |
+| Outreach | One consent form per drive to every student; personal forms for missing details/consent with closing times; reminders; shortlisted / not-shortlisted emails; selection results and placement history |
+| Evidence | 99 backend tests, 4 official scenarios (TC1–TC4), 10 browser end-to-end tests — see [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md) |
 
 > **Honesty notes.** The organiser's official mock drive form URL/credentials were not available to this build, so
 > every upload in this repository goes to the clearly labelled LOCAL MOCK portal served by the backend at
-> `/mock-portal`. No ANTHROPIC_API_KEY was available in the build environment, so all recorded runs used the
-> deterministic fallback planner; the LLM path is implemented and tested with a scripted client stand-in, not
-> against the live API. All people and employers in the data are synthetic.
+> `/mock-portal`. No Gemini or Anthropic key and no Google OAuth client were available in the build environment, so
+> recorded runs used the rule-based fallbacks. The Gemini and Gmail paths follow Google's documented REST shapes
+> and are tested against faithful stand-ins (a fake Gemini client and an httpx mock of the OAuth/Gmail endpoints),
+> not against the live services. All people and employers in the data are synthetic.
 
 ## Quick start (local)
 
@@ -42,7 +54,7 @@ Requirements: Python 3.12+, Node 22+.
 cd backend
 pip install -r requirements-dev.txt
 alembic upgrade head
-python -m app.cli seed                 # synthetic demo data (34 students, 4 drives, 4 users)
+python -m app.cli seed                 # synthetic demo data (34 students, 4 drives, 5 users)
 uvicorn app.main:app --port 8000       # API + LOCAL MOCK portal at /mock-portal
 
 # Frontend (separate terminal)
@@ -55,8 +67,9 @@ Sign in with a demo account (password `Demo@2026`, demo mode only):
 
 | Account | Role | Can |
 |---|---|---|
+| `drives@placementos.demo` | Drive upload officer | company inbox, connect Gmail, create drives, send consent forms |
 | `officer@placementos.demo` | Placement officer | run the agent, import/edit data, resolve exceptions |
-| `approver@placementos.demo` | Head of Placements | approve / reject roster proposals |
+| `approver@placementos.demo` | Head of Placements | approve / reject roster proposals, send personal forms to students |
 | `admin@placementos.demo` | Admin | everything, settings, fault injection, demo reset |
 | `viewer@placementos.demo` | Viewer | read only |
 
@@ -75,6 +88,8 @@ cd frontend && CHROMIUM_PATH=... npx playwright test   # browser e2e against run
 
 | Document | Contents |
 |---|---|
+| [AGENT_CREW](docs/AGENT_CREW.md) | The 21 agents, the three stages, who each agent works for |
+| [SETUP_GMAIL_GEMINI](docs/SETUP_GMAIL_GEMINI.md) | Step-by-step: Gemini key, Google sign-in for Gmail, trusted senders |
 | [PRODUCT_SPEC](docs/PRODUCT_SPEC.md) | Users, problems, MVP scope, features |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | System diagram, modules, request flows |
 | [AGENT_WORKFLOW](docs/AGENT_WORKFLOW.md) | Graph, states, tools & permissions, interrupts, recovery |

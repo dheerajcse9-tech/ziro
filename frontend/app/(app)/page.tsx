@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, Bot, CalendarClock, ClipboardCheck, GraduationCap, Inbox, UserCheck, UserX } from "lucide-react";
+import { AlertTriangle, BadgeCheck, Bot, MailOpen, CalendarClock, ClipboardCheck, GraduationCap, Inbox, UserCheck, UserX } from "lucide-react";
 import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ButtonLink, Card, CardHeader } from "@/components/ui/primitives";
@@ -28,7 +28,10 @@ export default function OverviewPage() {
       <PageHeader
         title="Overview"
         description="Live operational status computed from the database. Every card opens the underlying records."
-        actions={can(me.data, "runAgent") ? <ButtonLink href="/agent" variant="primary" icon={<Bot className="size-4" />}>Delegate a task to the agent</ButtonLink> : undefined}
+        actions={<>
+          {can(me.data, "manageDrives") && <ButtonLink href="/inbox" icon={<MailOpen className="size-4" />}>Company Inbox</ButtonLink>}
+          {can(me.data, "runAgent") && <ButtonLink href="/agent" variant="primary" icon={<Bot className="size-4" />}>Delegate a task to the agent</ButtonLink>}
+        </>}
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard label="Students on roster" value={m?.total_students ?? "—"} href="/students" icon={<GraduationCap className="size-4" />} />

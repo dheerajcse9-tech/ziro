@@ -13,7 +13,7 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { StatusBadge, Tag } from "@/components/ui/status";
 import { api, qs } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
-import type { Paged, Student } from "@/lib/types";
+import type { Drive, Paged, Student } from "@/lib/types";
 
 type StudentsResponse = Paged<Student> & { branches: { code: string; label: string }[] };
 
@@ -34,6 +34,15 @@ const columns: ColumnDef<Student>[] = [
     cell: ({ row }) => (row.original as Student & { selected_at?: string[] }).selected_at?.length
       ? <span className="flex flex-wrap gap-1">{(row.original as Student & { selected_at: string[] }).selected_at.map((e) => <Tag key={e} tone="ok">{e}</Tag>)}</span>
       : <span className="text-faint">—</span> },
+  { id: "drive", header: "For selected drive", enableSorting: false,
+    cell: ({ row }) => {
+      const v = row.original.drive;
+      if (!v) return <span className="text-faint">—</span>;
+      return <span className="flex flex-wrap gap-1" title={v.reasons.join("; ")}>
+        <StatusBadge status={v.roster_status === "INCLUDED" ? "INCLUDED" : v.decision} />
+        <Tag tone={v.consent === "yes" ? "ok" : v.consent === "no" ? "neutral" : "warn"}>consent: {v.consent ?? "no answer"}</Tag>
+      </span>;
+    } },
   { id: "issues", header: "Data issues", enableSorting: false,
     cell: ({ row }) => row.original.data_issues.length ? <span className="inline-flex items-center gap-1 text-[12px] text-warn"><AlertCircle className="size-3.5" />{row.original.data_issues.length}</span> : <span className="text-faint">—</span> },
 ];
@@ -48,8 +57,18 @@ function StudentsInner() {
   const issues = params.get("issues") ?? "";
   const sort = params.get("sort") ?? "roll_number";
   const page = Number(params.get("page") ?? 1);
+  const f = {
+    cgpa_min: params.get("cgpa_min") ?? "", cgpa_max: params.get("cgpa_max") ?? "", backlogs_max: params.get("backlogs_max") ?? "",
+    year: params.get("year") ?? "", missing: params.get("missing") ?? "", drive_id: params.get("drive_id") ?? "",
+    drive_status: params.get("drive_status") ?? "",
+  };
+  const [range, setRange] = useState({ cgpa_min: f.cgpa_min, cgpa_max: f.cgpa_max, backlogs_max: f.backlogs_max, year: f.year });
+  const drives = useQuery({ queryKey: ["drives"], queryFn: () => api.get<Drive[]>("/api/drives") });
 
-  useEffect(() => setQ(params.get("q") ?? ""), [params]);
+  useEffect(() => {
+    setQ(params.get("q") ?? "");
+    setRange({ cgpa_min: params.get("cgpa_min") ?? "", cgpa_max: params.get("cgpa_max") ?? "", backlogs_max: params.get("backlogs_max") ?? "", year: params.get("year") ?? "" });
+  }, [params]);
 
   const setParam = (patch: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(params.toString());
@@ -61,8 +80,8 @@ function StudentsInner() {
   };
 
   const query = useQuery({
-    queryKey: ["students", { q: params.get("q"), branch, consent, issues, sort, page }],
-    queryFn: () => api.get<StudentsResponse>(`/api/students${qs({ q: params.get("q"), branch, consent, issues: issues || undefined, sort, page, page_size: 25 })}`),
+    queryKey: ["students", { q: params.get("q"), branch, consent, issues, sort, page, ...f }],
+    queryFn: () => api.get<StudentsResponse>(`/api/students${qs({ q: params.get("q"), branch, consent, issues: issues || undefined, sort, page, page_size: 25, ...f })}`),
     placeholderData: keepPreviousData,
   });
   const data = query.data;
@@ -100,8 +119,27 @@ function StudentsInner() {
             <option value="cgpa">Sort: CGPA (low → high)</option>
             <option value="branch">Sort: branch</option>
           </Select>
-          {(params.get("q") || branch || consent || issues) && <Button variant="ghost" onClick={() => router.replace("/students")}>Clear filters</Button>}
+          {(params.toString() !== "") && <Button variant="ghost" onClick={() => router.replace("/students")}>Clear filters</Button>}
         </div>
+        <form className="flex flex-wrap items-end gap-2 border-b border-line bg-subtle/60 p-3" onSubmit={(e) => { e.preventDefault(); setParam(range); }}>
+          <Input aria-label="CGPA from" placeholder="CGPA from" inputMode="decimal" className="w-28" value={range.cgpa_min} onChange={(e) => setRange({ ...range, cgpa_min: e.target.value })} />
+          <Input aria-label="CGPA to" placeholder="CGPA to" inputMode="decimal" className="w-28" value={range.cgpa_max} onChange={(e) => setRange({ ...range, cgpa_max: e.target.value })} />
+          <Input aria-label="Max backlogs" placeholder="Max backlogs" inputMode="numeric" className="w-32" value={range.backlogs_max} onChange={(e) => setRange({ ...range, backlogs_max: e.target.value })} />
+          <Input aria-label="Batch" placeholder="Batch (e.g. 2026)" inputMode="numeric" className="w-36" value={range.year} onChange={(e) => setRange({ ...range, year: e.target.value })} />
+          <Button type="submit">Apply</Button>
+          <Select aria-label="Missing data" value={f.missing} onChange={(e) => setParam({ missing: e.target.value })}>
+            <option value="">Any data</option><option value="any">Missing anything</option><option value="cgpa">Missing CGPA</option>
+            <option value="active_backlogs">Missing backlogs</option><option value="branch">Missing branch</option><option value="graduation_year">Missing batch</option>
+          </Select>
+          <Select aria-label="Drive" value={f.drive_id} onChange={(e) => setParam({ drive_id: e.target.value, drive_status: e.target.value ? f.drive_status : "" })}>
+            <option value="">For drive…</option>{drives.data?.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+          </Select>
+          {f.drive_id && <Select aria-label="Drive status" value={f.drive_status} onChange={(e) => setParam({ drive_status: e.target.value })}>
+            <option value="">Everyone</option><option value="included">Would be on the roster</option><option value="eligible">Meets criteria</option>
+            <option value="ineligible">Does not meet criteria</option><option value="unknown">Missing data for this drive</option>
+            <option value="consent_yes">Said YES</option><option value="consent_no">Said NO</option><option value="consent_pending">No consent answer</option>
+          </Select>}
+        </form>
         {query.isError ? <div className="p-4"><ErrorState error={query.error} onRetry={() => query.refetch()} /></div>
           : !data ? <LoadingRows /> : (
             <>

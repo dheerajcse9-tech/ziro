@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ReviewPanel } from "@/components/approvals/review-panel";
 import { HashValue, RollList } from "@/components/ui/evidence";
 import { DefinitionList, KpiCard, PageHeader } from "@/components/ui/layout";
 import { ConfirmDialog } from "@/components/ui/overlay";
@@ -111,6 +112,7 @@ export default function ApprovalDetail() {
           </Card>
         </div>
         <div className="space-y-4">
+          <ReviewPanel approvalId={a.id} driveId={p.drive_id} pending={a.status === "PENDING"} />
           <Card>
             <CardHeader title="What you are approving" />
             <div className="p-4"><DefinitionList cols={1} items={[
@@ -137,7 +139,7 @@ export default function ApprovalDetail() {
 
       <ConfirmDialog open={mode === "approve"} onOpenChange={(o) => !o && setMode(null)} tone="success" loading={approve.isPending}
         title={`Approve ${p.kind === "SUPPLEMENT" ? "supplementary upload" : "upload"} of ${p.included_roll_numbers.length} student(s)?`} confirmLabel="Approve and execute"
-        description="The backend re-computes the roster from live data. If it no longer matches this hash the approval is refused. On approval the agent uploads to the destination, independently verifies the result, then emails the employer contact this roster and tells each student they were registered."
+        description="The backend re-computes the roster from live data. If it no longer matches this hash the approval is refused. On approval the Upload & Verification Agent uploads to the destination and independently verifies the result; the Employer Update Agent then emails the company this list from the placement mailbox, tells each student they are shortlisted, and tells consenting students who did not qualify why."
         onConfirm={() => ack ? approve.mutate() : toast.error("Confirm that you reviewed the roster")}>
         <div className="space-y-3">
           <div className="rounded-md bg-subtle p-3 text-[12.5px]"><p>Destination: <strong>{p.destination.name}</strong></p><p>Hash: <span className="font-mono">{p.proposal_hash.slice(0, 24)}…</span></p></div>

@@ -246,6 +246,125 @@
        "default": "roll_number",
        "title": "Sort"
       }
+     },
+     {
+      "name": "cgpa_min",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "number",
+         "maximum": 10,
+         "minimum": 0
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cgpa Min"
+      }
+     },
+     {
+      "name": "cgpa_max",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "number",
+         "maximum": 10,
+         "minimum": 0
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cgpa Max"
+      }
+     },
+     {
+      "name": "backlogs_max",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer",
+         "minimum": 0
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Backlogs Max"
+      }
+     },
+     {
+      "name": "year",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Year"
+      }
+     },
+     {
+      "name": "missing",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "pattern": "^(cgpa|active_backlogs|branch|graduation_year|any)$"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Missing"
+      }
+     },
+     {
+      "name": "drive_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Drive Id"
+      }
+     },
+     {
+      "name": "drive_status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "pattern": "^(included|eligible|ineligible|unknown|consent_yes|consent_no|consent_pending)$"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Drive Status"
+      }
      }
     ],
     "responses": {
@@ -3191,6 +3310,53 @@
     }
    }
   },
+  "/api/emails/retry-failed": {
+   "post": {
+    "tags": [
+     "outreach"
+    ],
+    "summary": "Retry Failed Emails",
+    "operationId": "retry_failed_emails_api_emails_retry_failed_post",
+    "parameters": [
+     {
+      "name": "email_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Email Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/public/requests/{token}": {
    "get": {
     "tags": [
@@ -3309,6 +3475,630 @@
       }
      }
     },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox": {
+   "get": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "List Inbox",
+    "operationId": "list_inbox_api_inbox_get",
+    "parameters": [
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Paste Email",
+    "operationId": "paste_email_api_inbox_post",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PastedEmail"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox/{email_id}": {
+   "get": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Get Inbox Email",
+    "operationId": "get_inbox_email_api_inbox__email_id__get",
+    "parameters": [
+     {
+      "name": "email_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Email Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox/check": {
+   "post": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Check Mailbox",
+    "description": "Mailbox Agent now, then the stage 1 agents on every new email.",
+    "operationId": "check_mailbox_api_inbox_check_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox/demo": {
+   "post": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Load Demo Emails",
+    "operationId": "load_demo_emails_api_inbox_demo_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox/{email_id}/process": {
+   "post": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Process Email",
+    "operationId": "process_email_api_inbox__email_id__process_post",
+    "parameters": [
+     {
+      "name": "email_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Email Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox/{email_id}/details": {
+   "put": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Correct Details",
+    "operationId": "correct_details_api_inbox__email_id__details_put",
+    "parameters": [
+     {
+      "name": "email_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Email Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DetailsIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox/{email_id}/ignore": {
+   "post": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Ignore Email",
+    "operationId": "ignore_email_api_inbox__email_id__ignore_post",
+    "parameters": [
+     {
+      "name": "email_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Email Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/IgnoreIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/inbox-settings/trusted-senders": {
+   "put": {
+    "tags": [
+     "inbox"
+    ],
+    "summary": "Set Trusted Senders",
+    "operationId": "set_trusted_senders_api_inbox_settings_trusted_senders_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TrustedIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/integrations/google": {
+   "get": {
+    "tags": [
+     "integrations"
+    ],
+    "summary": "Google Status",
+    "operationId": "google_status_api_integrations_google_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/integrations/google/connect": {
+   "post": {
+    "tags": [
+     "integrations"
+    ],
+    "summary": "Google Connect",
+    "operationId": "google_connect_api_integrations_google_connect_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/integrations/google/disconnect": {
+   "post": {
+    "tags": [
+     "integrations"
+    ],
+    "summary": "Google Disconnect",
+    "operationId": "google_disconnect_api_integrations_google_disconnect_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/autopilot": {
+   "get": {
+    "tags": [
+     "agents"
+    ],
+    "summary": "Autopilot Status",
+    "operationId": "autopilot_status_api_autopilot_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/autopilot/run": {
+   "post": {
+    "tags": [
+     "agents"
+    ],
+    "summary": "Autopilot Run",
+    "operationId": "autopilot_run_api_autopilot_run_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/agents": {
+   "get": {
+    "tags": [
+     "agents"
+    ],
+    "summary": "List Agents",
+    "operationId": "list_agents_api_agents_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/approvals/{approval_id}/review": {
+   "get": {
+    "tags": [
+     "approvals"
+    ],
+    "summary": "Approval Agent Review",
+    "operationId": "approval_agent_review_api_approvals__approval_id__review_get",
+    "parameters": [
+     {
+      "name": "approval_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Approval Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/drives/{drive_id}/followups": {
+   "get": {
+    "tags": [
+     "drives"
+    ],
+    "summary": "Followup Overview",
+    "operationId": "followup_overview_api_drives__drive_id__followups_get",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "drives"
+    ],
+    "summary": "Start Followups",
+    "operationId": "start_followups_api_drives__drive_id__followups_post",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FollowupIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/drives/{drive_id}/consent-form": {
+   "get": {
+    "tags": [
+     "drives"
+    ],
+    "summary": "Consent Form",
+    "operationId": "consent_form_api_drives__drive_id__consent_form_get",
+    "parameters": [
+     {
+      "name": "drive_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Drive Id"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "Successful Response",
@@ -3648,6 +4438,20 @@
     "type": "object",
     "title": "DestinationPatch"
    },
+   "DetailsIn": {
+    "properties": {
+     "values": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Values"
+     }
+    },
+    "type": "object",
+    "required": [
+     "values"
+    ],
+    "title": "DetailsIn"
+   },
    "DriveIn": {
     "properties": {
      "employer_id": {
@@ -3946,6 +4750,21 @@
     ],
     "title": "FaultIn"
    },
+   "FollowupIn": {
+    "properties": {
+     "closes_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Closes At",
+      "description": "Local wall-clock time in the drive's timezone when the forms close"
+     }
+    },
+    "type": "object",
+    "required": [
+     "closes_at"
+    ],
+    "title": "FollowupIn"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -3959,11 +4778,41 @@
     "type": "object",
     "title": "HTTPValidationError"
    },
+   "IgnoreIn": {
+    "properties": {
+     "note": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     }
+    },
+    "type": "object",
+    "title": "IgnoreIn"
+   },
    "InvitationAnswer": {
     "properties": {
      "accept": {
       "type": "boolean",
       "title": "Accept"
+     },
+     "comment": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 1000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Comment"
      }
     },
     "type": "object",
@@ -3989,6 +4838,52 @@
      "password"
     ],
     "title": "LoginIn"
+   },
+   "PastedEmail": {
+    "properties": {
+     "from_address": {
+      "type": "string",
+      "maxLength": 255,
+      "minLength": 3,
+      "title": "From Address"
+     },
+     "from_name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 200
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "From Name"
+     },
+     "subject": {
+      "type": "string",
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Subject"
+     },
+     "body": {
+      "type": "string",
+      "maxLength": 50000,
+      "minLength": 1,
+      "title": "Body"
+     },
+     "process": {
+      "type": "boolean",
+      "title": "Process",
+      "default": true
+     }
+    },
+    "type": "object",
+    "required": [
+     "from_address",
+     "subject",
+     "body"
+    ],
+    "title": "PastedEmail"
    },
    "RejectIn": {
     "properties": {
@@ -4198,6 +5093,43 @@
        }
       ],
       "title": "Attendance Fields"
+     },
+     "auto_apply_student_data": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Auto Apply Student Data"
+     },
+     "reminder_hours_before_deadline": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 168.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reminder Hours Before Deadline"
+     },
+     "reminder_hours_before_drive": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 168.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reminder Hours Before Drive"
      }
     },
     "type": "object",
@@ -4381,6 +5313,22 @@
     },
     "type": "object",
     "title": "TestRunIn"
+   },
+   "TrustedIn": {
+    "properties": {
+     "senders": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Senders"
+     }
+    },
+    "type": "object",
+    "required": [
+     "senders"
+    ],
+    "title": "TrustedIn"
    },
    "ValidationError": {
     "properties": {

@@ -21,6 +21,7 @@ from app.domain.eligibility import CriteriaSpec
 from app.domain.normalize import BRANCH_LABELS
 from app.domain.schedule import Interval, to_utc
 from app.models.entities import (
+    InboundEmail,
     AgentRun,
     ApprovalRequest,
     ConsentRecord,
@@ -163,6 +164,8 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(require_roles(*AN
             "drive_conflicts": len(drive_pair_conflicts(db)),
             "open_clash_exceptions": open_conflicts,
             "verification_attention": ver_problem,
+            "inbox_needs_review": db.scalar(select(func.count(InboundEmail.id)).where(
+                InboundEmail.status.in_(["NEW", "NEEDS_REVIEW"]))) or 0,
         },
         "drive_readiness": readiness,
         "recent_runs": [S.run(r, include_state=False) for r in runs],
@@ -178,9 +181,27 @@ def list_students(
     q: str | None = None, branch: str | None = None, consent: str | None = Query(None, pattern="^(granted|missing)$"),
     issues: bool | None = None, page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200),
     sort: str = Query("roll_number", pattern="^-?(roll_number|full_name|cgpa|branch|active_backlogs)$"),
+    cgpa_min: float | None = Query(None, ge=0, le=10), cgpa_max: float | None = Query(None, ge=0, le=10),
+    backlogs_max: int | None = Query(None, ge=0), year: int | None = None,
+    missing: str | None = Query(None, pattern="^(cgpa|active_backlogs|branch|graduation_year|any)$"),
+    drive_id: int | None = None,
+    drive_status: str | None = Query(None, pattern="^(included|eligible|ineligible|unknown|consent_yes|consent_no|consent_pending)$"),
     db: Session = Depends(get_db), _: User = Depends(require_roles(*ANY_ROLE)),
 ):
     stmt = select(Student)
+    if cgpa_min is not None:
+        stmt = stmt.where(Student.cgpa >= cgpa_min)
+    if cgpa_max is not None:
+        stmt = stmt.where(Student.cgpa <= cgpa_max)
+    if backlogs_max is not None:
+        stmt = stmt.where(Student.active_backlogs <= backlogs_max)
+    if year is not None:
+        stmt = stmt.where(Student.graduation_year == year)
+    if missing == "any":
+        stmt = stmt.where(or_(Student.cgpa.is_(None), Student.active_backlogs.is_(None), Student.branch.is_(None),
+                              Student.graduation_year.is_(None)))
+    elif missing:
+        stmt = stmt.where(getattr(Student, missing).is_(None))
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(Student.roll_number.ilike(like), Student.full_name.ilike(like), Student.email.ilike(like)))
@@ -194,6 +215,21 @@ def list_students(
         all_rows = [s for s in all_rows if not consent_map.get(s.id, {}).get("granted")]
     if issues is True:
         all_rows = [s for s in all_rows if s.data_issues or s.cgpa is None or s.active_backlogs is None or s.branch is None]
+    drive_view: dict[int, dict] = {}
+    if drive_id is not None:
+        from app.services.roster import evaluate_drive
+
+        outcomes = {o.student_id: o for o in evaluate_drive(db, drive_svc.get_drive(db, drive_id)).outcomes}
+        for sid, o in outcomes.items():
+            drive_view[sid] = {"decision": o.decision, "roster_status": o.roster_status,
+                               "consent": None if o.consent is None else ("yes" if o.consent.get("granted") else "no"),
+                               "reasons": o.reasons}
+        tests = {"included": lambda v: v["roster_status"] == "INCLUDED", "eligible": lambda v: v["decision"] == "ELIGIBLE",
+                 "ineligible": lambda v: v["decision"] == "INELIGIBLE", "unknown": lambda v: v["decision"] == "UNKNOWN",
+                 "consent_yes": lambda v: v["consent"] == "yes", "consent_no": lambda v: v["consent"] == "no",
+                 "consent_pending": lambda v: v["consent"] is None}
+        if drive_status:
+            all_rows = [s for s in all_rows if s.id in drive_view and tests[drive_status](drive_view[s.id])]
     key = sort.lstrip("-")
     all_rows.sort(key=lambda s: (getattr(s, key) is None, getattr(s, key) if getattr(s, key) is not None else 0),
                   reverse=sort.startswith("-"))
@@ -202,7 +238,8 @@ def list_students(
     from app.services.outreach import selected_employers
 
     offers = selected_employers(db, [s.id for s in rows])
-    return {"items": [{**S.student(s, consent_map.get(s.id)), "selected_at": offers.get(s.id, [])} for s in rows],
+    return {"items": [{**S.student(s, consent_map.get(s.id)), "selected_at": offers.get(s.id, []),
+                       **({"drive": drive_view.get(s.id)} if drive_id is not None else {})} for s in rows],
             "total": total, "page": page, "page_size": page_size,
             "branches": [{"code": c, "label": l} for c, l in BRANCH_LABELS.items()]}
 
