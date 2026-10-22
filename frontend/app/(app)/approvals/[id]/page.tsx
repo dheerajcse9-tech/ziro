@@ -1,5 +1,6 @@
 "use client";
 
+import { AgentFlowCard } from "@/components/agents/agent-flow";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink, ShieldCheck, XCircle } from "lucide-react";
 import Link from "next/link";
@@ -71,6 +72,7 @@ export default function ApprovalDetail() {
       {a.status === "PENDING" && !can(me.data, "approve") && (
         <div className="mb-4"><Banner tone="info" title="Approver action required">Only the Approver (Head of Placements) can approve or reject this list. Agents never approve.</Banner></div>)}
       {a.status === "INVALIDATED" && <div className="mb-4"><Banner title="Invalidated">{a.invalidated_reason}</Banner></div>}
+      {p.run_id && <div className="mb-4"><AgentFlowCard runId={p.run_id} title="How the agents prepared this list" /></div>}
 
       {p.kind === "SUPPLEMENT" && (
         <div className="mb-4"><Banner tone="info" title={`Supplementary upload: only ${p.included_roll_numbers.length} new student(s) will be sent`}>

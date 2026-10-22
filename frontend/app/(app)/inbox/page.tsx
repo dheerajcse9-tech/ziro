@@ -1,5 +1,6 @@
 "use client";
 
+import { AgentFlowCard } from "@/components/agents/agent-flow";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, ClipboardPaste, Inbox, MailCheck, MailOpen, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -127,9 +128,9 @@ function EmailDetail({ id, onClose }: { id: number; onClose: () => void }) {
               {e.extraction_mode === "AI" ? "Read by AI + rules" : e.extraction_mode === "RULES_AI_FAILED" ? "AI failed → rules" : "Read by rules"}</Tag>}
             {e.overrides.length > 0 && <Tag tone="info">Corrected: {e.overrides.join(", ")}</Tag>}
             {e.drive_id && <ButtonLink size="sm" href={`/drives/${e.drive_id}`}>Open drive #{e.drive_id}</ButtonLink>}
-            {e.run && <ButtonLink size="sm" variant="ghost" href={`/agent/${e.run.id}`} icon={<Bot className="size-3.5" />}>Agent run #{e.run.id}</ButtonLink>}
           </div>
 
+          {e.run && <AgentFlowCard runId={e.run.id} title="How the agents handled this email" />}
           {question && (
             <Banner tone="warn" title="The agents need you">
               <p className="mb-2">{question.question}</p>

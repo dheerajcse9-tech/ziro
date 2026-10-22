@@ -2,16 +2,17 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertOctagon, ArrowRight, Bot, CheckCircle2, Circle, CircleDashed, CircleDot, Download, Flag, Hand, Loader2,
+  AlertOctagon, ArrowRight, Bot, CheckCircle2, CircleDot, Download, Flag, Hand, Loader2,
   MessageSquare, ShieldAlert, Wrench, XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { AgentFlow } from "@/components/agents/agent-flow";
 import { JsonView, RollList } from "@/components/ui/evidence";
 import { DefinitionList, PageHeader } from "@/components/ui/layout";
 import { Button, ButtonLink, Card, CardHeader } from "@/components/ui/primitives";
-import { Banner, EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
+import { Banner, ErrorState, LoadingRows } from "@/components/ui/states";
 import { StatusBadge, Tag } from "@/components/ui/status";
 import { api } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
@@ -21,15 +22,6 @@ import type { AgentEvent, AgentRun, CrewResponse } from "@/lib/types";
 
 const TERMINAL = new Set(["VERIFIED", "REJECTED", "FAILED", "FAILED_VERIFICATION", "COMPLETED"]);
 const WAITING = new Set(["NEEDS_REVIEW", "AWAITING_APPROVAL", "PENDING_RECONCILIATION"]);
-
-function StepIcon({ status }: { status: string }) {
-  if (status === "done") return <CheckCircle2 className="size-4 text-ok" />;
-  if (status === "running") return <Loader2 className="size-4 animate-spin text-info" />;
-  if (status === "failed" || status === "rejected") return <XCircle className="size-4 text-bad" />;
-  if (status === "blocked" || status === "uncertain" || status === "pending") return <Hand className="size-4 text-warn" />;
-  if (status === "skipped") return <CircleDashed className="size-4 text-faint" />;
-  return <Circle className="size-4 text-line-strong" />;
-}
 
 const EVENT_STYLE: Record<string, { icon: React.ReactNode; tone: string }> = {
   GOAL: { icon: <Flag className="size-3.5" />, tone: "text-accent" },
@@ -62,7 +54,6 @@ export default function RunPage() {
     refetchInterval: () => (run.data && (TERMINAL.has(run.data.status) || WAITING.has(run.data.status)) ? false : 1000),
   });
   const crew = useQuery({ queryKey: ["crew"], queryFn: () => api.get<CrewResponse>("/api/agents"), staleTime: 300_000 });
-  const agentOf = (node?: string | null) => crew.data?.agents.find((a) => node && a.nodes.includes(node))?.name;
   const answer = useMutation({
     mutationFn: (value: string | number) => api.post<AgentRun>(`/api/agent/runs/${id}/answer`, { value }),
     onSuccess: () => qc.invalidateQueries(),
@@ -113,24 +104,13 @@ export default function RunPage() {
       {r.status === "FAILED_VERIFICATION" && <div className="mb-4"><Banner tone="bad" title="Independent verification failed" action={s.upload_id ? <ButtonLink size="sm" href={`/verification/${s.upload_id}`}>Inspect discrepancy</ButtonLink> : undefined}>{r.error}</Banner></div>}
       {r.status === "VERIFIED" && <div className="mb-4"><Banner tone="ok" title="Roster uploaded and independently verified" action={s.upload_id ? <ButtonLink size="sm" href={`/verification/${s.upload_id}`}>Receipt &amp; attendance</ButtonLink> : undefined}>{r.summary}</Banner></div>}
 
+      <Card className="mb-4">
+        <CardHeader title="How the agents handled this" description="Each card is one agent and what it did; the arrows show it handing over to the next. A person steps in where the chain waits." />
+        <div className="p-4">{crew.data ? <AgentFlow run={r} agents={crew.data.agents} /> : <LoadingRows rows={2} />}</div>
+      </Card>
+
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="space-y-4">
-          <Card>
-            <CardHeader title="Steps" />
-            {r.plan.length === 0 ? <EmptyState title="Planning…" /> : (
-              <ol className="space-y-0.5 p-2">
-                {r.plan.map((p, i) => (
-                  <li key={p.node} className={cn("flex gap-2.5 rounded-md px-2 py-1.5", r.current_step === p.node && live && "bg-info-soft")}>
-                    <div className="flex flex-col items-center"><StepIcon status={p.status} />{i < r.plan.length - 1 && <div className="mt-1 w-px flex-1 bg-line" />}</div>
-                    <div className="min-w-0 pb-1">
-                      <p className={cn("text-[13px]", p.status === "pending" ? "text-muted" : "text-ink")}>{p.title}</p>
-                      {agentOf(p.node) && <p className="text-[11px] font-medium text-accent">{agentOf(p.node)}</p>}
-                      {p.note && <p className="text-[11.5px] text-muted">{p.note}</p>}
-                    </div>
-                  </li>))}
-              </ol>
-            )}
-          </Card>
           <Card>
             <CardHeader title="Details" />
             <div className="p-4"><DefinitionList cols={1} items={[

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Clock, Cpu, Play, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, Bot, Clock, Cpu, Play, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/ui/layout";
@@ -22,7 +22,7 @@ const TRIGGER: Record<CrewAgent["trigger"], { label: string; icon: React.ReactNo
 
 function AgentCard({ a }: { a: CrewAgent }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3">
+    <div className="flex h-full flex-col gap-2 rounded-lg border border-line bg-surface p-3">
       <div className="flex items-start justify-between gap-2">
         <p className="text-[13px] font-semibold text-ink">{a.name}</p>
         {a.uses_ai && <Tag tone="accent"><Sparkles className="mr-1 size-3" />AI</Tag>}
@@ -84,8 +84,15 @@ export default function AgentsPage() {
                 <CardHeader title={<span className="flex items-center gap-2"><Cpu className="size-4 text-faint" />Stage {stage}: {d.stages[String(stage)]}</span>}
                   description={{ 1: "Company email → drive → consent form → every student", 2: "Criteria + consent → roster proposal for the approver",
                     3: "Review → personal forms for missing details/consent → updates → upload → emails" }[stage]} />
-                <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {d.agents.filter((a) => a.stage === stage).map((a) => <AgentCard key={a.key} a={a} />)}
+                <div className="p-4">
+                  <ol className="flex flex-wrap items-stretch gap-x-1.5 gap-y-3">
+                    {d.agents.filter((a) => a.stage === stage).map((a, i, all) => (
+                      <li key={a.key} className="flex items-center gap-1.5">
+                        <div className="w-60 shrink-0 self-stretch"><AgentCard a={a} /></div>
+                        {i < all.length - 1 && <ArrowRight className="size-4 shrink-0 text-faint" aria-label="hands over to" />}
+                      </li>
+                    ))}
+                  </ol>
                 </div>
               </Card>
             ))}

@@ -286,8 +286,11 @@ def make_plan(ctx: ToolContext, objective: str, client: Any | None = None) -> Pl
             return plan
         except Exception as exc:  # noqa: BLE001 - any LLM failure falls back, and is recorded
             ctx.db.rollback()
+            from app.agent.gemini import friendly_error
+
             emit(ctx.db, ctx.run, "LLM_ERROR", node="interpret_goal", status="FALLBACK",
-                 message=f"LLM planner failed ({type(exc).__name__}: {str(exc)[:300]}); using deterministic fallback")
+                 message=f"AI not used: {friendly_error(exc)}. The built-in rules understood the request instead.",
+                 payload={"error": f"{type(exc).__name__}: {str(exc)[:500]}"})
             ctx.db.commit()
             plan = deterministic_plan(ctx, objective)
             plan.planner_mode = "LLM_FAILED_DETERMINISTIC_FALLBACK"

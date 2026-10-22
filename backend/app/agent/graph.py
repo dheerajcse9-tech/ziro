@@ -146,6 +146,18 @@ class Step:
     message: str | None = None
 
 
+_FIELD_NAMES = {"min_cgpa": "minimum CGPA", "backlog_policy": "backlog rule", "max_active_backlogs": "maximum backlogs",
+                "allowed_branches": "branches", "graduation_years": "batch"}
+
+
+def _describe_diff(d: dict[str, Any]) -> str:
+    def show(v: Any) -> str:
+        if isinstance(v, list):
+            return ", ".join(map(str, v)) or "all"
+        return "not stated" if v is None else str(v).replace("_", " ").lower()
+    return f"{_FIELD_NAMES.get(d.get('field'), d.get('field'))}: company says {show(d.get('published'))}, drive has {show(d.get('configured'))}"
+
+
 def _plan(intent: str) -> list[dict[str, Any]]:
     return [{"node": n, "title": t, "status": "pending"} for n, t in PLAN_TEMPLATES[intent]]
 
@@ -311,7 +323,8 @@ def node_interpret_criteria(ctx: ToolContext) -> Step:
         run.pending_question = {
             "type": "criteria_mismatch",
             "question": "The employer's published criteria do not match the configured criteria"
-                        + (f": {diffs}" if diffs else f": {parsed.get('ambiguities')}")
+                        + (": " + "; ".join(_describe_diff(d) for d in diffs) if diffs
+                           else ": " + "; ".join(str(x) for x in parsed.get("ambiguities") or []))
                         + ". Update the drive criteria and re-run, or confirm the configured criteria are authoritative.",
             "options": [{"value": "use_configured", "label": "Configured criteria are authoritative — continue"},
                         {"value": "rerun", "label": "I updated the criteria — re-run"},

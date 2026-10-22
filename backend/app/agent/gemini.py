@@ -24,6 +24,18 @@ class GeminiError(RuntimeError):
     pass
 
 
+def friendly_error(exc: Exception) -> str:
+    """One plain sentence for people; the full error stays in the run's technical details."""
+    text = str(exc).lower()
+    if "429" in text or "quota" in text or "rate" in text and "limit" in text:
+        return "the AI key has used up its free quota for now"
+    if "401" in text or "403" in text or "api key" in text or "permission" in text:
+        return "the AI key was not accepted"
+    if "timeout" in text or "timed out" in text:
+        return "the AI service did not answer in time"
+    return "the AI service could not be reached"
+
+
 def to_gemini_schema(schema: dict[str, Any], defs: dict[str, Any] | None = None) -> dict[str, Any]:
     """Convert a JSON Schema (Pydantic or hand-written) to the OpenAPI subset Gemini accepts."""
     defs = defs if defs is not None else schema.get("$defs", {})

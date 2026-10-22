@@ -1,5 +1,6 @@
 "use client";
 
+import { DriveAgentFlows } from "@/components/agents/agent-flow";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -154,6 +155,7 @@ export default function DriveWorkspace() {
               </div>
             </Card>
           </div>
+          <DriveAgentFlows runs={d.runs} />
         </TabPanel>
 
         <TabPanel value="eligibility">
