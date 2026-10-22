@@ -135,10 +135,12 @@ export default function DriveWorkspace() {
       ]}>
         <TabPanel value="overview">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="On the list" value={counts?.included ?? "—"} tone="ok" hint={counts?.already_submitted ? `${counts.already_submitted} already sent to the company` : "Qualify and said YES"} />
-            <KpiCard label="Qualify, no YES yet" value={counts?.consent_missing ?? "—"} tone={counts?.consent_missing ? "accent" : "neutral"} />
-            <KpiCard label="Missing details" value={counts?.unknown ?? "—"} tone={counts?.unknown ? "warn" : "neutral"} />
-            <KpiCard label="Do not qualify" value={counts?.ineligible ?? "—"} hint={counts?.held ? `${counts.held} held for a schedule clash` : undefined} />
+            <KpiCard label="On the list" value={counts?.included ?? "—"} tone="ok"
+              hint={[counts?.already_submitted ? `${counts.already_submitted} already sent to the company` : "Qualify and said YES",
+                counts?.held ? `${counts.held} more held for a schedule clash` : ""].filter(Boolean).join(" · ")} />
+            <KpiCard label="Qualify, no YES yet" value={counts?.consent_missing ?? "—"} tone={counts?.consent_missing ? "accent" : "neutral"} hint="They can still answer the consent form" />
+            <KpiCard label="Missing details" value={counts?.unknown ?? "—"} tone={counts?.unknown ? "warn" : "neutral"} hint="The approver can send them a form" />
+            <KpiCard label="Do not qualify" value={counts?.ineligible ?? "—"} hint="Below the company's criteria" />
           </div>
           <div className="mt-4">
             <Card>

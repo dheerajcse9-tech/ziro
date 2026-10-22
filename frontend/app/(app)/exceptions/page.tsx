@@ -36,16 +36,16 @@ function Inner() {
       {q.data && Object.keys(q.data.open_counts_by_kind).length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {Object.entries(q.data.open_counts_by_kind).map(([k, n]) => (
-            <button key={k} onClick={() => set("kind", kind === k ? "" : k)} className={`rounded-full px-2.5 py-1 text-[12px] ring-1 ring-inset ${kind === k ? "bg-accent text-white ring-accent" : "bg-surface ring-line-strong hover:bg-subtle"}`}>{titleCase(k)} · {n}</button>))}
+            <button key={k} onClick={() => set("kind", kind === k ? "" : k)} className={`rounded-full px-2.5 py-1 text-[12px] ring-1 ring-inset ${kind === k ? "bg-accent text-white ring-accent" : "bg-surface ring-line-strong hover:bg-subtle"}`}>{kindLabel(k)} · {n}</button>))}
         </div>
       )}
       <Card>
-        <CardHeader title="Exceptions" actions={<>
+        <CardHeader title="Issues" actions={<>
           <Select aria-label="Status" value={status} onChange={(e) => set("status", e.target.value)}>
             <option value="OPEN">Open</option><option value="RESOLVED">Resolved</option><option value="DISMISSED">Dismissed</option><option value="ALL">All</option>
           </Select>
           <Select aria-label="Kind" value={kind} onChange={(e) => set("kind", e.target.value)}>
-            <option value="">All kinds</option>{KINDS.map((k) => <option key={k} value={k}>{titleCase(k)}</option>)}
+            <option value="">All kinds</option>{KINDS.map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
           </Select>
           {driveId && <Button size="sm" variant="ghost" onClick={() => set("drive_id", "")}>Drive #{driveId} ✕</Button>}
         </>} />
@@ -54,7 +54,7 @@ function Inner() {
             empty={<EmptyState title={status === "OPEN" ? "Inbox zero" : "No exceptions"} description="Nothing needs attention with these filters." />}
             columns={[
               { accessorKey: "severity", header: "Severity", cell: ({ row }) => <StatusBadge status={row.original.severity} /> },
-              { accessorKey: "kind", header: "Kind", cell: ({ row }) => <Tag>{titleCase(row.original.kind)}</Tag> },
+              { accessorKey: "kind", header: "Kind", cell: ({ row }) => <Tag>{kindLabel(row.original.kind)}</Tag> },
               { accessorKey: "title", header: "Issue", cell: ({ row }) => <button className="text-left text-[13px] text-ink hover:underline" onClick={() => setSelected(row.original)}>{row.original.title}</button> },
               { id: "links", header: "Context", enableSorting: false, cell: ({ row }) => <span className="flex flex-wrap gap-2 text-[12px]">
                 {row.original.drive_id && <Link className="text-accent hover:underline" href={`/drives/${row.original.drive_id}`}>drive #{row.original.drive_id}</Link>}
@@ -70,6 +70,14 @@ function Inner() {
     </>
   );
 }
+
+const KIND_LABEL: Record<string, string> = {
+  MISSING_CONSENT: "No YES/NO answer", MISSING_STUDENT_DATA: "Missing details", SCHEDULE_CONFLICT: "Schedule clash",
+  CRITERIA_MISMATCH: "Criteria differ", AMBIGUOUS_CRITERIA: "Unclear criteria", INTAKE_REVIEW: "Company email to check",
+  DATA_SUBMITTED: "Student sent details", INVALID_STUDENT_DATA: "Invalid details", APPROVAL_INVALIDATED: "List out of date",
+  VERIFICATION_FAILED: "Upload check failed", RETRIEVAL_FAILED: "Company form unreachable",
+};
+const kindLabel = (k: string) => KIND_LABEL[k] ?? titleCase(k);
 
 export default function ExceptionsPage() {
   return <Suspense fallback={<LoadingRows />}><Inner /></Suspense>;

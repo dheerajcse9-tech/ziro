@@ -347,6 +347,10 @@ def _persist(db: Session, drive: Drive, ev: RosterEvaluation, run_id: int | None
                     "action": "Ask the employer to remove this student; PlaceCrew never deletes from an employer form automatically."},
             drive_id=drive.id, student_id=o.student_id, run_id=run_id,
         )
+    from app.services.consent_forms import get_form
+
+    _form = get_form(db, drive.id)
+    form_open = _form is not None and _form.status == "OPEN"
     for o in ev.outcomes:
         db.add(EligibilityDecision(
             drive_id=drive.id, run_id=run_id, criteria_version=ev.criteria.version,
@@ -364,7 +368,10 @@ def _persist(db: Session, drive: Drive, ev: RosterEvaluation, run_id: int | None
                 drive_id=drive.id, student_id=o.student_id, run_id=run_id,
             )
         per_drive = ev.criteria.required_consent_scope == ConsentScope.DRIVE_REGISTRATION
-        if o.decision == Decision.ELIGIBLE and o.consent_ok:
+        if o.decision == Decision.ELIGIBLE and not o.consent_ok and per_drive and form_open:
+            # The consent form is still open: no answer yet is normal, not an issue (reminders handle it).
+            exceptions.auto_resolve(db, f"consent:{drive.id}:{o.student_id}", "Consent form still open")
+        elif o.decision == Decision.ELIGIBLE and o.consent_ok:
             exceptions.auto_resolve(db, f"consent:{drive.id}:{o.student_id}", "The student said YES")
         elif o.decision == Decision.ELIGIBLE and per_drive and o.consent:
             # Said NO: the student's own choice, nothing for anyone to fix.

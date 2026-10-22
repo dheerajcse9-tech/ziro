@@ -6,11 +6,11 @@ All results below were produced by actually running the commands on 2026-10-22 i
 ## Summary
 | Suite | Result | Log |
 |---|---|---|
-| Backend: unit + reliability + official scenarios + agent crew + institute seed + live HTTP (SQLite) | **110 passed, 0 failed** (incl. Test Lab TC5 company emails, TC6 student journey) | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
+| Backend: unit + reliability + official scenarios + agent crew + institute seed + live HTTP (SQLite) | **117 passed, 0 failed** (incl. Test Lab TC5/TC6, the walkthrough, Ask PlaceCrew) | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
 | Live HTTP API tests against **PostgreSQL 16** (incl. company inbox → drive → consent forms → review) | **5 passed** | [pytest-postgres-live-api.txt](evidence/pytest-postgres-live-api.txt) |
 | Migrations 0004–0005 on PostgreSQL: upgrade with data, downgrade, re-upgrade, `alembic check` | no drift | — |
 | Official scenarios via CLI on PostgreSQL + `alembic check` | **TC1 9/9, TC2 10/10, TC3 10/10, TC4 10/10**; no schema drift | [testlab-postgres.txt](evidence/testlab-postgres.txt) |
-| Browser end-to-end (Playwright, Chromium, PostgreSQL backend) | **10 passed** | [e2e-playwright.txt](evidence/e2e-playwright.txt) |
+| Browser end-to-end (Playwright, Chromium) | **13 passed** on the SQLite backend (latest run); the earlier PostgreSQL run had 10 | [e2e-playwright-sqlite.txt](evidence/e2e-playwright-sqlite.txt), [e2e-playwright.txt](evidence/e2e-playwright.txt) |
 | Frontend `tsc --noEmit` + `next build` | clean, 21 routes | — |
 
 **Not tested against live services:** Gemini, Google sign-in and the Gmail API were not reachable from the build

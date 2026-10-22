@@ -1,7 +1,7 @@
 # PlaceCrew: demo video script
 
 **Two versions:**
-- The **full walkthrough** (about 12 minutes) covers everything you listed.
+- The **full walkthrough** (about 13 minutes) covers everything you listed.
 - The form asks for a **2–3 minute** video. Scenes marked **★** make up the short cut. Record the full version once,
   then cut the ★ scenes into the short video.
 
@@ -203,6 +203,21 @@ The chain stops at the Approver: agents can't go further on their own."
 - The two Rahul Kumars: kept apart by roll number.
 - Ishaan: held for the schedule clash."
 
+## Scene 9b ★: Ask PlaceCrew, the conversational agent (about 45 s)
+**SCREEN:** As the approver, click **Ask PlaceCrew** (bottom right). Ask, one by one:
+1. *"Why isn't Farah on the Nimbus list?"*
+2. *"What if Nimbus lowered the CGPA to 6.5?"*
+3. *"Send personal forms for Nimbus"*
+
+Open **"N lookups"** under an answer.
+**SAY:** "Staff can just ask. The assistant is an agent: Gemini decides which tools to use, here looking up the student,
+then the drive. It answers with the real reason: Farah's CGPA 6.4 is below 7. The what-if shows Kabir would join at 6.5,
+and nothing was changed. When I ask it to send forms, it doesn't do it. It **proposes** the action, and I confirm.
+Agents never act on their own."
+
+**SCREEN (company email):** Open a company email → the **"Read by Gemini, checked by rules"** table.
+**SAY:** "Wherever AI works, you can see it. Here Gemini read the email, and the rules checked every field: they agree."
+
 ## Scene 10 ★: The Approver asks for missing details before approving (7:50–9:00)
 **SCREEN:** Log in as **approver@placementos.demo** → **Approvals** → open the Nimbus list → the **Approval Review
 Agent** box.
@@ -253,7 +268,7 @@ test data, "Why it passed").
 - every company-email case;
 - every student's journey.
 
-Each check explains *why* it's the right answer. There are also 114 backend tests and 12 browser tests."
+Each check explains *why* it's the right answer. There are also 117 backend tests and 13 browser tests."
 
 **SCREEN:** Login page → **Guided walkthrough** → click through a few steps.
 **SAY:** "For evaluators, the deployed link has a guided walkthrough: press 'Yes, continue', and the real agents
@@ -284,7 +299,8 @@ PlaceCrew: a crew of agents runs your placement drives, and people approve. Than
 | 1:00–1:30 | 5 + 6 | Company email → agent chain → consent email in a real inbox; Orion flagged as overlapping |
 | 1:30–1:50 | 8 | Students answer: yes, no, Ishaan yes to both, Charan silent |
 | 1:50–2:20 | 9 | One click → agent chain → "Who qualifies" with reasons |
-| 2:20–2:45 | 10 + 11 | Personal forms → Diya fills CGPA → new list → approve → company email |
+| 2:10–2:25 | 9b | Ask PlaceCrew: "Why isn't Farah…?" → real reason; action only proposed |
+| 2:25–2:45 | 10 + 11 | Personal forms → Diya fills CGPA → new list → approve → company email |
 | 2:45–3:00 | 14 + 15 | Test Lab 6/6 PASS, guided walkthrough, tech stack, close |
 
 ---

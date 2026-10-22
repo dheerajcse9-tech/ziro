@@ -93,7 +93,7 @@ export default function StudentDetailPage() {
         crumbs={[{ label: "Students", href: "/students" }, { label: s.roll_number }]}
         meta={<>
           {s.consent_granted ? <StatusBadge status="GRANTED" label="Consent granted" /> : <StatusBadge status="REVOKED" label={s.consent ? "Consent revoked" : "Consent not recorded"} />}
-          <Tag>Record v{s.record_version}</Tag>
+
         </>}
         actions={editable ? <>
           <Button onClick={openEdit} icon={<Pencil className="size-4" />}>Edit record</Button>
@@ -131,7 +131,7 @@ export default function StudentDetailPage() {
                 <tbody>{s.placement_history.map((h) => (
                   <tr key={h.drive_id}>
                     <td><Link className="font-medium hover:underline" href={`/drives/${h.drive_id}`}>{h.employer}</Link><div className="text-[11.5px] text-muted">{fmtDateTime(h.starts_at, h.timezone)}</div></td>
-                    <td>{h.decision ? <><StatusBadge status={h.decision} />{h.criteria_version && <span className="ml-1 text-[11px] text-muted">criteria v{h.criteria_version}</span>}
+                    <td>{h.decision ? <><StatusBadge status={h.decision} />
                       {h.reasons.length > 0 && <div className="mt-0.5 text-[11.5px] text-muted">{h.reasons.join("; ")}</div>}</> : <span className="text-faint">Not evaluated</span>}</td>
                     <td>{h.invitation ? <StatusBadge status={h.invitation} tone={h.invitation === "ACCEPTED" ? "ok" : h.invitation === "SENT" ? "warn" : "neutral"} label={h.invitation === "SENT" ? "Waiting" : undefined} /> : <span className="text-faint">—</span>}</td>
                     <td>{h.sent_to_employer ? <Tag tone="info">Sent</Tag> : <span className="text-faint">No</span>}</td>

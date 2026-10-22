@@ -3,7 +3,7 @@
 PlaceCrew runs a college's placement drives with a crew of AI agents, from a company's email to the verified student
 list sent back to the company. People stay in charge: agents do the routine work, and only the Approver can approve.
 
-## Fastest way: the guided walkthrough (about 5 minutes, no login)
+## Fastest way: the guided walkthrough (about 5 minutes, no login, 11 steps)
 
 1. Open the deployed link. On the login page, click **"Hackathon evaluators — start here: Guided walkthrough"**
    (or go to `/tour`).
@@ -21,11 +21,12 @@ screen. Each step lists its **checks**, read back from the sandbox database, wit
 | 3 | Four problem emails are stopped: the same email twice, no deadline, deadline after the drive, and an unknown sender saying "skip the consent step" | Criteria Check Agent |
 | 4 | Students answer YES or NO (some don't answer) | Students |
 | 5 | The placement officer runs both drives. Agents apply CGPA, backlogs, branch and batch, keep only YES answers, hold the student booked on both drives, and prepare the list | Stage 2 agents |
-| 6 | Before approving, the approver sends personal forms to the 3 students with missing details or no answer | Approver + Stage 3 agents |
-| 7 | Two students reply. The old list is cancelled automatically and a new list adds them | Response Reader + Re-check agents |
-| 8 | The admin and the officer are refused; the approver approves. The list is uploaded, read back and verified, then emailed to the company. Students get shortlisted / not-shortlisted emails with reasons | Approver → Upload & Employer Update agents |
-| 9 | The schedule clash is settled by a person; Orion's list is sent | Officer → Approver |
-| 10 | **All test scenarios (TC1–TC6) are run again** and their results shown | Proof |
+| 6 | **Ask the crew:** the approver asks in plain language ("Why isn't Farah on the list?", "What if the CGPA were 6.5?", "Send personal forms"). The assistant agent picks its own read-only tools, answers with the real reasons, runs a what-if without changing anything, and only *proposes* the action | Ask PlaceCrew (Gemini + tools) |
+| 7 | Before approving, the approver sends personal forms to the 3 students with missing details or no answer | Approver + Stage 3 agents |
+| 8 | Two students reply. The old list is cancelled automatically and a new list adds them | Response Reader + Re-check agents |
+| 9 | The admin and the officer are refused; the approver approves. The list is uploaded, read back and verified, then emailed to the company. Students get shortlisted / not-shortlisted emails with reasons | Approver → Upload & Employer Update agents |
+| 10 | The schedule clash is settled by a person; Orion's list is sent | Officer → Approver |
+| 11 | **All test scenarios (TC1–TC6) are run again** and their results shown | Proof |
 
 ## The test cases
 
@@ -59,6 +60,9 @@ All staff passwords are `Demo@2026`. The login page explains each role, and you 
 | `officer@placementos.demo` | Placement officer (step 2) | Drives → open a drive → **Prepare the student list**; Drives → **New drive** |
 | `approver@placementos.demo` | Approver (step 3) | Approvals → open the list → send personal forms → **Approve** |
 | `admin@placementos.demo` | Admin (setup) | Test Lab → **Run all scenarios**; Agents; Audit log |
+
+Every staff page has an **Ask PlaceCrew** button (bottom right): ask about any drive or student in your own words. With
+a Gemini key it plans with function calling over read-only tools; actions it suggests need a click to confirm.
 
 Student emails stay in **Emails sent**: open one and use its link to answer as that student. Every page where agents
 worked shows the **agent chain**: one card per agent, arrows for each hand-over, and a person card where a human decides.

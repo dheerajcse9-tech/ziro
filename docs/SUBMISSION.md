@@ -56,6 +56,12 @@ Eligibility Re-check Agent re-proposes when a student now qualifies → the APPR
 Upload & Verification Agent uploads the exact approved list and reads it back ID by ID → Employer Update Agent emails
 the company the verified list and tells each student the result. Background agents: Deadline Agent and Reminder Agent.
 
+Ask PlaceCrew – a conversational agent for staff: Gemini plans with function calling over read-only tools on live data
+(drive status, a student's result and reasons, who needs attention, what-if simulations) and answers in plain language.
+It can only PROPOSE actions (prepare a list, send personal forms, check the mailbox); a person confirms each one.
+The AI is visible everywhere it works: each company email shows Gemini's reading next to the rules' reading, field by
+field, and the approver gets a Gemini-written summary of the review.
+
 Design: durable agent graph (each step persisted; it stops for NEEDS_REVIEW / AWAITING_APPROVAL); per-agent tool
 allow-lists; approvals bound to a hash of the exact list, criteria and schedule; idempotent uploads with read-back
 verification; hash-chained audit log; email text is treated as data, never as instructions; AI falls back to rules,
@@ -82,6 +88,8 @@ TC6 Student journey (16 test students) – YES, NO, no answer, missing CGPA, mis
     wrong branch, backlogs, wrong batch, duplicate names, YES to two overlapping drives; forms sent before approval;
     late qualifiers re-proposed; admin cannot approve; verified list emailed to the company. 25/25.
 
-Automated: 114 backend tests (pytest) and 12 browser end-to-end tests (Playwright), all passing.
+Ask PlaceCrew – the conversational agent answers from live data with the real reasons, runs what-ifs without changing
+    anything, and only proposes actions (tested with a Gemini fake and with the rule fallback).
+Automated: 117 backend tests (pytest) and 13 browser end-to-end tests (Playwright), all passing.
 Evidence: docs/TEST_EVIDENCE.md, docs/TEST_SCENARIOS.md, docs/EVALUATOR_GUIDE.md.
 ```
