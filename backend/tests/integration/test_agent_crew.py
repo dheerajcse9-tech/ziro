@@ -340,15 +340,21 @@ def test_google_sign_in_reads_company_mail_and_sends_from_the_officer_mailbox(sb
     assert 'subject:"Campus Drive"' in google.last_query and "-from:me" in google.last_query
     assert intake.fetch_mailbox(sb.db, None)["new"] == 0  # read-only and idempotent
 
+    # Two students have real addresses; the others keep reserved demo addresses, which are never sent.
+    students[0].email, students[1].email = "asha.real@gmail.com", "bala.real@college.ac.in"
+    sb.db.commit()
     processed = autopilot.process_new_emails(sb.db, crew_people["coordinator"])
     assert processed[0]["status"] == RunStatus.COMPLETED
     sent = [email.message_from_bytes(b, policy=email.policy.default) for b in google.sent]
-    assert len(sent) == len(students) and all("driveuploadtesting@gmail.com" in m["From"] for m in sent)
-    assert all(m.status == "SENT" and m.transport == "GMAIL_API" for m in emails(sb, "DRIVE_INVITATION"))
+    assert sorted(m["To"].addresses[0].addr_spec for m in sent) == ["asha.real@gmail.com", "bala.real@college.ac.in"]
+    assert all("driveuploadtesting@gmail.com" in m["From"] for m in sent)
+    by_status = {(m.to_address, m.status, m.transport) for m in emails(sb, "DRIVE_INVITATION")}
+    assert ("asha.real@gmail.com", "SENT", "GMAIL_API") in by_status
+    assert ("a003@sandbox.test", "DELIVERED_LOCAL", "LOCAL_MAILBOX") in by_status
 
     google.fail_refresh = True
     gmail._access_cache.clear()
-    msg = outreach.request_missing_data(sb.db, students[3], ["cgpa"], None)
+    msg = outreach.request_missing_data(sb.db, students[0], ["cgpa"], None)
     assert sb.db.get(EmailMessage, sb.db.scalar(select(EmailMessage.id).where(EmailMessage.request_id == msg.id))).status == "FAILED"
     assert sb.db.scalar(select(OAuthCredential)).status == "ERROR"
 

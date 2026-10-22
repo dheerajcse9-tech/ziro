@@ -41,7 +41,7 @@ export default function CommunicationsPage() {
   const [openId, setOpenId] = useState<number | null>(null);
   const q = useQuery({
     queryKey: ["emails", category, status, page],
-    queryFn: () => api.get<Paged<EmailItem> & { transport: string; sender: string | null }>(`/api/emails${qs({ category, status, page, page_size: 50 })}`),
+    queryFn: () => api.get<Paged<EmailItem> & { transport: string; sender: string | null }>(`/api/emails${qs({ category, status, page, page_size: 25 })}`),
     placeholderData: keepPreviousData, refetchInterval: 10_000,
   });
   const detail = useQuery({ queryKey: ["email", openId], queryFn: () => api.get<EmailItem>(`/api/emails/${openId}`), enabled: openId !== null });
@@ -60,12 +60,13 @@ export default function CommunicationsPage() {
 
   return (
     <>
-      <PageHeader title="Communications" description="Every email PlacementOS sends: drive invitations, missing-data requests, registration confirmations, rosters to employers and selection results. Duplicates are prevented automatically." />
+      <PageHeader title="Emails sent" description="Every email sent to students and companies. The same email is never sent twice." />
       {q.data && (
         <div className="mb-4">
           {q.data.transport === "LOCAL_MAILBOX"
-            ? <Banner tone="info" title="Local mailbox mode — emails are not leaving this server">No SMTP server is configured, so messages are stored here instead of being delivered. Open an invitation or data request below and click its link to act as the student. Set SMTP_* in backend/.env to deliver real email.</Banner>
-            : <Banner tone="ok" title={q.data.transport === "GMAIL_API" ? `Emails are sent from ${q.data.sender} through Gmail` : "Emails are delivered through the configured SMTP server"} />}
+            ? <Banner tone="info" title="Gmail is not connected — emails stay in this app">Connect the placement Gmail in Settings to send real email. You can open any email below and click its link to act as the student.</Banner>
+            : <Banner tone="ok" title={q.data.transport === "GMAIL_API" ? `Real emails are sent from ${q.data.sender}` : "Real emails are sent through the configured SMTP server"}>
+                Students with demo addresses (…@students.example.edu) are not emailed: their messages stay here as “In app”.</Banner>}
         </div>
       )}
       <Card>
@@ -75,7 +76,7 @@ export default function CommunicationsPage() {
             <option value="">All types</option>{CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? titleCase(c)}</option>)}
           </Select>
           <Select aria-label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-            <option value="">Any status</option><option value="DELIVERED_LOCAL">In local mailbox</option><option value="SENT">Sent (Gmail / SMTP)</option>
+            <option value="">Any status</option><option value="SENT">Really sent</option><option value="DELIVERED_LOCAL">In app only (demo address)</option>
             <option value="FAILED">Failed</option><option value="SKIPPED">Skipped (no address)</option>
           </Select>
         </>} />
@@ -86,10 +87,7 @@ export default function CommunicationsPage() {
                 { accessorKey: "category", header: "Type", cell: ({ row }) => <Tag tone={row.original.category === "SELECTED" || row.original.category === "PROFILE_SUBMITTED" ? "ok" : row.original.category === "NOT_SELECTED" || row.original.category === "NOT_SHORTLISTED" ? "neutral" : row.original.category === "EMPLOYER_ROSTER" ? "accent" : row.original.category === "REMINDER" ? "warn" : "info"}>{CATEGORY_LABEL[row.original.category] ?? titleCase(row.original.category)}</Tag> },
                 { accessorKey: "to_name", header: "To", cell: ({ row }) => <span><span className="font-medium">{row.original.to_name ?? "—"}</span><br /><span className="font-mono text-[11.5px] text-muted">{row.original.to_address ?? "no address"}</span></span> },
                 { accessorKey: "subject", header: "Subject", cell: ({ row }) => <button className="text-left hover:underline" onClick={() => setOpenId(row.original.id)}>{row.original.subject}</button> },
-                { id: "ctx", header: "Context", cell: ({ row }) => <span className="flex flex-col text-[12px]">
-                  {row.original.drive_id && <Link className="text-accent hover:underline" href={`/drives/${row.original.drive_id}`}>drive #{row.original.drive_id}</Link>}
-                  {row.original.student_id && <Link className="text-accent hover:underline" href={`/students/${row.original.student_id}`}>student</Link>}</span> },
-                { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge status={row.original.status} tone={row.original.status === "FAILED" ? "bad" : row.original.status === "SKIPPED" ? "warn" : "ok"} label={row.original.status === "DELIVERED_LOCAL" ? "Local mailbox" : row.original.status === "SENT" && row.original.transport === "GMAIL_API" ? "Sent (Gmail)" : titleCase(row.original.status)} /> },
+                { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge status={row.original.status} tone={row.original.status === "FAILED" ? "bad" : row.original.status === "SKIPPED" ? "warn" : "ok"} label={row.original.status === "DELIVERED_LOCAL" ? "In app" : row.original.status === "SENT" && row.original.transport === "GMAIL_API" ? "Sent (Gmail)" : titleCase(row.original.status)} /> },
                 { accessorKey: "created_at", header: "When", cell: ({ row }) => <span className="whitespace-nowrap text-[12px] text-muted">{relTime(row.original.created_at)}</span> },
                 { id: "open", header: "", cell: ({ row }) => <Button size="sm" onClick={() => setOpenId(row.original.id)}>Open</Button> },
               ]} />

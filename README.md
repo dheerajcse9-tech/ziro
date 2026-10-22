@@ -54,7 +54,8 @@ Requirements: Python 3.12+, Node 22+.
 cd backend
 pip install -r requirements-dev.txt
 alembic upgrade head
-python -m app.cli seed                 # synthetic demo data (34 students, 4 drives, 5 users)
+python -m app.cli seed                 # institute data: 120 students, 4 staff logins, no drives
+                                       # (SEED_PROFILE=demo for the synthetic dataset with sample drives)
 uvicorn app.main:app --port 8000       # API + LOCAL MOCK portal at /mock-portal
 
 # Frontend (separate terminal)
@@ -63,15 +64,19 @@ npm ci
 npm run build && npm start             # http://localhost:3000  (proxies /api to :8000)
 ```
 
-Sign in with a demo account (password `Demo@2026`, demo mode only):
+Sign in (password `Demo@2026`):
 
-| Account | Role | Can |
+| Login | Role | Does |
 |---|---|---|
-| `drives@placementos.demo` | Drive upload officer | company inbox, connect Gmail, create drives, send consent forms |
-| `officer@placementos.demo` | Placement officer | run the agent, import/edit data, resolve exceptions |
-| `approver@placementos.demo` | Head of Placements | approve / reject roster proposals, send personal forms to students |
-| `admin@placementos.demo` | Admin | everything, settings, fault injection, demo reset |
-| `viewer@placementos.demo` | Viewer | read only |
+| `driveuploadtesting@gmail.com` | Drive upload officer | company emails, connect Gmail, drives, consent forms |
+| `officer@placementos.demo` | Placement officer | filter students, run drives, resolve issues |
+| `approver@placementos.demo` | Head of Placements | review and approve lists, send personal forms to students |
+| `admin@placementos.demo` | Admin | everything, settings, demo reset |
+
+Students: [`backend/app/data/institute_students.csv`](backend/app/data/institute_students.csv) (120 students, 7 branches,
+batch 2026, a few with missing data). They have demo addresses (`…@students.example.edu`) that are **never emailed**;
+those messages stay in the app. Give 2–3 students real addresses with `REAL_STUDENT_EMAILS` in `backend/.env`. All
+real email goes out from the connected Gmail (`driveuploadtesting@gmail.com`).
 
 Full stack with PostgreSQL: `docker compose up --build` (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); the compose file
 was not executed in the build environment, which has no Docker daemon).

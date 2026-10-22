@@ -66,7 +66,7 @@ export default function AgentsPage() {
   const d = q.data;
   return (
     <>
-      <PageHeader title="Agent Crew"
+      <PageHeader title="Agents"
         description="Each agent does one job, can use only its own tools, and works for one person. Agents never approve anything: a person approves every roster before it reaches a company."
         actions={can(me.data, "manageDrives") || can(me.data, "approve") ? <Button variant="primary" icon={<Play className="size-4" />} loading={tick.isPending} onClick={() => tick.mutate()}>Run background agents now</Button> : undefined} />
       {q.isError ? <ErrorState error={q.error} /> : !d ? <LoadingRows /> : (

@@ -1,15 +1,15 @@
 
 Running 10 tests using 1 worker
 
-  ✓   1 e2e/workflow.spec.ts:28:7 › PlacementOS end-to-end › officer delegates roster preparation to the agent (2.8s)
-  ✓   2 e2e/workflow.spec.ts:44:7 › PlacementOS end-to-end › approver approves exact proposal; upload is verified by read-back (3.5s)
-  ✓   3 e2e/workflow.spec.ts:60:7 › PlacementOS end-to-end › late student with missing CGPA is sent later as a supplement (5.1s)
+  ✓   1 e2e/workflow.spec.ts:28:7 › PlacementOS end-to-end › officer delegates roster preparation to the agent (3.1s)
+  ✓   2 e2e/workflow.spec.ts:44:7 › PlacementOS end-to-end › approver approves exact proposal; upload is verified by read-back (4.0s)
+  ✓   3 e2e/workflow.spec.ts:60:7 › PlacementOS end-to-end › late student with missing CGPA is sent later as a supplement (5.3s)
   ✓   4 e2e/workflow.spec.ts:86:7 › PlacementOS end-to-end › clash on overlapping drive is flagged before approval (3.1s)
-  ✓   5 e2e/workflow.spec.ts:105:7 › PlacementOS end-to-end › criteria mismatch stops the agent for an officer decision (2.0s)
-  ✓   6 e2e/workflow.spec.ts:115:7 › PlacementOS end-to-end › records pages render real data (4.2s)
-  ✓   7 e2e/workflow.spec.ts:138:7 › PlacementOS end-to-end › test lab runs official scenarios against real code (4.6s)
-  ✓   8 e2e/workflow.spec.ts:147:7 › PlacementOS end-to-end › outreach: invitation accepted via emailed link, missing data supplied and verified, result recorded (6.3s)
-  ✓   9 e2e/workflow.spec.ts:202:7 › PlacementOS end-to-end › three stages: company email -> consent forms -> roster -> approver follow-up form -> re-proposal (9.3s)
-  ✓  10 e2e/workflow.spec.ts:259:7 › PlacementOS end-to-end › viewer cannot act (1.5s)
+  ✓   5 e2e/workflow.spec.ts:105:7 › PlacementOS end-to-end › criteria mismatch stops the agent for an officer decision (2.5s)
+  ✓   6 e2e/workflow.spec.ts:115:7 › PlacementOS end-to-end › records pages render real data (3.8s)
+  ✓   7 e2e/workflow.spec.ts:138:7 › PlacementOS end-to-end › test lab runs official scenarios against real code (4.2s)
+  ✓   8 e2e/workflow.spec.ts:147:7 › PlacementOS end-to-end › outreach: invitation accepted via emailed link, missing data supplied and verified, result recorded (5.8s)
+  ✓   9 e2e/workflow.spec.ts:202:7 › PlacementOS end-to-end › three stages: company email -> consent forms -> roster -> approver follow-up form -> re-proposal (9.2s)
+  ✓  10 e2e/workflow.spec.ts:259:7 › PlacementOS end-to-end › viewer cannot act (1.3s)
 
-  10 passed (44.5s)
+  10 passed (44.8s)

@@ -130,6 +130,75 @@ def reset_database(db: Session) -> None:
 
 
 def seed(db: Session) -> dict:
+    """Load the configured starting data (SEED_PROFILE): the institute roster, or the synthetic demo set."""
+    if get_settings().seed_profile == "demo":
+        return seed_demo(db)
+    return seed_institute(db)
+
+
+INSTITUTE_USERS = [
+    ("admin@placementos.demo", "Placement Admin", Role.ADMIN),
+    ("driveuploadtesting@gmail.com", "Drive Upload Officer", Role.COORDINATOR),
+    ("officer@placementos.demo", "Placement Officer", Role.OFFICER),
+    ("approver@placementos.demo", "Head of Placements (Approver)", Role.APPROVER),
+]
+STUDENTS_CSV = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "institute_students.csv")
+
+
+def _real_emails() -> dict[str, str]:
+    out = {}
+    for pair in get_settings().real_student_emails.split(","):
+        if ":" in pair:
+            roll, addr = pair.split(":", 1)
+            if "@" in addr:
+                out[roll.strip().upper()] = addr.strip()
+    return out
+
+
+def seed_institute(db: Session) -> dict:
+    """Staff logins, the institute's student list (app/data/institute_students.csv) and the company senders.
+    No drives: drives are created by the agents from company emails. Students give consent per drive."""
+    import csv
+
+    from app.domain.normalize import normalize_branch, parse_backlogs, parse_cgpa, parse_year
+    from app.services import app_settings
+
+    settings = get_settings()
+    if db.scalar(select(User).limit(1)):
+        return {"seeded": False, "reason": "database already has users"}
+    pw = os.getenv("DEMO_PASSWORD", DEMO_PASSWORD)
+    for email, name, role in INSTITUTE_USERS:
+        db.add(User(email=email, name=name, role=role, password_hash=hash_password(pw)))
+    real = _real_emails()
+    count = 0
+    with open(STUDENTS_CSV, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            cgpa, backlogs, year = parse_cgpa(row["cgpa"]), parse_backlogs(row["active_backlogs"]), parse_year(row["graduation_year"])
+            branch = normalize_branch(row["branch"])
+            issues = []
+            if cgpa.value is None:
+                issues.append({"field": "cgpa", "code": "MISSING", "message": "CGPA is missing", "severity": "WARNING"})
+            if backlogs.value is None:
+                issues.append({"field": "active_backlogs", "code": "MISSING", "message": "Backlog count is missing", "severity": "WARNING"})
+            if branch is None:
+                issues.append({"field": "branch", "code": "UNRECOGNISED", "message": f"Branch '{row['branch']}' is not recognised", "severity": "WARNING"})
+            roll = row["roll_number"].strip().upper()
+            db.add(Student(roll_number=roll, full_name=row["full_name"].strip(), email=real.get(roll, row["email"].strip()),
+                           phone=row.get("phone") or None, branch=branch, branch_raw=row["branch"], cgpa=cgpa.value,
+                           active_backlogs=backlogs.value, graduation_year=year.value, data_issues=issues))
+            count += 1
+    senders = sorted({x.strip().lower() for x in settings.company_senders.split(",") if "@" in x})
+    app_settings.set_value(db, "trusted_company_senders", senders)
+    app_settings.set_value(db, "institution_name", settings.institution_name)
+    db.flush()
+    ledger.record(db, actor_type=ActorType.SYSTEM, actor_id="system:seed", action="INSTITUTE_DATA_LOADED",
+                  details={"students": count, "real_email_students": sorted(real), "company_senders": senders})
+    db.commit()
+    return {"seeded": True, "profile": "institute", "students": count, "drives": 0,
+            "users": [u[0] for u in INSTITUTE_USERS], "real_email_students": sorted(real)}
+
+
+def seed_demo(db: Session) -> dict:
     settings = get_settings()
     tz = settings.default_timezone
     if db.scalar(select(User).limit(1)):

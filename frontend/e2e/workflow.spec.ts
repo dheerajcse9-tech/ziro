@@ -11,7 +11,7 @@ async function login(page: Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("Demo@2026");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Hello/ })).toBeVisible();
 }
 
 test.describe.serial("PlacementOS end-to-end", () => {
@@ -28,14 +28,14 @@ test.describe.serial("PlacementOS end-to-end", () => {
   test("officer delegates roster preparation to the agent", async ({ page }) => {
     await login(page, "officer@placementos.demo");
     await shot(page, "01-overview");
-    await page.getByRole("link", { name: "Agent Control Room" }).click();
+    await page.getByRole("link", { name: "Run a drive" }).click();
     await page.getByLabel("Objective").fill("Prepare the eligible roster for the upcoming drive, identify unresolved records, and show me the proposal for approval.");
     await page.getByRole("button", { name: "Run agent" }).click();
     await expect(page.getByText("Waiting for human approval").first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("create_approval_request").first()).toBeVisible();
     await shot(page, "02-agent-run-awaiting-approval");
-    // Officers cannot approve: the Approval Center shows the approver-only notice.
-    await page.getByRole("link", { name: "Open in Approval Center" }).click();
+    // Officers cannot approve: the approval page shows the approver-only notice.
+    await page.getByRole("link", { name: "Open approval" }).click();
     await expect(page.getByText("Approver action required").first()).toBeVisible();
     approvalUrl = page.url();
     await shot(page, "03-approval-officer-view");
@@ -69,7 +69,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await page.getByLabel("Objective").fill("Prepare the eligible roster for the Northwind drive");
     await page.getByRole("button", { name: "Run agent" }).click();
     await expect(page.getByText("Waiting for human approval").first()).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("link", { name: "Open in Approval Center" }).click();
+    await page.getByRole("link", { name: "Open approval" }).click();
     await page.waitForURL(/\/approvals\/\d+$/);
     supplementUrl = page.url();
     await login(page, "approver@placementos.demo");
@@ -119,10 +119,10 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await expect(page.getByRole("cell", { name: "21ME001" })).toBeVisible();
     await shot(page, "09-students-rahul");
     await page.goto("/drives/1");
-    await page.getByRole("tab", { name: /Eligibility/ }).click();
-    await expect(page.getByText("Eligibility — live evaluation").first()).toBeVisible();
+    await page.getByRole("tab", { name: "Who qualifies" }).click();
+    await expect(page.getByText(/Criteria v\d+ applied to/).first()).toBeVisible();
     await shot(page, "10-drive-eligibility");
-    await page.getByRole("tab", { name: "What-if simulator" }).click();
+    await page.getByRole("tab", { name: "Criteria" }).click();
     await page.getByLabel("Minimum CGPA").fill("6.5");
     await page.getByRole("button", { name: "Simulate" }).click();
     await expect(page.getByText("Simulation only").first()).toBeVisible();
@@ -239,7 +239,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await page.getByRole("button", { name: "Run agent" }).click();
     await expect(page.getByText("Waiting for human approval").first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("Consent Agent").first()).toBeVisible();
-    await page.getByRole("link", { name: "Open in Approval Center" }).click();
+    await page.getByRole("link", { name: "Open approval" }).click();
     await page.waitForURL(/\/approvals\/\d+$/);
     const approval = page.url();
 

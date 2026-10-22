@@ -28,8 +28,6 @@ const columns: ColumnDef<Student>[] = [
     cell: ({ row }) => row.original.cgpa === null ? <Tag tone="warn">Missing</Tag> : <span className="tabular">{row.original.cgpa.toFixed(2)}</span> },
   { accessorKey: "active_backlogs", header: "Backlogs", enableSorting: false,
     cell: ({ row }) => row.original.active_backlogs === null ? <Tag tone="warn">Missing</Tag> : <span className="tabular">{row.original.active_backlogs}</span> },
-  { id: "consent", header: "Employer-sharing consent", enableSorting: false,
-    cell: ({ row }) => row.original.consent ? <StatusBadge status={row.original.consent.status} /> : <StatusBadge status="NONE" tone="warn" label="Not recorded" /> },
   { id: "selected", header: "Selected at", enableSorting: false,
     cell: ({ row }) => (row.original as Student & { selected_at?: string[] }).selected_at?.length
       ? <span className="flex flex-wrap gap-1">{(row.original as Student & { selected_at: string[] }).selected_at.map((e) => <Tag key={e} tone="ok">{e}</Tag>)}</span>
@@ -89,8 +87,8 @@ function StudentsInner() {
 
   return (
     <>
-      <PageHeader title="Student Registry"
-        description="Synthetic roster. Students are identified by roll number — never by name. Consent is append-only and checked again before any upload."
+      <PageHeader title="Students"
+        description="All students of the institute. Use the filters to find students by marks, branch or their answer for a drive."
         actions={can(me.data, "editData") ? <ButtonLink href="/students/import" variant="primary" icon={<Upload className="size-4" />}>Import roster</ButtonLink> : undefined} />
       <Card>
         <div className="flex flex-wrap items-end gap-2 border-b border-line p-3">
@@ -102,11 +100,6 @@ function StudentsInner() {
             <option value="">All branches</option>
             {data?.branches.map((b) => <option key={b.code} value={b.code}>{b.code} — {b.label}</option>)}
             <option value="UNKNOWN">Missing / unrecognised</option>
-          </Select>
-          <Select aria-label="Consent" value={consent} onChange={(e) => setParam({ consent: e.target.value })}>
-            <option value="">Any consent</option>
-            <option value="granted">Consent granted</option>
-            <option value="missing">Consent missing / revoked</option>
           </Select>
           <Select aria-label="Data quality" value={issues} onChange={(e) => setParam({ issues: e.target.value })}>
             <option value="">All records</option>

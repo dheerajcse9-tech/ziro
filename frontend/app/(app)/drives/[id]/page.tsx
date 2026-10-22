@@ -31,16 +31,26 @@ function ruleCell(o: StudentOutcome, rule: string) {
   return <span className={cn("tabular", cls)} title={r.reason}>{r.observed ?? "missing"}</span>;
 }
 
+// One plain result per student instead of separate decision / roster columns.
+function resultOf(o: StudentOutcome): { label: string; tone: "ok" | "info" | "warn" | "neutral" | "hold"; rank: number } {
+  if (o.roster_status === "INCLUDED") return { label: "On the list", tone: "ok", rank: 0 };
+  if (o.roster_status === "HELD") return { label: "Held: schedule clash", tone: "hold", rank: 1 };
+  if (o.decision === "ELIGIBLE") return { label: "Qualifies, no YES yet", tone: "info", rank: 2 };
+  if (o.decision === "UNKNOWN") return { label: "Missing details", tone: "warn", rank: 3 };
+  return { label: "Does not qualify", tone: "neutral", rank: 4 };
+}
+
 const eligibilityColumns: ColumnDef<StudentOutcome>[] = [
   { accessorKey: "roll_number", header: "Roll", cell: ({ row }) => <Link href={`/students/${row.original.student_id}`} className="font-mono text-[12px] text-accent hover:underline">{row.original.roll_number}</Link> },
   { accessorKey: "full_name", header: "Name" },
   { id: "cgpa", header: "CGPA", accessorFn: (o) => o.cgpa ?? -1, cell: ({ row }) => ruleCell(row.original, "CGPA") },
   { id: "backlogs", header: "Backlogs", accessorFn: (o) => o.active_backlogs ?? -1, cell: ({ row }) => ruleCell(row.original, "BACKLOGS") },
   { id: "branch", header: "Branch", accessorFn: (o) => o.branch ?? "", cell: ({ row }) => ruleCell(row.original, "BRANCH") },
-  { id: "consent", header: "Consent", accessorFn: (o) => o.consent_ok, cell: ({ row }) => row.original.consent_ok ? <span className="text-ok">Granted</span> : <span className="font-medium text-bad">No</span> },
-  { accessorKey: "decision", header: "Decision", cell: ({ row }) => <StatusBadge status={row.original.decision} /> },
-  { accessorKey: "roster_status", header: "Roster", cell: ({ row }) => <span className="flex flex-wrap items-center gap-1"><StatusBadge status={row.original.roster_status} />{row.original.already_submitted && <Tag tone="info">Sent</Tag>}</span> },
-  { id: "reasons", header: "Reasons", enableSorting: false, cell: ({ row }) => <span className="text-[12px] text-muted">{row.original.reasons.join("; ") || "—"}</span> },
+  { id: "result", header: "Result", accessorFn: (o) => resultOf(o).rank, cell: ({ row }) => {
+    const r = resultOf(row.original);
+    return <span className="flex flex-wrap items-center gap-1"><StatusBadge status={r.label} label={r.label} tone={r.tone} />{row.original.already_submitted && <Tag tone="info">Sent</Tag>}</span>;
+  } },
+  { id: "reasons", header: "Why", enableSorting: false, cell: ({ row }) => <span className="text-[12px] text-muted">{row.original.reasons.join("; ") || "Meets every rule and said YES"}</span> },
 ];
 
 export default function DriveWorkspace() {
@@ -83,7 +93,8 @@ export default function DriveWorkspace() {
     onSuccess: (r) => { toast.success(`Missing-data requests emailed to ${r.requested.length} student(s)`, { description: "Their answers appear in the Exception Inbox for you to verify." }); qc.invalidateQueries(); },
     onError: toastError,
   });
-  const filteredStudents = useMemo(() => (elig.data?.students ?? []).filter((s) => rosterFilter === "ALL" || s.roster_status === rosterFilter || s.decision === rosterFilter), [elig.data, rosterFilter]);
+  const filteredStudents = useMemo(() => (elig.data?.students ?? []).filter((s) => rosterFilter === "ALL" || resultOf(s).label === rosterFilter)
+    .sort((a, b) => resultOf(a).rank - resultOf(b).rank), [elig.data, rosterFilter]);
 
   if (drive.isError) return <ErrorState error={drive.error} onRetry={() => drive.refetch()} />;
   if (!drive.data) return <LoadingRows />;
@@ -108,49 +119,29 @@ export default function DriveWorkspace() {
 
   return (
     <>
-      <PageHeader title={d.title} crumbs={[{ label: "Employer Drives", href: "/drives" }, { label: d.employer.name }]}
+      <PageHeader title={d.title} crumbs={[{ label: "Drives", href: "/drives" }, { label: d.employer.name }]}
         description={<>{fmtSlot(d.starts_at, d.ends_at, d.timezone)}{d.location ? ` · ${d.location}` : ""}</>}
-        meta={<><StatusBadge status={d.status} />{c && <Tag tone="accent">Criteria v{c.version}</Tag>}<Tag>Schedule v{d.schedule_version}</Tag>{d.destination?.is_local_mock && <MockBadge />}</>}
+        meta={<StatusBadge status={d.status} />}
         actions={<>
           {editable && <Button onClick={openSchedule} icon={<CalendarClock className="size-4" />}>Edit schedule / status</Button>}
           {can(me.data, "runAgent") && <Button variant="primary" icon={<Bot className="size-4" />}
-            onClick={() => router.push(`/agent?objective=${encodeURIComponent(`Prepare the eligible roster for drive #${d.id} (${d.title}), identify unresolved records, and show me the proposal for approval.`)}`)}>Prepare roster with agent</Button>}
+            onClick={() => router.push(`/agent?objective=${encodeURIComponent(`Prepare the eligible roster for drive #${d.id} (${d.title}), identify unresolved records, and show me the proposal for approval.`)}`)}>Run this drive</Button>}
         </>} />
 
       <Tabs value={tab} onValueChange={setTab} tabs={[
-        { value: "overview", label: "Overview" }, { value: "eligibility", label: "Eligibility", count: counts?.total },
-        { value: "conflicts", label: "Conflicts" }, { value: "invitations", label: "Consent form" }, { value: "results", label: "Results" },
-        { value: "criteria", label: "Criteria versions" }, { value: "whatif", label: "What-if simulator" },
+        { value: "overview", label: "Overview" }, { value: "invitations", label: "Consent form" },
+        { value: "eligibility", label: "Who qualifies" }, { value: "conflicts", label: "Clashes" },
+        { value: "results", label: "Results" }, { value: "criteria", label: "Criteria" },
       ]}>
         <TabPanel value="overview">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="Would be included now" value={counts?.included ?? "—"} tone="ok" hint={counts?.already_submitted ? `${counts.already_submitted} already sent · ${counts.new_to_upload} new to send` : "Live evaluation, not persisted"} />
-            <KpiCard label="Held (schedule clash)" value={counts?.held ?? "—"} tone={counts?.held ? "warn" : "neutral"} />
-            <KpiCard label="Excluded" value={counts?.excluded ?? "—"} hint={counts ? `${counts.consent_missing} eligible but no consent` : undefined} />
-            <KpiCard label="Unknown (missing data)" value={counts?.unknown ?? "—"} tone={counts?.unknown ? "warn" : "neutral"} />
+            <KpiCard label="On the list" value={counts?.included ?? "—"} tone="ok" hint={counts?.already_submitted ? `${counts.already_submitted} already sent to the company` : "Qualify and said YES"} />
+            <KpiCard label="Qualify, no YES yet" value={counts?.consent_missing ?? "—"} tone={counts?.consent_missing ? "accent" : "neutral"} />
+            <KpiCard label="Missing details" value={counts?.unknown ?? "—"} tone={counts?.unknown ? "warn" : "neutral"} />
+            <KpiCard label="Do not qualify" value={counts?.ineligible ?? "—"} hint={counts?.held ? `${counts.held} held for a schedule clash` : undefined} />
           </div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader title="Configuration" />
-              <div className="p-4">
-                <DefinitionList items={[
-                  { label: "Employer", value: d.employer.name },
-                  { label: "Role", value: d.role_title ?? "—" },
-                  { label: "Starts (UTC)", value: <span className="font-mono text-[12px]">{d.starts_at.replace("+00:00", "Z")}</span> },
-                  { label: "Timezone", value: d.timezone },
-                  { label: "Criteria", value: c ? `CGPA ≥ ${c.min_cgpa ?? "—"} · ${c.backlog_policy.replace(/_/g, " ").toLowerCase()}${c.max_active_backlogs ? ` (${c.max_active_backlogs})` : ""} · ${c.allowed_branches.join(", ") || "all branches"}` : <Tag tone="bad">Not configured</Tag> },
-                  { label: "Consent required", value: c?.required_consent_scope === "DRIVE_REGISTRATION" ? "YES on this drive's consent form" : c?.required_consent_scope.replace(/_/g, " ").toLowerCase() ?? "—" },
-                  { label: "Students register by", value: d.registration_deadline_local ? d.registration_deadline_local.replace("T", " ") : "—" },
-                  { label: "Company wants the list by", value: d.roster_due_at_local ? d.roster_due_at_local.replace("T", " ") : "—" },
-                  ...(d.source_email ? [{ label: "Created from", value: <Link className="text-accent hover:underline" href="/inbox">{d.source_email.from_address}: {d.source_email.subject}</Link> }] : []),
-                  { label: "Destination", value: d.destination ? <span className="flex flex-wrap items-center gap-1.5">{d.destination.name}
-                    <a className="inline-flex items-center gap-0.5 text-accent hover:underline" target="_blank" rel="noreferrer" href={`/mock-portal/forms/${d.destination.form_ref}`}>open form <ExternalLink className="size-3" /></a></span> : <Tag tone="bad">None</Tag> },
-                  { label: "Live proposal hash", value: <HashValue value={elig.data?.live_proposal_hash} /> },
-                ]} />
-              </div>
-            </Card>
             {d.consent_form && (
-              <Card className="lg:col-span-2">
+              <Card className="mt-4">
                 <CardHeader title={d.consent_form.title}
                   description={`${d.consent_form.audience === "ALL_STUDENTS" ? "Sent to every student" : "Sent to eligible students"} · ${d.consent_form.status === "OPEN" ? "closes" : "closed"} ${d.consent_form.closes_at_local.replace("T", " ")} · prepared by the Consent Form Agent`}
                   actions={<StatusBadge status={d.consent_form.status} />} />
@@ -163,6 +154,23 @@ export default function DriveWorkspace() {
                 </div>
               </Card>
             )}
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader title="Drive details" />
+              <div className="p-4">
+                <DefinitionList items={[
+                  { label: "Employer", value: d.employer.name },
+                  { label: "Role", value: d.role_title ?? "—" },
+                  { label: "Criteria", value: c ? `CGPA ≥ ${c.min_cgpa ?? "—"} · ${c.backlog_policy.replace(/_/g, " ").toLowerCase()}${c.max_active_backlogs ? ` (${c.max_active_backlogs})` : ""} · ${c.allowed_branches.join(", ") || "all branches"}` : <Tag tone="bad">Not configured</Tag> },
+                  { label: "Consent required", value: c?.required_consent_scope === "DRIVE_REGISTRATION" ? "YES on this drive's consent form" : c?.required_consent_scope.replace(/_/g, " ").toLowerCase() ?? "—" },
+                  { label: "Students register by", value: d.registration_deadline_local ? d.registration_deadline_local.replace("T", " ") : "—" },
+                  { label: "Company wants the list by", value: d.roster_due_at_local ? d.roster_due_at_local.replace("T", " ") : "—" },
+                  ...(d.source_email ? [{ label: "Created from", value: <Link className="text-accent hover:underline" href="/inbox">{d.source_email.from_address}: {d.source_email.subject}</Link> }] : []),
+                  { label: "Destination", value: d.destination ? <span className="flex flex-wrap items-center gap-1.5">{d.destination.name}
+                    <a className="inline-flex items-center gap-0.5 text-accent hover:underline" target="_blank" rel="noreferrer" href={`/mock-portal/forms/${d.destination.form_ref}`}>open form <ExternalLink className="size-3" /></a></span> : <Tag tone="bad">None</Tag> },
+                ]} />
+              </div>
+            </Card>
             <Card>
               <CardHeader title="Activity on this drive" />
               <div className="divide-y divide-line">
@@ -170,7 +178,7 @@ export default function DriveWorkspace() {
                 {d.runs.map((r) => (
                   <Link key={`r${r.id}`} href={`/agent/${r.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">
                     <span className="text-[13px]">Agent run #{r.id} <span className="text-muted">· {relTime(r.created_at)}</span></span>
-                    <span className="flex items-center gap-2"><PlannerBadge mode={r.planner_mode} /><StatusBadge status={r.status} /></span>
+                    <StatusBadge status={r.status} />
                   </Link>))}
                 {d.approvals.map((a) => (
                   <Link key={`a${a.id}`} href={`/approvals/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">
@@ -188,18 +196,13 @@ export default function DriveWorkspace() {
 
         <TabPanel value="eligibility">
           <Card>
-            <CardHeader title="Eligibility — live evaluation"
+            <CardHeader title="Who qualifies"
               description={elig.data ? `Criteria v${elig.data.criteria.version} applied to ${elig.data.counts.total} students at ${fmtDateTime(elig.data.evaluated_at)}. Hover a value for the rule explanation.` : undefined}
-              actions={<>{editable && (counts?.unknown ?? 0) > 0 && <Button size="sm" loading={requestData.isPending} onClick={() => requestData.mutate()}>Email {counts?.unknown} student(s) with missing data</Button>}
+              actions={<>{editable && (counts?.unknown ?? 0) > 0 && <Button size="sm" loading={requestData.isPending} onClick={() => requestData.mutate()}>Ask {counts?.unknown} student(s) for missing details</Button>}
               <Select aria-label="Filter" value={rosterFilter} onChange={(e) => setRosterFilter(e.target.value)}>
-                <option value="ALL">All students</option><option value="INCLUDED">Included</option><option value="HELD">Held</option>
-                <option value="EXCLUDED">Excluded</option><option value="UNKNOWN">Unknown decisions</option><option value="INELIGIBLE">Ineligible</option>
+                <option value="ALL">All students</option>
+                {["On the list", "Qualifies, no YES yet", "Missing details", "Held: schedule clash", "Does not qualify"].map((l) => <option key={l} value={l}>{l}</option>)}
               </Select></>} />
-            {elig.data && Object.keys(elig.data.exclusion_reasons).length > 0 && (
-              <div className="flex flex-wrap gap-1.5 border-b border-line px-4 py-2">
-                {Object.entries(elig.data.exclusion_reasons).map(([r, n]) => <Tag key={r}>{r}: {n}</Tag>)}
-              </div>
-            )}
             {elig.isError ? <div className="p-4"><ErrorState error={elig.error} /></div> : !elig.data ? <LoadingRows /> :
               <DataTable data={filteredStudents} columns={eligibilityColumns} pageSize={50} dense
                 rowClassName={(o) => o.roster_status === "HELD" ? "bg-hold-soft/40" : undefined} />}
@@ -240,7 +243,7 @@ export default function DriveWorkspace() {
 
         <TabPanel value="criteria">
           <Card>
-            <CardHeader title="Criteria versions" description="Criteria are immutable once created. A new version re-validates every open approval on this drive."
+            <CardHeader title="Eligibility criteria" description="Every change is kept as a new version; changing criteria cancels any approval in progress."
               actions={editable ? <Button variant="primary" size="sm" onClick={openCriteria} icon={<ListChecks className="size-4" />}>New version</Button> : undefined} />
             {!versions.data ? <LoadingRows rows={3} /> : (
               <table className="data-table w-full"><thead><tr><th>Version</th><th>CGPA</th><th>Backlogs</th><th>Branches</th><th>Change note</th><th>Created</th></tr></thead>
@@ -252,14 +255,16 @@ export default function DriveWorkspace() {
                     <td className="whitespace-nowrap text-[12px]">{fmtDateTime(v.created_at)}</td></tr>))}
                 </tbody></table>
             )}
-            {c?.source_text && <div className="border-t border-line p-4"><p className="mb-1 text-[12px] font-semibold text-muted">Recorded employer source text (current version)</p><pre className="whitespace-pre-wrap rounded-md bg-subtle p-3 text-[12.5px] text-ink-2">{c.source_text}</pre></div>}
+            {c?.source_text && <details className="border-t border-line p-4"><summary className="cursor-pointer text-[12px] font-semibold text-muted">Company's original text</summary><pre className="mt-2 whitespace-pre-wrap rounded-md bg-subtle p-3 text-[12.5px] text-ink-2">{c.source_text}</pre></details>}
           </Card>
+          <div className="mt-4">
+            <p className="mb-2 text-[13px] font-semibold text-ink">What-if: try different criteria (nothing is saved)</p>
+            <WhatIf driveId={d.id} criteria={c} startLocal={d.starts_at_local} endLocal={d.ends_at_local} />
+          </div>
         </TabPanel>
 
         <TabPanel value="invitations"><InvitationsPanel drive={d} /></TabPanel>
         <TabPanel value="results"><ResultsPanel drive={d} /></TabPanel>
-
-        <TabPanel value="whatif"><WhatIf driveId={d.id} criteria={c} startLocal={d.starts_at_local} endLocal={d.ends_at_local} /></TabPanel>
       </Tabs>
 
       <Dialog open={critOpen} onOpenChange={setCritOpen} wide title={`New criteria version (v${(c?.version ?? 0) + 1})`}

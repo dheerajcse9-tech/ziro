@@ -41,7 +41,7 @@ export default function UploadDetailPage() {
 
   return (
     <>
-      <PageHeader title={`Upload #${u.id} · ${u.drive_title}`} crumbs={[{ label: "Verification Center", href: "/verification" }, { label: `Upload #${u.id}` }]}
+      <PageHeader title={`Upload #${u.id} · ${u.drive_title}`} crumbs={[{ label: "Sent to companies", href: "/verification" }, { label: `Upload #${u.id}` }]}
         meta={<><StatusBadge status={u.status} />{v && <StatusBadge status={v.status} />}{u.destination.is_local_mock && <MockBadge />}</>}
         actions={officer ? <>
           {u.status === "SUBMITTED" && <Button onClick={() => verify.mutate()} loading={verify.isPending} icon={<RefreshCw className="size-4" />}>Re-read destination &amp; verify</Button>}

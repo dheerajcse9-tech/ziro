@@ -84,7 +84,7 @@ export default function RunPage() {
   return (
     <>
       <PageHeader title={<span className="flex items-center gap-2">Agent run #{r.id}{live && <Loader2 className="size-4 animate-spin text-info" />}</span>}
-        crumbs={[{ label: "Agent Control Room", href: "/agent" }, { label: `Run #${r.id}` }]}
+        crumbs={[{ label: "Run a drive", href: "/agent" }, { label: `Run #${r.id}` }]}
         description={<span className="italic">“{r.objective}”</span>}
         meta={<><StatusBadge status={r.status} /><PlannerBadge mode={r.planner_mode} />{r.intent && <Tag>{r.intent.replace(/_/g, " ").toLowerCase()}</Tag>}
           {r.drive_id && <Link href={`/drives/${r.drive_id}`} className="text-[12px] text-accent hover:underline">{r.drive_title}</Link>}
@@ -99,10 +99,10 @@ export default function RunPage() {
                 <p className="mt-1 text-[14px] text-ink">{q!.question}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {q!.type === "approval" && q!.approval_id && <ButtonLink variant="primary" href={`/approvals/${q!.approval_id}`} icon={<ArrowRight className="size-4" />}>Open in Approval Center</ButtonLink>}
+                {q!.type === "approval" && q!.approval_id && <ButtonLink variant="primary" href={`/approvals/${q!.approval_id}`} icon={<ArrowRight className="size-4" />}>Open approval</ButtonLink>}
                 {(q!.type === "reconcile" || q!.type === "verification_pending") && q!.upload_id && <ButtonLink variant="primary" href={`/verification/${q!.upload_id}`}>Open Verification Center</ButtonLink>}
                 {q!.type === "criteria_mismatch" && r.drive_id && <ButtonLink href={`/drives/${r.drive_id}`}>Review drive criteria</ButtonLink>}
-                {q!.type === "intake_review" && <ButtonLink href="/inbox">Open in Company Inbox</ButtonLink>}
+                {q!.type === "intake_review" && <ButtonLink href="/inbox">Open company email</ButtonLink>}
                 {mayAnswer && q!.options?.map((o) => (
                   <Button key={String(o.value)} variant={o.value === "stop" ? "ghost" : "secondary"} loading={answer.isPending && answer.variables === o.value}
                     disabled={answer.isPending} onClick={() => answer.mutate(o.value)}>{o.label}</Button>))}

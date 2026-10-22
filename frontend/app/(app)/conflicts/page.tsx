@@ -22,7 +22,7 @@ export default function ConflictsPage() {
   const closed = q.data?.student_conflicts.filter((c) => c.status !== "OPEN") ?? [];
   return (
     <>
-      <PageHeader title="Schedule Conflicts"
+      <PageHeader title="Schedule clashes"
         description="Drive slots are compared as half-open intervals in UTC (so drives in different timezones compare correctly, and back-to-back slots do not clash). A clash only matters for a student actually assigned to both drives." />
       <Card className="mb-4">
         <CardHeader title="Overlapping drive slots" />

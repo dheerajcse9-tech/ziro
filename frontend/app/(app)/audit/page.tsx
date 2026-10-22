@@ -30,7 +30,7 @@ export default function AuditPage() {
 
   return (
     <>
-      <PageHeader title="Audit Explorer" description="Append-only, hash-chained ledger of every consequential event. Application workflows cannot edit or delete entries; on PostgreSQL a trigger enforces this at the database level."
+      <PageHeader title="Audit log" description="Append-only, hash-chained ledger of every consequential event. Application workflows cannot edit or delete entries; on PostgreSQL a trigger enforces this at the database level."
         actions={<Button onClick={() => chain.refetch()} loading={chain.isFetching} icon={<Link2 className="size-4" />}>Verify chain integrity</Button>} />
       {chain.data && (
         <div className="mb-4">

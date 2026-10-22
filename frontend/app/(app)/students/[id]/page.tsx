@@ -90,7 +90,7 @@ export default function StudentDetailPage() {
   return (
     <>
       <PageHeader title={<span className="flex items-center gap-2"><span className="font-mono">{s.roll_number}</span><span className="text-muted">·</span>{s.full_name}</span>}
-        crumbs={[{ label: "Student Registry", href: "/students" }, { label: s.roll_number }]}
+        crumbs={[{ label: "Students", href: "/students" }, { label: s.roll_number }]}
         meta={<>
           {s.consent_granted ? <StatusBadge status="GRANTED" label="Consent granted" /> : <StatusBadge status="REVOKED" label={s.consent ? "Consent revoked" : "Consent not recorded"} />}
           <Tag>Record v{s.record_version}</Tag>

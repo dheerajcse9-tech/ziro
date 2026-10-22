@@ -6,7 +6,7 @@ All results below were produced by actually running the commands on 2026-10-22 i
 ## Summary
 | Suite | Result | Log |
 |---|---|---|
-| Backend: unit + reliability + official scenarios + agent crew + live HTTP (SQLite) | **99 passed, 0 failed** | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
+| Backend: unit + reliability + official scenarios + agent crew + institute seed + live HTTP (SQLite) | **107 passed, 0 failed** | [pytest-sqlite.txt](evidence/pytest-sqlite.txt) |
 | Live HTTP API tests against **PostgreSQL 16** (incl. company inbox → drive → consent forms → review) | **5 passed** | [pytest-postgres-live-api.txt](evidence/pytest-postgres-live-api.txt) |
 | Migrations 0004–0005 on PostgreSQL: upgrade with data, downgrade, re-upgrade, `alembic check` | no drift | — |
 | Official scenarios via CLI on PostgreSQL + `alembic check` | **TC1 9/9, TC2 10/10, TC3 10/10, TC4 10/10**; no schema drift | [testlab-postgres.txt](evidence/testlab-postgres.txt) |
@@ -89,6 +89,6 @@ This is a **local mock** destination served by the same backend — not an exter
 ```bash
 cd backend && python -m pytest -o addopts="" -v
 DATABASE_URL=postgresql://... alembic upgrade head && DATABASE_URL=postgresql://... python -m app.cli run-tests
-# with backend on :8000 and `next start` on :3000:
+# with backend on :8000 started with SEED_PROFILE=demo (sample drives) and `next start` on :3000:
 cd frontend && CHROMIUM_PATH=/path/to/chrome SCREENSHOT_DIR=../docs/evidence/screenshots npx playwright test
 ```

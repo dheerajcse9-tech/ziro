@@ -73,9 +73,16 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings & Integrations" description="Environment, destinations, roles and institutional policy. Credentials are server-side only and never shown here." />
-      {health.data?.demo_mode && <div className="mb-4"><Banner title="Demo environment">All people and employers are synthetic. Fault injection and demo reset are available to admins.</Banner></div>}
-      <div className="grid gap-4 xl:grid-cols-2">
+      <PageHeader title="Settings" description="Passwords and keys stay on the server and are never shown here." />
+      {(me.data?.role === "coordinator" || isAdmin) && (
+        <div className="mb-4 grid gap-4 xl:grid-cols-2">
+          <Suspense fallback={<Card><LoadingRows rows={3} /></Card>}><GmailCard /></Suspense>
+          <TrustedSendersCard />
+        </div>
+      )}
+      {isAdmin && <AgentPolicyCard />}
+      {isAdmin && <h2 className="mb-3 mt-6 text-[13px] font-semibold uppercase tracking-wide text-faint">Technical (admin)</h2>}
+      {isAdmin && <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader title="Application health" />
           {!health.data ? <LoadingRows rows={3} /> : <div className="p-4"><DefinitionList items={[
@@ -96,17 +103,9 @@ export default function SettingsPage() {
             {integ.data && <p className="text-[12.5px]">Email: <strong>{{ GMAIL_API: "Gmail", SMTP: "SMTP", LOCAL_MAILBOX: "Local mailbox" }[integ.data.email.transport] ?? integ.data.email.transport}</strong> — {integ.data.email.note}</p>}
           </div>
         </Card>
-      </div>
+      </div>}
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <Suspense fallback={<Card><LoadingRows rows={3} /></Card>}><GmailCard /></Suspense>
-        <div className="space-y-4">
-          <TrustedSendersCard />
-          <AgentPolicyCard />
-        </div>
-      </div>
-
-      <Card className="mt-4">
+      {isAdmin && <Card className="mt-4">
         <CardHeader title="Upload destinations" description="Reachability is checked live by fetching each form page through the adapter." />
         {!integ.data ? <LoadingRows rows={3} /> : (
           <table className="data-table w-full"><thead><tr><th>Destination</th><th>Form</th><th>Kind</th><th>Reachability</th><th>Config</th><th>Enabled</th></tr></thead>
@@ -120,10 +119,10 @@ export default function SettingsPage() {
                 <td>{can(me.data, "editData") ? <Button size="sm" variant={d.is_enabled ? "secondary" : "primary"} loading={toggleDest.isPending && toggleDest.variables?.id === d.id} onClick={() => toggleDest.mutate(d)}>{d.is_enabled ? "Disable" : "Enable"}</Button> : d.is_enabled ? "Yes" : "No"}</td>
               </tr>))}</tbody></table>
         )}
-      </Card>
+      </Card>}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <Card>
+        {isAdmin && <Card>
           <CardHeader title="Institutional settings" description={isAdmin ? "Admin only. Schedule buffer changes re-validate open approvals." : "Read-only for your role."} />
           {!form ? <LoadingRows rows={4} /> : (
             <form className="grid gap-3 p-4 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
@@ -141,7 +140,7 @@ export default function SettingsPage() {
                 <Button type="button" loading={purge.isPending} onClick={() => purge.mutate()} icon={<Trash2 className="size-4" />}>Apply retention purge now</Button></div>}
             </form>
           )}
-        </Card>
+        </Card>}
         <Card>
           <CardHeader title="Users and roles" />
           {!users.data ? <p className="p-4 text-[13px] text-muted">{me.data?.role === "viewer" ? "Not visible to viewers." : "Loading…"}</p> : (

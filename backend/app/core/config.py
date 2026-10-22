@@ -52,6 +52,15 @@ class Settings:
     app_name: str = "PlacementOS"
     environment: str = field(default_factory=lambda: os.getenv("APP_ENV", "development"))
     demo_mode: bool = field(default_factory=lambda: _bool("DEMO_MODE", True))
+    # What `seed` / Demo reset loads: "institute" (student list in app/data, staff logins, company senders, no drives)
+    # or "demo" (the synthetic hackathon dataset with sample drives, used by the automated tests).
+    seed_profile: str = field(default_factory=lambda: os.getenv("SEED_PROFILE", "institute").strip().lower())
+    # Students who should receive real email: "ROLL:address,ROLL:address". Kept in backend/.env, not in git.
+    real_student_emails: str = field(default_factory=lambda: os.getenv("REAL_STUDENT_EMAILS", ""))
+    # Company addresses whose recruitment emails are trusted from the start (comma separated).
+    company_senders: str = field(default_factory=lambda: os.getenv(
+        "COMPANY_SENDERS", "companytestmailone@gmail.com,companytestmailtwo@gmail.com,companytestmailthree@gmail.com"))
+    institution_name: str = field(default_factory=lambda: os.getenv("INSTITUTION_NAME", "Institute Placement Cell"))
     database_url: str = field(
         default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./placementos.db")
     )

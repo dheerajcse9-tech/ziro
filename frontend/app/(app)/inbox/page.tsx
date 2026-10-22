@@ -278,10 +278,10 @@ export default function InboxPage() {
 
   return (
     <>
-      <PageHeader title="Company Inbox"
+      <PageHeader title="Company emails"
         description="Recruitment emails from companies. The stage 1 agents read each email, check every detail, create the drive with its deadline, prepare its consent form and send it to every student."
         actions={canAct ? <>
-          {health.data?.demo_mode && <Button onClick={() => samples.mutate()} loading={samples.isPending} icon={<Sparkles className="size-4" />}>Load sample emails</Button>}
+          {health.data?.seed_profile === "demo" && <Button onClick={() => samples.mutate()} loading={samples.isPending} icon={<Sparkles className="size-4" />}>Load sample emails</Button>}
           <Button onClick={() => setPaste(true)} icon={<ClipboardPaste className="size-4" />}>Paste an email</Button>
           <Button variant="primary" onClick={() => check.mutate()} loading={check.isPending} icon={<RefreshCw className="size-4" />}>Check mailbox now</Button>
         </> : undefined} />
@@ -296,7 +296,7 @@ export default function InboxPage() {
           ) : (
             <Banner tone="info" title="No mailbox connected yet"
               action={can(me.data, "connectMailbox") ? <ButtonLink size="sm" href="/settings">Connect Gmail</ButtonLink> : undefined}>
-              Connect the drive upload officer’s Gmail in Settings so company emails arrive here automatically. Until then, paste emails or load the samples.
+              Connect the drive upload officer’s Gmail in Settings so company emails arrive here automatically. Until then, you can paste a company email here.
             </Banner>
           )}
         </div>

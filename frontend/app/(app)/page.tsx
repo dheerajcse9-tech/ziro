@@ -1,119 +1,109 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, Bot, MailOpen, CalendarClock, ClipboardCheck, GraduationCap, Inbox, UserCheck, UserX } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, ClipboardCheck, MailOpen, PlayCircle, Users } from "lucide-react";
 import Link from "next/link";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ButtonLink, Card, CardHeader } from "@/components/ui/primitives";
-import { KpiCard, PageHeader } from "@/components/ui/layout";
+import { PageHeader } from "@/components/ui/layout";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { PlannerBadge, StatusBadge } from "@/components/ui/status";
+import { StatusBadge } from "@/components/ui/status";
 import { api } from "@/lib/api";
-import { can, useMe } from "@/lib/auth";
-import { fmtDateTime, fmtSlot, relTime } from "@/lib/format";
-import type { Dashboard } from "@/lib/types";
+import { ROLE_LABEL, useMe } from "@/lib/auth";
+import { cn, fmtDateTime, relTime } from "@/lib/format";
+import type { Dashboard, Role } from "@/lib/types";
 
-export default function OverviewPage() {
+const STEPS: { n: number; who: Role; title: string; text: string; href: string; icon: React.ReactNode }[] = [
+  { n: 1, who: "coordinator", title: "Company email → consent form", icon: <MailOpen className="size-4" />, href: "/inbox",
+    text: "A company emails the placement mailbox. Agents read it, create the drive and send every student its consent form." },
+  { n: 2, who: "officer", title: "Run the drive", icon: <PlayCircle className="size-4" />, href: "/agent",
+    text: "Agents apply the company's criteria to students who said YES and prepare the list for approval." },
+  { n: 3, who: "approver", title: "Approve and send", icon: <ClipboardCheck className="size-4" />, href: "/approvals",
+    text: "Check the list, ask students with missing details to fill a form, approve. The list is sent and emailed to the company." },
+];
+
+function Task({ show, count, text, href, action }: { show: boolean; count: number; text: string; href: string; action: string }) {
+  if (!show || count === 0) return null;
+  return (
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
+      <span className="text-[13.5px]"><strong className="tabular">{count}</strong> {text}</span>
+      <ButtonLink size="sm" variant="primary" href={href} icon={<ArrowRight className="size-3.5" />}>{action}</ButtonLink>
+    </li>
+  );
+}
+
+export default function HomePage() {
   const me = useMe();
   const q = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get<Dashboard>("/api/dashboard"), refetchInterval: 20_000 });
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
   const m = d?.metrics;
-  const chartData = (d?.drive_readiness ?? []).filter((r) => r.included + r.excluded + r.held > 0).map((r) => ({
-    name: r.employer, Included: r.included, Held: r.held, Excluded: r.excluded,
-  }));
+  const role = me.data?.role;
+  const is = (...roles: Role[]) => !!role && (role === "admin" || roles.includes(role));
+  const toRun = (d?.drive_readiness ?? []).filter((r) => r.stage === "Consent closed — ready to run" || r.stage === "Collecting consent" || r.stage === "Not evaluated");
+  const tasks = m ? [
+    is("coordinator") && m.inbox_needs_review, is("officer") && toRun.length, is("approver") && m.pending_approvals,
+    is("officer") && m.unresolved_exceptions, is("officer") && m.open_clash_exceptions,
+  ].some(Boolean) : false;
 
   return (
     <>
-      <PageHeader
-        title="Overview"
-        description="Live operational status computed from the database. Every card opens the underlying records."
-        actions={<>
-          {can(me.data, "manageDrives") && <ButtonLink href="/inbox" icon={<MailOpen className="size-4" />}>Company Inbox</ButtonLink>}
-          {can(me.data, "runAgent") && <ButtonLink href="/agent" variant="primary" icon={<Bot className="size-4" />}>Delegate a task to the agent</ButtonLink>}
-        </>}
-      />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard label="Students on roster" value={m?.total_students ?? "—"} href="/students" icon={<GraduationCap className="size-4" />} />
-        <KpiCard label="Upcoming drives" value={m?.upcoming_drives ?? "—"} href="/drives" icon={<CalendarClock className="size-4" />} />
-        <KpiCard label="Eligible (latest evaluations)" value={m?.eligible_candidates ?? "—"} hint={m ? `${m.included_candidates} on proposed rosters` : undefined} href="/drives" tone="ok" icon={<UserCheck className="size-4" />} />
-        <KpiCard label="Excluded (latest evaluations)" value={m?.excluded_candidates ?? "—"} href="/drives" icon={<UserX className="size-4" />} />
-        <KpiCard label="Pending approvals" value={m?.pending_approvals ?? "—"} href="/approvals?status=PENDING" tone={m?.pending_approvals ? "accent" : "neutral"} icon={<ClipboardCheck className="size-4" />} />
-        <KpiCard label="Unresolved exceptions" value={m?.unresolved_exceptions ?? "—"} href="/exceptions" tone={m?.unresolved_exceptions ? "warn" : "neutral"} icon={<Inbox className="size-4" />} />
-        <KpiCard label="Overlapping drive pairs" value={m?.drive_conflicts ?? "—"} hint={m ? `${m.open_clash_exceptions} student clashes open` : undefined} href="/conflicts" tone={m?.open_clash_exceptions ? "warn" : "neutral"} icon={<AlertTriangle className="size-4" />} />
-        <KpiCard label="Uploads needing attention" value={m?.verification_attention ?? "—"} hint="Not submitted or not VERIFIED" href="/verification" tone={m?.verification_attention ? "bad" : "neutral"} icon={<BadgeCheck className="size-4" />} />
+      <PageHeader title={`Hello, ${me.data?.name.split(" (")[0] ?? ""}`} description={role ? `Signed in as ${ROLE_LABEL[role]}` : undefined} />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {STEPS.map((s) => {
+          const mine = role === s.who;
+          return (
+            <Link key={s.n} href={s.href} className={cn("group rounded-[var(--radius-card)] border p-4 transition-colors",
+              mine ? "border-accent bg-accent-soft/60" : "border-line bg-surface hover:bg-subtle")}>
+              <div className="flex items-center gap-2 text-[12px] font-semibold text-muted">
+                <span className={cn("flex size-6 items-center justify-center rounded-full text-[12px]", mine ? "bg-accent text-white" : "bg-subtle text-ink ring-1 ring-line")}>{s.n}</span>
+                {ROLE_LABEL[s.who]}{mine && <span className="text-accent">· you</span>}
+              </div>
+              <p className="mt-2 flex items-center gap-2 text-[14px] font-semibold text-ink">{s.icon}{s.title}</p>
+              <p className="mt-1 text-[12.5px] leading-snug text-muted">{s.text}</p>
+            </Link>
+          );
+        })}
       </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader title="Drive readiness" description="Pipeline stage per upcoming drive, from the latest eligibility decisions, approvals and verifications." />
-          {!d ? <LoadingRows rows={4} /> : d.drive_readiness.length === 0 ? <EmptyState title="No upcoming drives" action={<ButtonLink href="/drives">Create a drive</ButtonLink>} /> : (
-            <div className="overflow-x-auto">
-              <table className="data-table w-full">
-                <thead><tr><th>Drive</th><th>Slot</th><th>Stage</th><th className="text-right">Included</th><th className="text-right">Held</th><th className="text-right">Excluded</th><th className="text-right">Open issues</th></tr></thead>
-                <tbody>
-                  {d.drive_readiness.map((r) => (
-                    <tr key={r.drive_id}>
-                      <td><Link href={`/drives/${r.drive_id}`} className="font-medium text-ink hover:underline">{r.title}</Link></td>
-                      <td className="whitespace-nowrap text-muted">{fmtDateTime(r.starts_at, r.timezone)}</td>
-                      <td><StatusBadge status={r.stage} tone={r.stage === "Verified" ? "ok" : r.stage === "Awaiting approval" ? "accent" : r.stage.startsWith("Failed") ? "bad" : "neutral"} label={r.stage} /></td>
-                      <td className="text-right tabular">{r.included}</td>
-                      <td className="text-right tabular">{r.held || <span className="text-faint">0</span>}</td>
-                      <td className="text-right tabular">{r.excluded}</td>
-                      <td className="text-right tabular">{r.open_exceptions ? <Link href={`/exceptions?drive_id=${r.drive_id}`} className="font-medium text-warn hover:underline">{r.open_exceptions}</Link> : <span className="text-faint">0</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-        <Card>
-          <CardHeader title="Upcoming schedule" description="Drive-local times" />
-          {!d ? <LoadingRows rows={4} /> : d.upcoming_schedule.length === 0 ? <EmptyState title="Nothing scheduled" /> : (
+      <div className="mt-5 grid gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-2">
+          <CardHeader title="Needs your attention" />
+          {!m ? <LoadingRows rows={3} /> : !tasks ? (
+            <EmptyState icon={<CheckCircle2 className="size-5" />} title="Nothing needs you right now" description="The agents keep working in the background; new items appear here." />
+          ) : (
             <ul className="divide-y divide-line">
-              {d.upcoming_schedule.map((s) => (
-                <li key={s.drive_id} className="px-4 py-2.5">
-                  <Link href={`/drives/${s.drive_id}`} className="text-[13px] font-medium text-ink hover:underline">{s.title}</Link>
-                  <div className="text-[12px] text-muted">{fmtSlot(s.starts_at, s.ends_at, s.timezone)}{s.location ? ` · ${s.location}` : ""}</div>
-                </li>
-              ))}
+              <Task show={is("coordinator")} count={m.inbox_needs_review} text="company email(s) to check" href="/inbox" action="Open" />
+              <Task show={is("officer")} count={toRun.length} text="drive(s) waiting to be run" href="/drives" action="Drives" />
+              <Task show={is("approver")} count={m.pending_approvals} text="list(s) waiting for approval" href="/approvals?status=PENDING" action="Review" />
+              <Task show={is("officer")} count={m.unresolved_exceptions} text="issue(s) to resolve" href="/exceptions" action="Open" />
+              <Task show={is("officer")} count={m.open_clash_exceptions} text="schedule clash(es)" href="/conflicts" action="Resolve" />
             </ul>
           )}
-        </Card>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader title="Roster composition by drive" description="Counts from the latest persisted evaluation of each drive (not estimates)." />
-          <div className="h-64 px-2 py-3">
-            {chartData.length === 0 ? <EmptyState title="No evaluations yet" description="Run the agent on a drive to evaluate eligibility." /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e2d9" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#5d667a" }} axisLine={false} tickLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: "#5d667a" }} axisLine={false} tickLine={false} width={32} />
-                  <Tooltip cursor={{ fill: "rgba(15,27,61,0.04)" }} contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: "#e5e2d9" }} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Included" stackId="a" fill="#17734a" />
-                  <Bar dataKey="Held" stackId="a" fill="#6d3fb5" />
-                  <Bar dataKey="Excluded" stackId="a" fill="#c9c4b5" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+          <div className="flex gap-4 border-t border-line px-4 py-3 text-[12.5px] text-muted">
+            <Link href="/students" className="flex items-center gap-1.5 hover:text-ink"><Users className="size-3.5" />{m?.total_students ?? "—"} students</Link>
+            <Link href="/drives" className="flex items-center gap-1.5 hover:text-ink"><Building2 className="size-3.5" />{m?.upcoming_drives ?? "—"} upcoming drives</Link>
           </div>
         </Card>
-        <Card>
-          <CardHeader title="Recent agent runs" actions={<ButtonLink href="/agent" size="sm">All runs</ButtonLink>} />
-          {!d ? <LoadingRows rows={4} /> : d.recent_runs.length === 0 ? <EmptyState title="No agent runs yet" /> : (
+
+        <Card className="lg:col-span-3">
+          <CardHeader title="Upcoming drives" actions={<ButtonLink size="sm" href="/drives">All drives</ButtonLink>} />
+          {!d ? <LoadingRows rows={4} /> : d.drive_readiness.length === 0 ? (
+            <EmptyState icon={<Building2 className="size-5" />} title="No drives yet" description="Drives are created automatically when a company emails the placement mailbox." />
+          ) : (
             <ul className="divide-y divide-line">
-              {d.recent_runs.map((r) => (
-                <li key={r.id} className="px-4 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <Link href={`/agent/${r.id}`} className="truncate text-[13px] font-medium text-ink hover:underline">#{r.id} {r.drive_title ?? r.objective}</Link>
-                    <StatusBadge status={r.status} />
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted"><PlannerBadge mode={r.planner_mode} /> {relTime(r.created_at)}</div>
+              {d.drive_readiness.map((r) => (
+                <li key={r.drive_id}>
+                  <Link href={`/drives/${r.drive_id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-subtle">
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13.5px] font-medium text-ink">{r.title}</span>
+                      <span className="text-[12px] text-muted">{fmtDateTime(r.starts_at, r.timezone)}
+                        {r.consent && ` · ${r.consent.accepted} of ${r.consent.sent} said YES`}
+                        {r.consent?.status === "OPEN" && ` · form closes ${relTime(r.consent.closes_at)}`}</span>
+                    </span>
+                    <StatusBadge status={r.stage} label={r.stage} className="shrink-0"
+                      tone={r.stage === "Verified" ? "ok" : r.stage === "Awaiting approval" ? "accent" : r.stage.startsWith("Consent closed") ? "warn" : r.stage.startsWith("Failed") ? "bad" : "info"} />
+                  </Link>
                 </li>
               ))}
             </ul>

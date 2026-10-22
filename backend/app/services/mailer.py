@@ -30,6 +30,17 @@ def transport_name(db: Session | None = None) -> str:
     return "SMTP" if get_settings().smtp_host else "LOCAL_MAILBOX"
 
 
+_DEMO_TLDS = {"example", "test", "invalid", "localhost", "demo", "local"}
+
+
+def is_demo_address(address: str | None) -> bool:
+    """Reserved / made-up domains (students.example.edu, x.test, ...): kept in the app mailbox, never sent,
+    so a connected Gmail account never mails invented addresses."""
+    domain = (address or "").rsplit("@", 1)[-1].lower().strip(".")
+    labels = domain.split(".")
+    return not domain or labels[-1] in _DEMO_TLDS or "example" in labels
+
+
 def _mime(msg: EmailMessage, from_header: str) -> MimeMessage:
     mime = MimeMessage()
     mime["From"] = from_header
@@ -95,6 +106,9 @@ def _attempt(db: Session, msg: EmailMessage) -> None:
     msg.transport, msg.error = transport_name(db), None
     if not msg.to_address:
         msg.status, msg.error = EmailStatus.SKIPPED, "No email address on record"
+    elif msg.transport in ("SMTP", "GMAIL_API") and is_demo_address(msg.to_address):
+        msg.transport = "LOCAL_MAILBOX"
+        msg.status, msg.sent_at = EmailStatus.DELIVERED_LOCAL, utcnow()
     elif msg.transport in ("SMTP", "GMAIL_API"):
         try:
             if msg.transport == "GMAIL_API":

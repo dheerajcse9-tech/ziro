@@ -31,7 +31,7 @@ function Inner() {
 
   return (
     <>
-      <PageHeader title="Exception Inbox" description="Everything the agent or the system could not decide alone: missing data, consent gaps, clashes, criteria disagreements, retrieval failures, invalidated approvals and upload discrepancies." />
+      <PageHeader title="Issues" description="Everything the agent or the system could not decide alone: missing data, consent gaps, clashes, criteria disagreements, retrieval failures, invalidated approvals and upload discrepancies." />
       {q.data && Object.keys(q.data.open_counts_by_kind).length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {Object.entries(q.data.open_counts_by_kind).map(([k, n]) => (

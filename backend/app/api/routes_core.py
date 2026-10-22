@@ -101,6 +101,7 @@ def health(db: Session = Depends(get_db)):
         "database_dialect": db.get_bind().dialect.name, "environment": settings.environment, "demo_mode": settings.demo_mode,
         "planner": "LLM" if settings.llm_enabled else "DETERMINISTIC_FALLBACK",
         "llm_provider": settings.active_llm, "llm_model": settings.active_llm_model, "time": utcnow().isoformat(),
+        "seed_profile": settings.seed_profile,
     }
 
 
@@ -123,7 +124,12 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(require_roles(*AN
         op = db.scalar(select(UploadOperation).where(UploadOperation.drive_id == d.id).order_by(UploadOperation.id.desc()))
         ver = db.scalar(select(VerificationResult).where(VerificationResult.upload_id == op.id).order_by(VerificationResult.id.desc())) if op else None
         open_exc = db.scalar(select(func.count(ExceptionItem.id)).where(ExceptionItem.drive_id == d.id, ExceptionItem.status == ExceptionStatus.OPEN)) or 0
+        from app.services import consent_forms
+
+        form = consent_forms.summary(db, d.id)
         stage = "Not evaluated"
+        if form:
+            stage = "Collecting consent" if form["status"] == "OPEN" else "Consent closed — ready to run"
         if decisions:
             stage = "Evaluated"
         if pending:
@@ -135,6 +141,7 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(require_roles(*AN
         readiness.append({
             "drive_id": d.id, "title": d.title, "employer": d.employer.name, "starts_at": S.iso(d.starts_at),
             "timezone": d.timezone, "status": d.status, "stage": stage,
+            "consent": None if form is None else {k: form[k] for k in ("sent", "accepted", "declined", "pending", "status", "closes_at")},
             "included": sum(x.roster_status == "INCLUDED" for x in decisions),
             "excluded": sum(x.roster_status == "EXCLUDED" for x in decisions),
             "held": sum(x.roster_status == "HELD" for x in decisions),

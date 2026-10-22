@@ -94,7 +94,7 @@ export default function DrivesPage() {
 
   return (
     <>
-      <PageHeader title="Employer Drives" description="Drives, schedules (timezone-aware), versioned eligibility criteria and their upload destinations."
+      <PageHeader title="Drives" description="Drives, schedules (timezone-aware), versioned eligibility criteria and their upload destinations."
         actions={editable ? <>
           <Button onClick={() => setEmpOpen(true)} icon={<Building2 className="size-4" />}>Add employer</Button>
           <Button variant="primary" onClick={() => setCreateOpen(true)} icon={<Plus className="size-4" />}>New drive</Button>

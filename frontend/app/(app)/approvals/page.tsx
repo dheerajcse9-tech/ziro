@@ -20,7 +20,7 @@ function ApprovalsInner() {
   const q = useQuery({ queryKey: ["approvals", status], queryFn: () => api.get<Approval[]>(`/api/approvals${status ? `?status=${status}` : ""}`), refetchInterval: 10_000 });
   return (
     <>
-      <PageHeader title="Approval Center"
+      <PageHeader title="Approvals"
         description="Every external submission needs an explicit decision by an approver. Approvals bind to an exact proposal hash (roster, criteria version, schedule version, destination) and are invalidated automatically if anything changes." />
       <Card>
         <CardHeader title="Approval queue" actions={

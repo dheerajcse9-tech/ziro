@@ -14,7 +14,7 @@ export default function VerificationPage() {
   const q = useQuery({ queryKey: ["uploads"], queryFn: () => api.get<Upload[]>("/api/uploads"), refetchInterval: 10_000 });
   return (
     <>
-      <PageHeader title="Verification Center"
+      <PageHeader title="Sent to companies"
         description="A submission response is never treated as proof. After every upload the destination is re-read and the exact set of roll numbers is compared with the approved set." />
       <Card>
         <CardHeader title="Upload operations" />

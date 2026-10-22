@@ -59,8 +59,8 @@ export default function ApprovalDetail() {
 
   return (
     <>
-      <PageHeader title={`Approval #${a.id} · ${a.drive_title}`} crumbs={[{ label: "Approval Center", href: "/approvals" }, { label: `#${a.id}` }]}
-        meta={<><StatusBadge status={a.status} label={a.status === "CONSUMED" ? "Executed" : undefined} />{p.kind === "SUPPLEMENT" && <Tag tone="info">Supplementary upload</Tag>}<Tag tone="accent">criteria v{p.criteria_version}</Tag><Tag>schedule v{p.schedule_version}</Tag>{p.destination.is_local_mock && <MockBadge />}</>}
+      <PageHeader title={`Approval #${a.id} · ${a.drive_title}`} crumbs={[{ label: "Approvals", href: "/approvals" }, { label: `#${a.id}` }]}
+        meta={<><StatusBadge status={a.status} label={a.status === "CONSUMED" ? "Sent" : undefined} />{p.kind === "SUPPLEMENT" && <Tag tone="info">Additional students only</Tag>}</>}
         actions={canApprove ? <>
           <Button variant="secondary" onClick={() => { setNote(""); setMode("reject"); }} icon={<XCircle className="size-4" />}>Reject</Button>
           <Button variant="success" disabled={!a.is_current} onClick={() => { setNote(""); setAck(false); setMode("approve"); }} icon={<CheckCircle2 className="size-4" />}>Approve upload</Button>
@@ -80,14 +80,14 @@ export default function ApprovalDetail() {
       <div className="grid gap-3 sm:grid-cols-3">
         <KpiCard label={p.kind === "SUPPLEMENT" ? "New students to upload" : "Will be uploaded"} value={p.included_roll_numbers.length} tone="ok"
           hint={p.kind === "SUPPLEMENT" ? `${p.previously_submitted_roll_numbers.length} already sent earlier` : undefined} />
-        <KpiCard label="Excluded" value={p.excluded.length} />
-        <KpiCard label="Held for officer resolution" value={p.held.length} tone={p.held.length ? "warn" : "neutral"} />
+        <KpiCard label="Not included" value={p.excluded.length} />
+        <KpiCard label="Held (schedule clash)" value={p.held.length} tone={p.held.length ? "warn" : "neutral"} />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <div className="space-y-4 xl:col-span-2">
           <Card>
-            <CardHeader title={p.kind === "SUPPLEMENT" ? "New students to upload" : "Roster to upload"} description="Exact roll numbers bound by the proposal hash." />
+            <CardHeader title={p.kind === "SUPPLEMENT" ? "Additional students to send" : "Students to send"} description="Exactly these students will be sent if you approve." />
             <div className="p-4"><RollList rolls={p.included_roll_numbers} tone="ok" empty="Empty roster" /></div>
           </Card>
           {p.previously_submitted_roll_numbers.length > 0 && (
@@ -104,7 +104,7 @@ export default function ApprovalDetail() {
             </Card>
           )}
           <Card>
-            <CardHeader title="Excluded students and reasons" />
+            <CardHeader title="Not included, and why" />
             {p.excluded.length === 0 ? <EmptyState title="No exclusions" /> : (
               <table className="data-table w-full"><thead><tr><th>Roll</th><th>Name</th><th>Decision</th><th>Reasons</th></tr></thead>
                 <tbody>{p.excluded.map((x) => <tr key={x.roll_number}><td className="font-mono text-[12px]">{x.roll_number}</td><td>{x.full_name}</td><td><StatusBadge status={x.decision} /></td><td className="text-[12px] text-muted">{x.reasons.join("; ")}</td></tr>)}</tbody></table>
@@ -117,16 +117,24 @@ export default function ApprovalDetail() {
             <CardHeader title="What you are approving" />
             <div className="p-4"><DefinitionList cols={1} items={[
               { label: "Drive", value: <Link className="text-accent hover:underline" href={`/drives/${p.drive_id}`}>{p.drive_title}</Link> },
-              { label: "Destination", value: <span>{p.destination.name}<br /><a className="inline-flex items-center gap-1 font-mono text-[11.5px] text-accent hover:underline" target="_blank" rel="noreferrer" href={`/mock-portal/forms/${p.destination.form_ref}`}>{p.destination.form_ref}<ExternalLink className="size-3" /></a></span> },
-              { label: "Proposal hash", value: <HashValue value={p.proposal_hash} /> },
-              { label: "Live hash now", value: a.is_current ? <span className="inline-flex items-center gap-1 text-ok"><ShieldCheck className="size-3.5" />matches</span> : <span className="text-bad">differs</span> },
-              { label: "Destination fingerprint", value: <HashValue value={p.destination_fingerprint} /> },
-              { label: "Requested by", value: <span className="font-mono text-[12px]">{a.requested_by}</span> },
-              { label: "Requested", value: fmtDateTime(a.created_at) },
-              ...(a.decided_by ? [{ label: "Decided by", value: `${a.decided_by.name} (${a.decided_by.role})` }, { label: "Decided at", value: fmtDateTime(a.decided_at) }] : []),
+              { label: "Sent to", value: <span>{p.destination.name}{p.destination.is_local_mock && <span className="ml-1"><MockBadge /></span>}</span> },
+              { label: "List unchanged since it was prepared", value: a.is_current ? <span className="inline-flex items-center gap-1 text-ok"><ShieldCheck className="size-3.5" />Yes</span> : <span className="text-bad">No — it changed, ask for a fresh list</span> },
+              { label: "Prepared", value: fmtDateTime(a.created_at) },
+              ...(a.decided_by ? [{ label: "Decided by", value: `${a.decided_by.name}` }, { label: "Decided at", value: fmtDateTime(a.decided_at) }] : []),
               ...(a.decision_note ? [{ label: "Note", value: a.decision_note }] : []),
-              ...(p.run_id ? [{ label: "Agent run", value: <Link className="text-accent hover:underline" href={`/agent/${p.run_id}`}>#{p.run_id}</Link> }] : []),
-            ]} /></div>
+            ]} />
+            <details className="mt-4 text-[12.5px]">
+              <summary className="cursor-pointer text-muted">Technical details</summary>
+              <div className="mt-3"><DefinitionList cols={1} items={[
+                { label: "Proposal hash", value: <HashValue value={p.proposal_hash} /> },
+                { label: "Destination fingerprint", value: <HashValue value={p.destination_fingerprint} /> },
+                { label: "Form", value: <a className="inline-flex items-center gap-1 font-mono text-[11.5px] text-accent hover:underline" target="_blank" rel="noreferrer" href={`/mock-portal/forms/${p.destination.form_ref}`}>{p.destination.form_ref}<ExternalLink className="size-3" /></a> },
+                { label: "Criteria / schedule version", value: `v${p.criteria_version} / v${p.schedule_version}` },
+                { label: "Requested by", value: <span className="font-mono text-[12px]">{a.requested_by}</span> },
+                ...(p.run_id ? [{ label: "Agent run", value: <Link className="text-accent hover:underline" href={`/agent/${p.run_id}`}>#{p.run_id}</Link> }] : []),
+              ]} /></div>
+            </details>
+            </div>
           </Card>
           {p.unresolved_issues.length > 0 && (
             <Card>

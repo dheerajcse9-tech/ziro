@@ -57,7 +57,7 @@ export default function ImportPage() {
 
   return (
     <>
-      <PageHeader title="Import roster" crumbs={[{ label: "Student Registry", href: "/students" }, { label: "Import" }]}
+      <PageHeader title="Import roster" crumbs={[{ label: "Students", href: "/students" }, { label: "Import" }]}
         description="CSV or XLSX. Rows are matched to existing students by roll number only. Nothing changes until you commit the validated preview."
         actions={<a href="/api/roster-imports/template.csv" className="inline-flex h-9 items-center gap-2 rounded-md border border-line-strong bg-surface px-3.5 text-sm font-medium hover:bg-subtle"><Download className="size-4" />CSV template</a>} />
 

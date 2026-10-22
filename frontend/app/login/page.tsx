@@ -58,8 +58,8 @@ function LoginForm() {
         </Card>
         {demo.data && demo.data.length > 0 && (
           <Card className="mt-4 p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-faint">Demo accounts (synthetic environment)</p>
-            <p className="mt-1 text-[12px] text-muted">Password for all demo accounts: <code className="font-mono">Demo@2026</code></p>
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-faint">Staff logins</p>
+            <p className="mt-1 text-[12px] text-muted">Password for all staff logins: <code className="font-mono">Demo@2026</code></p>
             <ul className="mt-3 divide-y divide-line">
               {demo.data.map((a) => (
                 <li key={a.email}>

@@ -253,12 +253,12 @@ export interface Dashboard {
     excluded_candidates: number; unresolved_exceptions: number; pending_approvals: number; drive_conflicts: number;
     open_clash_exceptions: number; verification_attention: number; inbox_needs_review: number;
   };
-  drive_readiness: { drive_id: number; title: string; employer: string; starts_at: string; timezone: string; status: string; stage: string; included: number; excluded: number; held: number; unknown: number; open_exceptions: number; pending_approvals: number }[];
+  drive_readiness: { drive_id: number; title: string; employer: string; starts_at: string; timezone: string; status: string; stage: string; consent: { sent: number; accepted: number; declined: number; pending: number; status: string; closes_at: string } | null; included: number; excluded: number; held: number; unknown: number; open_exceptions: number; pending_approvals: number }[];
   recent_runs: AgentRun[];
   upcoming_schedule: { drive_id: number; title: string; employer: string; starts_at: string; ends_at: string; timezone: string; location: string | null }[];
 }
 
-export interface Health { status: string; database: string; database_dialect: string; environment: string; demo_mode: boolean; planner: string; llm_provider?: string; llm_model: string | null; time: string }
+export interface Health { status: string; database: string; database_dialect: string; environment: string; demo_mode: boolean; planner: string; llm_provider?: string; llm_model: string | null; time: string; seed_profile?: string }
 
 export interface StudentRequest {
   id: number; kind: "DRIVE_INVITATION" | "DATA_REQUEST"; status: string; student_id: number; roll_number: string;

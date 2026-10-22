@@ -59,7 +59,7 @@ function AgentInner() {
   const allowed = can(me.data, "runAgent");
   return (
     <>
-      <PageHeader title="Agent Control Room"
+      <PageHeader title="Run a drive"
         description="Delegate a drive workflow in plain language. The agent plans, calls typed tools and stops for human approval before any external action. Everything shown is read from persisted events." />
       {health.data && health.data.planner !== "LLM" && (
         <div className="mb-4"><Banner tone="info" title="Running the deterministic fallback planner">No LLM API key is configured on this deployment, so goal interpretation uses the labelled rule-based planner. Tools, approval gate, upload and verification are identical in both modes.</Banner></div>

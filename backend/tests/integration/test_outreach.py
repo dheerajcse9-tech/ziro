@@ -137,11 +137,11 @@ def test_failed_smtp_email_can_be_retried(sb, monkeypatch):
 
     monkeypatch.setattr(mailer, "transport_name", lambda db=None: "SMTP")
     monkeypatch.setattr(mailer, "_deliver_smtp", unreachable)
-    msg = mailer.send(sb.db, category="DATA_REQUEST", to_address="s@example.edu", to_name="S", subject="Hi",
+    msg = mailer.send(sb.db, category="DATA_REQUEST", to_address="s@college.ac.in", to_name="S", subject="Hi",
                       body="Body", dedupe_key="retry-test", sent_by="user:1")
     assert msg.status == "FAILED" and "could not be found" in msg.error
     # Same dedupe key does not send again on its own.
-    assert mailer.send(sb.db, category="DATA_REQUEST", to_address="s@example.edu", to_name="S", subject="Hi",
+    assert mailer.send(sb.db, category="DATA_REQUEST", to_address="s@college.ac.in", to_name="S", subject="Hi",
                        body="Body", dedupe_key="retry-test", sent_by="user:1").status == "FAILED"
 
     delivered = []
