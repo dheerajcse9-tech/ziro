@@ -14,7 +14,7 @@ import { StatusBadge, Tag } from "@/components/ui/status";
 import { api, qs } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
 import { toastError } from "@/lib/errors";
-import { cn, relTime } from "@/lib/format";
+import { cn, fmtDateTime, relTime } from "@/lib/format";
 import type { Health, InboundEmail, InboxResponse, IntakeIssue } from "@/lib/types";
 
 const STATUS_LABEL: Record<InboundEmail["status"], string> = {
@@ -274,6 +274,11 @@ export default function InboxPage() {
     onError: toastError,
   });
   const box = q.data?.mailbox;
+  const readSince = useMutation({
+    mutationFn: (since: "now" | "all") => api.put<{ read_since: string | null }>("/api/inbox-settings/read-since", { since }),
+    onSuccess: (r) => { toast.success(r.read_since ? "Older emails will be ignored" : "Older emails will be read on the next check"); qc.invalidateQueries({ queryKey: ["inbox"] }); },
+    onError: toastError,
+  });
   const pilot = q.data?.autopilot;
 
   return (
@@ -292,6 +297,11 @@ export default function InboxPage() {
             <Banner tone="ok" title={`Watching ${box.address} (${box.source === "GMAIL" ? "Gmail" : "IMAP"})`}>
               Reading emails whose subject contains “{box.filter || "anything"}”. Read-only: nothing is marked, moved or deleted.
               {pilot?.enabled ? ` The Mailbox Agent checks every ${Math.round(pilot.interval_seconds / 60) || 1} min${pilot.last_tick_at ? ` (last check ${relTime(pilot.last_tick_at)})` : ""}.` : " Autopilot is off — use Check mailbox now."}
+              <span className="mt-1 block">
+                {box.read_since ? <>Only emails received after <strong>{fmtDateTime(box.read_since)}</strong> are read (older ones were handled before the last reset).</> : "Emails from the last 30 days are read."}
+                {can(me.data, "connectMailbox") && <button type="button" className="ml-2 text-accent underline" disabled={readSince.isPending}
+                  onClick={() => readSince.mutate(box.read_since ? "all" : "now")}>{box.read_since ? "Read older emails too" : "Ignore emails already in the mailbox"}</button>}
+              </span>
             </Banner>
           ) : (
             <Banner tone="info" title="No mailbox connected yet"

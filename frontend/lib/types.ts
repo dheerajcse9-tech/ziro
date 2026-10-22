@@ -90,7 +90,7 @@ export interface InboundEmail {
   run: { id: number; status: string; pending_question: PendingQuestion | null; summary: string | null } | null;
 }
 
-export interface MailboxStatus { source: "GMAIL" | "IMAP" | null; address: string; filter: string }
+export interface MailboxStatus { source: "GMAIL" | "IMAP" | null; address: string; filter: string; read_since?: string | null }
 
 export interface AutopilotStatus {
   enabled: boolean; interval_seconds: number; last_tick_at: string | null; last_error: string | null; running: boolean;

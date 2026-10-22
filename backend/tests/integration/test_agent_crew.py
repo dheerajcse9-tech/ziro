@@ -320,6 +320,21 @@ def google(settings_override, monkeypatch):
     gmail._access_cache.clear()
 
 
+def test_after_a_reset_the_mailbox_agent_skips_emails_it_already_handled(sb, crew_people, google):
+    gmail.complete_sign_in(sb.db, "auth-code", crew_people["coordinator"].id)
+    sb.db.commit()
+    # Data was reset after the company email arrived (seed sets this to "now").
+    app_settings.set_value(sb.db, "mailbox_read_since", (utcnow()).isoformat())
+    sb.db.commit()
+    result = intake.fetch_mailbox(sb.db, None, actor="agent:mailbox")
+    assert result["new"] == 0 and sb.db.scalar(select(InboundEmail)) is None
+    assert f"after:{int(intake.read_since(sb.db).timestamp())}" in google.last_query
+    # The drive upload officer chooses "Read older emails too".
+    app_settings.set_value(sb.db, "mailbox_read_since", None)
+    sb.db.commit()
+    assert intake.fetch_mailbox(sb.db, None)["new"] == 1
+
+
 def test_google_sign_in_reads_company_mail_and_sends_from_the_officer_mailbox(sb, crew_people, students, google):
     url = urlparse(gmail.authorization_url(crew_people["coordinator"].id))
     q = parse_qs(url.query)

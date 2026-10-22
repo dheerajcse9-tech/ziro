@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.audit import ledger
 from app.core.config import get_settings
 from app.core.security import hash_password
-from app.db.base import Base
+from app.db.base import Base, utcnow
 from app.mock_portal.models import MockPortalForm
 from app.models.entities import ConsentRecord, Destination, Drive, DriveCriteria, Employer, Student, User
 from app.models.enums import ActorType, BacklogPolicy, ConsentScope, ConsentStatus, DestinationKind, DriveStatus, Role
@@ -198,6 +198,8 @@ def seed_institute(db: Session) -> dict:
     senders = sorted({x.strip().lower() for x in settings.company_senders.split(",") if "@" in x})
     app_settings.set_value(db, "trusted_company_senders", senders)
     app_settings.set_value(db, "institution_name", settings.institution_name)
+    # Fresh data: the Mailbox Agent only reads company emails that arrive from now on.
+    app_settings.set_value(db, "mailbox_read_since", utcnow().isoformat())
     db.flush()
     ledger.record(db, actor_type=ActorType.SYSTEM, actor_id="system:seed", action="INSTITUTE_DATA_LOADED",
                   details={"students": count, "real_email_students": sorted(real), "company_senders": senders})

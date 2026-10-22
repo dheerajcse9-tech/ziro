@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlencode
 
 import jwt
@@ -19,6 +19,7 @@ from app.audit import ledger
 from app.core.config import get_settings
 from app.core.errors import PreconditionFailed, ValidationFailed
 from app.core.security import read_state_token
+from app.db.base import utcnow
 from app.db.session import get_db
 from app.domain.schedule import to_utc
 from app.integrations import gmail
@@ -130,6 +131,21 @@ def ignore_email(email_id: int, body: IgnoreIn, db: Session = Depends(get_db), u
         run.state = {**(run.state or {}), "next_node": None}
     db.commit()
     return _row_out(db, row)
+
+
+class ReadSinceIn(BaseModel):
+    since: Literal["now", "all"]
+
+
+@router.put("/inbox-settings/read-since", tags=["inbox"])
+def set_read_since(body: ReadSinceIn, db: Session = Depends(get_db), user: User = Depends(require_roles(Role.COORDINATOR, Role.ADMIN))):
+    """'now': ignore everything already in the mailbox; 'all': read the last INBOX_LOOKBACK_DAYS again."""
+    value = utcnow().isoformat() if body.since == "now" else None
+    app_settings.set_value(db, "mailbox_read_since", value)
+    ledger.record(db, actor_type=ActorType.USER, actor_id=f"user:{user.id}", action="MAILBOX_READ_SINCE_SET",
+                  details={"read_since": value})
+    db.commit()
+    return {"read_since": value}
 
 
 @router.put("/inbox-settings/trusted-senders", tags=["inbox"])

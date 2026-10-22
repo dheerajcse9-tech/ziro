@@ -111,11 +111,12 @@ def mailbox_status(db: Session) -> dict[str, Any]:
     from app.integrations import gmail
 
     s = get_settings()
+    since = app_settings.get(db, "mailbox_read_since")
     if gmail.connected(db):
-        return {"source": "GMAIL", "address": gmail.account_email(db), "filter": s.inbox_subject_filter}
+        return {"source": "GMAIL", "address": gmail.account_email(db), "filter": s.inbox_subject_filter, "read_since": since}
     if s.inbox_imap_host:
-        return {"source": "IMAP", "address": s.inbox_imap_user, "filter": s.inbox_subject_filter}
-    return {"source": None, "address": s.inbox_address, "filter": s.inbox_subject_filter}
+        return {"source": "IMAP", "address": s.inbox_imap_user, "filter": s.inbox_subject_filter, "read_since": since}
+    return {"source": None, "address": s.inbox_address, "filter": s.inbox_subject_filter, "read_since": since}
 
 
 def _raw_from_imap(imap_factory: Callable[..., Any] | None, limit: int) -> list[bytes]:
@@ -142,10 +143,19 @@ def _raw_from_imap(imap_factory: Callable[..., Any] | None, limit: int) -> list[
     return out
 
 
-def gmail_query() -> str:
+def read_since(db: Session) -> datetime | None:
+    raw = app_settings.get(db, "mailbox_read_since")
+    try:
+        return datetime.fromisoformat(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def gmail_query(since: datetime | None = None) -> str:
     s = get_settings()
     subject = f' subject:"{s.inbox_subject_filter}"' if s.inbox_subject_filter else ""
-    return f"in:inbox -from:me newer_than:{s.inbox_lookback_days}d{subject}"
+    after = f" after:{int(since.timestamp())}" if since else ""
+    return f"in:inbox -from:me newer_than:{s.inbox_lookback_days}d{after}{subject}"
 
 
 def fetch_mailbox(db: Session, user: User | None, imap_factory: Callable[..., Any] | None = None,
@@ -160,7 +170,8 @@ def fetch_mailbox(db: Session, user: User | None, imap_factory: Callable[..., An
                 "message": "No mailbox connected. Connect Gmail in Settings (or set INBOX_IMAP_HOST)."}
     actor = actor or _actor(user)
     try:
-        raws = gmail.search_raw_messages(db, gmail_query(), limit) if box["source"] == "GMAIL" else _raw_from_imap(imap_factory, limit)
+        since = read_since(db)
+        raws = gmail.search_raw_messages(db, gmail_query(since), limit) if box["source"] == "GMAIL" else _raw_from_imap(imap_factory, limit)
     except (gmail.GmailError, imaplib.IMAP4.error, OSError) as exc:
         db.commit()  # keep a recorded credential error
         raise ValidationFailed(f"Could not read the mailbox {box['address']}: {exc}") from exc
@@ -176,6 +187,8 @@ def fetch_mailbox(db: Session, user: User | None, imap_factory: Callable[..., An
             received = parsedate_to_datetime(str(msg.get("Date"))).astimezone(timezone.utc)
         except (TypeError, ValueError):
             received = utcnow()
+        if since and received < since:
+            continue  # arrived before the data was (re)loaded: already handled, or from an earlier test run
         body = _body_text(msg)
         if not body or "@" not in addr or (box["address"] and addr.lower() == box["address"].lower()):
             continue

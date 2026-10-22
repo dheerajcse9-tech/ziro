@@ -492,8 +492,15 @@ def demo_reset(db: Session = Depends(get_db), user: User = Depends(require_roles
     if not get_settings().demo_mode:
         raise HTTPException(status_code=403, detail="Demo reset is disabled outside demo mode")
     actor = f"user:{user.id} ({user.email})"
+    # Keep the connected Gmail account: a reset reloads the data, it should not require signing in to Google again.
+    from app.models.entities import OAuthCredential
+
+    keep = [{c.name: getattr(o, c.name) for c in OAuthCredential.__table__.columns if c.name not in ("id", "connected_by_id")}
+            for o in db.scalars(select(OAuthCredential))]
     reset_database(db)
     result = seed(db)
+    for values in keep:
+        db.add(OAuthCredential(**values))
     ledger.record(db, actor_type=ActorType.USER, actor_id=actor, action="DEMO_RESET",
                   details={"note": "All demo data deleted and re-seeded with synthetic records", **result})
     db.commit()

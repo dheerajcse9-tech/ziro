@@ -22,6 +22,9 @@ DEFAULTS: dict[str, Any] = {
     # Reminder Agent timing (hours before a form closes / before the drive starts).
     "reminder_hours_before_deadline": 24,
     "reminder_hours_before_drive": 24,
+    # The Mailbox Agent ignores emails received before this time (ISO, UTC). Set when the data is (re)loaded,
+    # so a reset does not re-read company emails that were already handled. None = the last INBOX_LOOKBACK_DAYS.
+    "mailbox_read_since": None,
 }
 
 
