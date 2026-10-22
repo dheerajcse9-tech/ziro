@@ -9,6 +9,7 @@ is never sent twice, even if a workflow step is retried.
 from __future__ import annotations
 
 import smtplib
+from contextvars import ContextVar
 from email.message import EmailMessage as MimeMessage
 from email.utils import formataddr, parseaddr
 
@@ -22,9 +23,15 @@ from app.models.entities import EmailMessage
 from app.models.enums import ActorType, EmailStatus
 
 
+# Set by the Test Lab sandbox: every message stays in the (throwaway) local mailbox, even to real addresses.
+LOCAL_ONLY: ContextVar[bool] = ContextVar("mail_local_only", default=False)
+
+
 def transport_name(db: Session | None = None) -> str:
     from app.integrations import gmail
 
+    if LOCAL_ONLY.get():
+        return "LOCAL_MAILBOX"
     if db is not None and gmail.connected(db):
         return "GMAIL_API"
     return "SMTP" if get_settings().smtp_host else "LOCAL_MAILBOX"

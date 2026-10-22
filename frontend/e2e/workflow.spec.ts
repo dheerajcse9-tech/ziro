@@ -142,7 +142,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await login(page, "officer@placementos.demo");
     await page.goto("/test-lab");
     await page.getByRole("button", { name: "Run all scenarios" }).click();
-    await expect(page.getByText("4/4 scenarios passed").first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("6/6 scenarios passed").first()).toBeVisible({ timeout: 60_000 });
     await page.getByRole("button", { name: "Details" }).first().click();
     await shot(page, "14-test-lab");
   });

@@ -31,7 +31,7 @@ from app.models.entities import (
     User,
 )
 from app.models.enums import ApprovalStatus, ExceptionKind, Role, RunStatus
-from app.services import approvals, students, uploads
+from app.services import approvals, mailer, students, uploads
 from app.services.roster import drive_pair_conflicts
 from app.services.sandbox import Sandbox, ist
 
@@ -287,11 +287,203 @@ def tc4(sb: Sandbox) -> dict[str, Any]:
     }
 
 
+# --------------------------------------------------------------------------- TC5 / TC6 (institute data)
+
+COMPANY_SENDERS = ["companytestmailone@gmail.com", "companytestmailthree@gmail.com", "companytestmailtwo@gmail.com"]
+
+
+def _institute(sb: Sandbox) -> dict[str, User]:
+    """The institute's student list (demo addresses only), the trusted company senders and one user per role."""
+    from app.services import app_settings
+    from app.services.seed import load_institute_students
+
+    load_institute_students(sb.db, real={})
+    app_settings.set_value(sb.db, "trusted_company_senders", COMPANY_SENDERS)
+    sb.db.commit()
+    return {r: sb.user(r) for r in (Role.COORDINATOR, Role.OFFICER, Role.APPROVER, Role.ADMIN)}
+
+
+def _receive_test_emails(sb: Sandbox, coordinator: User) -> list[dict[str, Any]]:
+    """Every company-email test case through the real Stage 1 agents, in order."""
+    from app.models.enums import InboundSource
+    from app.services import intake
+
+    out = []
+    for i, mail in enumerate(intake.company_test_emails("Asia/Kolkata")):
+        case, expect = mail.pop("case"), mail.pop("expect")
+        row, _ = intake.ingest(sb.db, source=InboundSource.MANUAL, message_id=f"<test-case-{i + 1}@sandbox>", **mail)
+        sb.db.commit()
+        run = graph.start_intake_run(sb.db, row, coordinator)
+        sb.db.refresh(row)
+        out.append({"case": case, "expect": expect, "row": row, "run": run, "status": run.status, "drive_id": row.drive_id,
+                    "codes": sorted({x["code"] for x in row.issues or [] if x["level"] != "INFO" or x["code"] == "OVERLAPS"})})
+    return out
+
+
+def tc5(sb: Sandbox) -> dict[str, Any]:
+    from app.models.entities import Drive, EmailMessage
+    from app.services import intake
+
+    people = _institute(sb)
+    cases = _receive_test_emails(sb, people[Role.COORDINATOR])
+    e1, e2, e3, e4, e5, e6 = cases
+    pairs = {tuple(sorted((p["drive_a"]["id"], p["drive_b"]["id"]))) for p in drive_pair_conflicts(sb.db)}
+    drives_before_fixes = sb.db.query(Drive).count()
+    invites = sb.db.scalars(select(EmailMessage).where(EmailMessage.category == "DRIVE_INVITATION",
+                                                       EmailMessage.drive_id == e1["drive_id"])).all()
+    # E4: the drive upload officer adds the missing deadline, the agents check again and create the drive.
+    intake.update_details(sb.db, e4["row"], {"registration_deadline": _days_before(e4["row"], 5)}, people[Role.COORDINATOR])
+    sb.db.commit()
+    e4_after = graph.answer(sb.db, e4["run"], people[Role.COORDINATOR], "recheck")
+    # E6: the officer confirms the unknown company is genuine; the injected text still changes nothing.
+    e6_after = graph.answer(sb.db, e6["run"], people[Role.COORDINATOR], "confirm")
+    e6_drive = sb.db.get(Drive, e6_after.drive_id) if e6_after.drive_id else None
+
+    c = Checks()
+    c.eq("E1 valid email → drive created", RunStatus.COMPLETED, e1["status"])
+    c.eq("E1 consent form emailed to every student", 16, len(invites))
+    c.eq("E2 overlapping email → drive created", RunStatus.COMPLETED, e2["status"])
+    c.true("E2 flagged as overlapping Nimbus Softech", "OVERLAPS" in e2["codes"], e2["codes"])
+    c.true("E1 and E2 detected as overlapping drives", tuple(sorted((e1["drive_id"], e2["drive_id"]))) in pairs)
+    c.eq("E3 same drive twice → stopped as duplicate", (RunStatus.NEEDS_REVIEW, None), (e3["status"], e3["drive_id"]))
+    c.true("E3 reason is DRIVE_EXISTS", "DRIVE_EXISTS" in e3["codes"], e3["codes"])
+    c.eq("E4 no deadline → stopped", RunStatus.NEEDS_REVIEW, e4["status"])
+    c.true("E4 reason is the missing deadline", "MISSING" in e4["codes"], e4["codes"])
+    c.eq("E4 after the officer adds the deadline → drive created", RunStatus.COMPLETED, e4_after.status)
+    c.eq("E5 deadline after drive → stopped", (RunStatus.NEEDS_REVIEW, None), (e5["status"], e5["drive_id"]))
+    c.true("E5 reason is AFTER_DRIVE", "AFTER_DRIVE" in e5["codes"], e5["codes"])
+    c.eq("E6 unknown sender → waits for the officer", RunStatus.NEEDS_REVIEW, e6["status"])
+    c.eq("E6 reasons", ["NEW_COMPANY", "SUSPICIOUS"], e6["codes"])
+    c.eq("Only E1 and E2 became drives without a person", 2, drives_before_fixes)
+    c.true("E6 drive still requires each student's YES (injected text ignored)",
+           e6_drive is not None and e6_drive.criteria_versions[-1].required_consent_scope == "DRIVE_REGISTRATION")
+    return {
+        "input": {"emails": [{"case": x["case"], "from": x["row"].from_address, "subject": x["row"].subject} for x in cases]},
+        "expected": {x["case"]: x["expect"] for x in cases},
+        "actual": {x["case"]: {"status": x["status"], "issues": x["codes"], "drive_id": x["drive_id"]} for x in cases}
+                  | {"E4 after fix": e4_after.status, "E6 after confirm": e6_after.status},
+        "checks": c, "evidence": {"overlapping_pairs": sorted(pairs), "invitations_E1": len(invites)},
+    }
+
+
+def _days_before(row, days: int) -> str:
+    from datetime import date, timedelta
+
+    from app.services import intake
+
+    start = date.fromisoformat(intake.details(row)["drive_date"])
+    return f"{start - timedelta(days=days):%Y-%m-%d}T17:00"
+
+
+def tc6(sb: Sandbox) -> dict[str, Any]:
+    from datetime import timedelta
+
+    from app.models.entities import Drive, EmailMessage, Student, StudentRequest
+    from app.models.enums import RequestKind
+    from app.services import approval_review, outreach, roster_refresh
+
+    people = _institute(sb)
+    officer, approver = people[Role.OFFICER], people[Role.APPROVER]
+    cases = _receive_test_emails(sb, people[Role.COORDINATOR])
+    A, B = sb.db.get(Drive, cases[0]["drive_id"]), sb.db.get(Drive, cases[1]["drive_id"])
+
+    def form(drive, roll, kind=RequestKind.DRIVE_INVITATION):
+        return next(r for r in sb.db.scalars(select(StudentRequest).where(StudentRequest.drive_id == drive.id,
+                                                                           StudentRequest.kind == kind))
+                    if r.student.roll_number == roll)
+
+    # Students answer the consent forms (Charan and Manav never answer).
+    for roll in ("22CSE001", "22CSE003", "22IT002", "22CSE004", "22AIDS001", "22CSE005", "22CSE006", "22CSE007",
+                 "22IT004", "22IT003", "22ECE001", "21CE001"):
+        outreach.respond_invitation(sb.db, form(A, roll), True)
+    outreach.respond_invitation(sb.db, form(A, "22CSE002"), False)
+    for roll in ("22ECE001", "22ME001", "22AIDS001", "22CSE004"):
+        outreach.respond_invitation(sb.db, form(B, roll), True)
+    sb.db.commit()
+
+    # Stage 2: the officer runs Orion first (reserves Ishaan), then Nimbus.
+    run_b = graph.start_run(sb.db, f"Prepare the eligible roster for drive #{B.id}", officer)
+    run_a = graph.start_run(sb.db, f"Prepare the eligible roster for drive #{A.id}", officer)
+    dec = _decisions(sb.db, A.id)
+    first = approvals.get_approval(sb.db, run_a.state["approval_id"])
+    follow = {i["roll_number"]: i["fields"] for i in next(
+        x for x in approval_review.review(sb.db, first)["checks"] if x["key"] == "followup")["items"]}
+
+    # Stage 3, before approving: personal forms to students with missing details or no answer.
+    fu = graph.start_followup_run(sb.db, A, approver, utcnow() + timedelta(days=2))
+    asked = sorted(m.to_address.split("@")[0].upper() for m in sb.db.scalars(
+        select(EmailMessage).where(EmailMessage.category == "DATA_REQUEST", EmailMessage.drive_id == A.id)))
+    outreach.submit_data(sb.db, form(A, "22CSE003", RequestKind.DATA_REQUEST), {"cgpa": "8.4"})   # Diya fills her CGPA
+    outreach.submit_data(sb.db, form(A, "22IT001", RequestKind.DATA_REQUEST), {"consent": "yes"})  # Charan says YES
+    sb.db.commit()
+    first_after = approvals.get_approval(sb.db, first.id).status
+    diya = sb.db.scalar(select(Student).where(Student.roll_number == "22CSE003"))
+    refreshed = roster_refresh.refresh_if_qualifies(sb.db, A, diya, "Test Lab: Diya answered")
+    final_run = graph.get_run(sb.db, refreshed["run_id"])
+    final = approvals.get_approval(sb.db, final_run.state["approval_id"])
+
+    admin_blocked = False
+    try:
+        approvals.approve(sb.db, final.id, people[Role.ADMIN], expected_hash=final.proposal_hash)
+    except Exception:  # noqa: BLE001 - PermissionDenied expected
+        sb.db.rollback()
+        admin_blocked = True
+    done = _approve_and_execute(sb, final_run, approver)
+    mails = {cat: sorted(m.to_address.split("@")[0].upper() if m.to_address.endswith(".edu") else m.to_address
+                         for m in sb.db.scalars(select(EmailMessage).where(EmailMessage.category == cat,
+                                                                          EmailMessage.drive_id == A.id)))
+             for cat in ("EMPLOYER_ROSTER", "PROFILE_SUBMITTED", "NOT_SHORTLISTED")}
+
+    c = Checks()
+    c.eq("Aarav (YES) on the list", "INCLUDED", dec["22CSE001"].roster_status)
+    c.eq("Bhavya (said NO) left out", ("ELIGIBLE", "EXCLUDED"), (dec["22CSE002"].decision, dec["22CSE002"].roster_status))
+    c.eq("Charan (no answer) left out at first", ("ELIGIBLE", "EXCLUDED"), (dec["22IT001"].decision, dec["22IT001"].roster_status))
+    c.eq("Diya (CGPA missing) → missing details", "UNKNOWN", dec["22CSE003"].decision)
+    c.eq("Eshan (backlogs missing) → missing details", "UNKNOWN", dec["22IT002"].decision)
+    c.eq("Farah (CGPA 6.4) does not qualify", "INELIGIBLE", dec["22CSE004"].decision)
+    c.eq("Gokul (ECE) wrong branch for Nimbus", "INELIGIBLE", dec["22ECE001"].decision)
+    c.eq("Harini (2 backlogs) does not qualify", "INELIGIBLE", dec["22IT003"].decision)
+    c.eq("Ishaan (YES to both overlapping drives) held", "HELD", dec["22AIDS001"].roster_status)
+    c.eq("Jiya (CGPA exactly 7.0) qualifies", "INCLUDED", dec["22CSE005"].roster_status)
+    c.eq("Kabir (CGPA 6.99) does not qualify", "INELIGIBLE", dec["22CSE006"].decision)
+    c.eq("Two Rahul Kumars kept apart by roll number", ("INCLUDED", "INELIGIBLE"),
+         (dec["22CSE007"].roster_status, dec["22IT004"].decision))
+    c.eq("Om (batch 2025) does not qualify", "INELIGIBLE", dec["21CE001"].decision)
+    c.eq("First list for Nimbus", ["22CSE001", "22CSE005", "22CSE007"], first.proposal.included_roll_numbers)
+    c.eq("Orion list (Gokul, Lakshmi with 1 backlog, Ishaan)", ["22AIDS001", "22ECE001", "22ME001"],
+         approvals.get_approval(sb.db, run_b.state["approval_id"]).proposal.included_roll_numbers)
+    c.eq("Approver sees who needs a form", {"22CSE003": ["cgpa"], "22IT001": ["consent"], "22IT002": ["active_backlogs"]}, follow)
+    c.eq("Forms emailed BEFORE approval to exactly those students", ["22CSE003", "22IT001", "22IT002"], asked)
+    c.eq("Follow-up run finished", RunStatus.COMPLETED, fu.status)
+    c.eq("Old list cancelled when Diya's CGPA arrived", "INVALIDATED", first_after)
+    c.eq("New list adds Diya and Charan", ["22CSE001", "22CSE003", "22CSE005", "22CSE007", "22IT001"],
+         final.proposal.included_roll_numbers)
+    c.true("Admin cannot approve", admin_blocked)
+    c.eq("After approval: sent and checked", RunStatus.VERIFIED, done.status)
+    c.eq("List emailed to the company", ["companytestmailone@gmail.com"], mails["EMPLOYER_ROSTER"])
+    c.eq("Shortlisted emails", ["22CSE001", "22CSE003", "22CSE005", "22CSE007", "22IT001"], mails["PROFILE_SUBMITTED"])
+    c.eq("Not-shortlisted emails (said YES, did not qualify)",
+         ["21CE001", "22CSE004", "22CSE006", "22ECE001", "22IT003", "22IT004"], mails["NOT_SHORTLISTED"])
+    return {
+        "input": {"drives": {"Nimbus (A)": "10:00-13:00, CGPA ≥ 7, no backlogs, CSE/IT/AIDS",
+                             "Orion (B)": "11:30-14:30 same day, CGPA ≥ 6.5, ≤ 1 backlog, all branches"},
+                  "said_YES_A": "12 students", "said_NO_A": ["22CSE002"], "no_answer": ["22IT001", "22EEE001"],
+                  "form_answers": {"22CSE003": "CGPA 8.4", "22IT001": "consent YES", "22IT002": "no reply"}},
+        "expected": {"first_list": ["22CSE001", "22CSE005", "22CSE007"], "forms_before_approval": ["22CSE003", "22IT001", "22IT002"],
+                     "final_list": ["22CSE001", "22CSE003", "22CSE005", "22CSE007", "22IT001"]},
+        "actual": {"decisions": {r: [d.decision, d.roster_status, d.reasons] for r, d in sorted(dec.items())},
+                   "forms_sent_to": asked, "final_list": final.proposal.included_roll_numbers, "emails": mails},
+        "checks": c, "evidence": _pipeline_evidence(sb, done),
+    }
+
+
 SCENARIOS: dict[str, tuple[str, str, Callable[[Sandbox], dict[str, Any]]]] = {
     "TC1": ("CGPA threshold and backlogs", "CGPA >= 7 (inclusive) and no backlogs produce the correct eligible list; missing data yields UNKNOWN.", tc1),
     "TC2": ("Duplicate names", "Two (here three) students named Rahul Kumar are matched by roll number through import, evaluation, upload and attendance.", tc2),
     "TC3": ("Missing consent", "Eligible students without consent are excluded from payload, destination and attendance; revocation after approval blocks upload.", tc3),
     "TC4": ("Conflicting drives", "Overlapping drive slots are detected (with timezone conversion and half-open boundaries) and the clash is flagged before assignment.", tc4),
+    "TC5": ("Company email cases", "Six emails from the test company mailboxes: valid, overlapping, duplicate, no deadline, deadline after the drive, unknown sender with instruction-like text.", tc5),
+    "TC6": ("Student journey (3 stages)", "Each test student's case on real drives: YES, NO, no answer, missing details, low CGPA, wrong branch, backlogs, 7.0 boundary, clash, duplicate names, old batch; forms before approval; late qualifiers; emails.", tc6),
 }
 
 
@@ -300,11 +492,14 @@ def run_scenario(db: Session, test_id: str, user: User | None) -> TestRun:
     started = time.perf_counter()
     result: dict[str, Any] = {}
     failure = None
+    local_only = mailer.LOCAL_ONLY.set(True)  # scenarios never deliver real email, whatever is configured
     try:
         with Sandbox() as sb:
             result = fn(sb)
     except Exception as exc:  # noqa: BLE001 - a crash is a FAIL with details, never a pass
         failure = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[-4000:]}"
+    finally:
+        mailer.LOCAL_ONLY.reset(local_only)
     checks: Checks | None = result.get("checks")
     passed = failure is None and checks is not None and checks.passed
     if failure is None and checks is not None and not checks.passed:

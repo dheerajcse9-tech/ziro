@@ -155,21 +155,12 @@ def _real_emails() -> dict[str, str]:
     return out
 
 
-def seed_institute(db: Session) -> dict:
-    """Staff logins, the institute's student list (app/data/institute_students.csv) and the company senders.
-    No drives: drives are created by the agents from company emails. Students give consent per drive."""
+def load_institute_students(db: Session, real: dict[str, str]) -> int:
+    """Add the students in app/data/institute_students.csv; `real` maps roll number -> real email address."""
     import csv
 
     from app.domain.normalize import normalize_branch, parse_backlogs, parse_cgpa, parse_year
-    from app.services import app_settings
 
-    settings = get_settings()
-    if db.scalar(select(User).limit(1)):
-        return {"seeded": False, "reason": "database already has users"}
-    pw = os.getenv("DEMO_PASSWORD", DEMO_PASSWORD)
-    for email, name, role in INSTITUTE_USERS:
-        db.add(User(email=email, name=name, role=role, password_hash=hash_password(pw)))
-    real = _real_emails()
     count = 0
     with open(STUDENTS_CSV, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -187,6 +178,23 @@ def seed_institute(db: Session) -> dict:
                            phone=row.get("phone") or None, branch=branch, branch_raw=row["branch"], cgpa=cgpa.value,
                            active_backlogs=backlogs.value, graduation_year=year.value, data_issues=issues))
             count += 1
+    db.flush()
+    return count
+
+
+def seed_institute(db: Session) -> dict:
+    """Staff logins, the institute's student list (app/data/institute_students.csv) and the company senders.
+    No drives: drives are created by the agents from company emails. Students give consent per drive."""
+    from app.services import app_settings
+
+    settings = get_settings()
+    if db.scalar(select(User).limit(1)):
+        return {"seeded": False, "reason": "database already has users"}
+    pw = os.getenv("DEMO_PASSWORD", DEMO_PASSWORD)
+    for email, name, role in INSTITUTE_USERS:
+        db.add(User(email=email, name=name, role=role, password_hash=hash_password(pw)))
+    real = _real_emails()
+    count = load_institute_students(db, real)
     senders = sorted({x.strip().lower() for x in settings.company_senders.split(",") if "@" in x})
     app_settings.set_value(db, "trusted_company_senders", senders)
     app_settings.set_value(db, "institution_name", settings.institution_name)

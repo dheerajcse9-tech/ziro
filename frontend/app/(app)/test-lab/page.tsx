@@ -40,10 +40,10 @@ export default function TestLabPage() {
 
   return (
     <>
-      <PageHeader title="Test Lab" description="The four official scenarios, executed on demand against the real backend code in an isolated sandbox. Results are recorded as they come out — nothing is hard-coded."
+      <PageHeader title="Test Lab" description="TC1–TC4: the official hackathon scenarios. TC5: every company-email case. TC6: every test student's journey through the three steps. Each runs the real code in a throwaway sandbox (no real email is sent); results are recorded as they come out."
         actions={<>
           <a href="/api/tests/runs.csv" className="inline-flex h-9 items-center gap-2 rounded-md border border-line-strong bg-surface px-3.5 text-sm font-medium hover:bg-subtle"><Download className="size-4" />Evidence CSV</a>
-          {allowed && <Button variant="primary" loading={run.isPending && run.variables?.length === 4} onClick={() => run.mutate(["TC1", "TC2", "TC3", "TC4"])} icon={<Play className="size-4" />}>Run all scenarios</Button>}
+          {allowed && <Button variant="primary" loading={run.isPending && (run.variables?.length ?? 0) > 1} disabled={!q.data} onClick={() => run.mutate(q.data!.tests.map((t) => t.test_id))} icon={<Play className="size-4" />}>Run all scenarios</Button>}
         </>} />
       {q.data && <div className="mb-4"><Banner tone="info" title="Execution environment">{q.data.environment}. Demo data is never touched.</Banner></div>}
       {q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data ? <LoadingRows /> : (

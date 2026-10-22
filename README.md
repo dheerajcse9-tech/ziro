@@ -54,7 +54,7 @@ Requirements: Python 3.12+, Node 22+.
 cd backend
 pip install -r requirements-dev.txt
 alembic upgrade head
-python -m app.cli seed                 # institute data: 120 students, 4 staff logins, no drives
+python -m app.cli seed                 # institute data: 16 test students, 4 staff logins, no drives
                                        # (SEED_PROFILE=demo for the synthetic dataset with sample drives)
 uvicorn app.main:app --port 8000       # API + LOCAL MOCK portal at /mock-portal
 
@@ -73,8 +73,7 @@ Sign in (password `Demo@2026`):
 | 3 | `approver@placementos.demo` | Approver (Head of Placements) | Checks the list, sends forms for missing details, approves or rejects; approval sends the list to the company |
 | Setup | `admin@placementos.demo` | Admin | Connects Gmail, AI key, trusted senders, students, Test Lab, audit log; can help with steps 1–2 but **cannot approve** |
 
-Students: [`backend/app/data/institute_students.csv`](backend/app/data/institute_students.csv) (120 students, 7 branches,
-batch 2026, a few with missing data). They have demo addresses (`…@students.example.edu`) that are **never emailed**;
+Students: [`backend/app/data/institute_students.csv`](backend/app/data/institute_students.csv) (16 students, one per test case — see [docs/TEST_SCENARIOS.md](docs/TEST_SCENARIOS.md)). They have demo addresses (`…@students.example.edu`) that are **never emailed**;
 those messages stay in the app. Give 2–3 students real addresses with `REAL_STUDENT_EMAILS` in `backend/.env`. All
 real email goes out from the connected Gmail (`driveuploadtesting@gmail.com`).
 

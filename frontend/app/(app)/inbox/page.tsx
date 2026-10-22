@@ -281,7 +281,7 @@ export default function InboxPage() {
       <PageHeader title="Company emails"
         description="Recruitment emails from companies. The stage 1 agents read each email, check every detail, create the drive with its deadline, prepare its consent form and send it to every student."
         actions={canAct ? <>
-          {health.data?.seed_profile === "demo" && <Button onClick={() => samples.mutate()} loading={samples.isPending} icon={<Sparkles className="size-4" />}>Load sample emails</Button>}
+          <Button onClick={() => samples.mutate()} loading={samples.isPending} icon={<Sparkles className="size-4" />}>{health.data?.seed_profile === "demo" ? "Load sample emails" : "Load test emails (E1–E6)"}</Button>
           <Button onClick={() => setPaste(true)} icon={<ClipboardPaste className="size-4" />}>Paste an email</Button>
           <Button variant="primary" onClick={() => check.mutate()} loading={check.isPending} icon={<RefreshCw className="size-4" />}>Check mailbox now</Button>
         </> : undefined} />
