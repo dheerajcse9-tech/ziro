@@ -88,6 +88,20 @@ class Settings:
     # Base URL students open from emailed links (the frontend).
     public_app_url: str = field(default_factory=lambda: os.getenv("PUBLIC_APP_URL", "http://localhost:3000"))
 
+    # Company inbox. With INBOX_IMAP_HOST set, "Check mailbox" reads matching emails from that mailbox
+    # (read-only: messages are never marked read, moved or deleted). User/password default to the SMTP ones.
+    inbox_address: str = field(default_factory=lambda: os.getenv("INBOX_ADDRESS", "") or os.getenv("SMTP_USER", "")
+                               or "placements@college.example.edu")
+    inbox_imap_host: str = field(default_factory=lambda: os.getenv("INBOX_IMAP_HOST", ""))
+    inbox_imap_port: int = field(default_factory=lambda: int(os.getenv("INBOX_IMAP_PORT", "993")))
+    inbox_imap_user: str = field(default_factory=lambda: os.getenv("INBOX_IMAP_USER", "") or os.getenv("SMTP_USER", ""))
+    inbox_imap_password: str = field(default_factory=lambda: os.getenv("INBOX_IMAP_PASSWORD", "")
+                                     or os.getenv("SMTP_PASSWORD", ""))
+    inbox_imap_folder: str = field(default_factory=lambda: os.getenv("INBOX_IMAP_FOLDER", "INBOX"))
+    # Only emails whose subject contains this text are read, so personal mail in the same mailbox is never touched.
+    inbox_subject_filter: str = field(default_factory=lambda: os.getenv("INBOX_SUBJECT_FILTER", "Campus Drive"))
+    inbox_lookback_days: int = field(default_factory=lambda: int(os.getenv("INBOX_LOOKBACK_DAYS", "30")))
+
     # Serve the built static frontend from the API process (single-service deploys).
     frontend_dist: str = field(default_factory=lambda: os.getenv("FRONTEND_DIST", ""))
 

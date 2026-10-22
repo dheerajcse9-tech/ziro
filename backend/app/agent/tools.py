@@ -7,6 +7,8 @@ database or browser access, and they cannot approve anything.
 Permission tiers
   READ     : read-only queries and analysis (also available to the LLM planner)
   PROPOSE  : creates a proposal + approval request (graph only)
+  WRITE    : creates internal records only (a drive from a checked company email) (graph only)
+  NOTIFY   : emails students or employers (graph only)
   EXECUTE  : external side effects; requires an APPROVED approval, which the
              services re-validate server-side (graph only)
 """
@@ -37,7 +39,7 @@ from app.services import approvals, attendance, uploads, verification
 from app.services.consent import current_consent
 from app.services.roster import criteria_spec, current_criteria, drive_pair_conflicts, evaluate_drive
 
-Permission = Literal["READ", "PROPOSE", "NOTIFY", "EXECUTE"]
+Permission = Literal["READ", "WRITE", "PROPOSE", "NOTIFY", "EXECUTE"]
 
 
 class ToolFailure(Exception):
@@ -51,6 +53,7 @@ class ToolContext:
     db: Session
     run: AgentRun
     user: User | None
+    llm_client: Any = None  # injected AI client (tests); None = configured client or rules
 
     @property
     def actor(self) -> str:
@@ -76,6 +79,10 @@ class SimulateInput(_Strict):
     max_active_backlogs: int | None = Field(default=None, ge=0)
     allowed_branches: list[str] | None = Field(default=None, description="Branch codes, e.g. CSE, IT, ECE")
     shift_minutes: int | None = Field(default=None, description="Move the drive start/end by this many minutes")
+
+
+class InboundInput(_Strict):
+    email_id: int = Field(description="Company email id in the inbox")
 
 
 class ApprovalInput(_Strict):
@@ -369,6 +376,47 @@ def send_roster_notifications(ctx: ToolContext, args: UploadInput) -> dict[str, 
     return outreach.notify_upload(ctx.db, op, ctx.actor)
 
 
+def read_company_email(ctx: ToolContext, args: InboundInput) -> dict[str, Any]:
+    from app.services import intake
+
+    try:
+        row = intake.get(ctx.db, args.email_id)
+    except DomainError as exc:
+        raise ToolFailure("read_company_email", exc.message) from exc
+    result = intake.analyse(ctx.db, row, client=ctx.llm_client)
+    keys = ("company", "role", "drive_date", "start_time", "end_time", "venue", "registration_deadline", "roster_due",
+            "ctc", "graduation_years", "min_cgpa", "backlog_policy", "max_active_backlogs", "allowed_branches")
+    return {"email_id": row.id, "from": row.from_address, "subject": row.subject, "mode": result.get("mode"),
+            "ai_error": result.get("ai_error"), "fields": {k: result.get(k) for k in keys},
+            "ambiguities": result.get("ambiguities", []), "suspicious_phrases": result.get("suspicious_phrases", []),
+            "evidence": result.get("evidence", {})}
+
+
+def check_company_email(ctx: ToolContext, args: InboundInput) -> dict[str, Any]:
+    from app.services import intake
+
+    row = intake.get(ctx.db, args.email_id)
+    issues = intake.check(ctx.db, row)
+    return {"email_id": row.id, "issues": issues, "errors": sum(i["level"] == "ERROR" for i in issues),
+            "needs_review": sum(i["level"] == "REVIEW" for i in issues),
+            "corrected_fields": sorted((row.overrides or {}).keys())}
+
+
+def create_drive_from_email(ctx: ToolContext, args: InboundInput) -> dict[str, Any]:
+    from app.services import intake
+
+    row = intake.get(ctx.db, args.email_id)
+    try:
+        drive = intake.create_drive(ctx.db, row, ctx.user, ctx.actor)
+    except DomainError as exc:
+        raise ToolFailure("create_drive_from_email", exc.message) from exc
+    crit = current_criteria(ctx.db, drive.id)
+    return {"drive_id": drive.id, "title": drive.title, "employer": drive.employer.name,
+            "starts_at_local": to_local(drive.starts_at, drive.timezone).isoformat(timespec="minutes"),
+            "registration_deadline_local": to_local(drive.registration_deadline, drive.timezone).isoformat(timespec="minutes"),
+            "criteria_version": crit.version if crit else None, "consent": "Students must accept this drive's invitation"}
+
+
 def record_audit_event(ctx: ToolContext, args: AuditNoteInput) -> dict[str, Any]:
     ev = ledger.record(ctx.db, actor_type=ActorType.AGENT, actor_id=ctx.actor, action="AGENT_NOTE",
                        run_id=ctx.run.id, drive_id=ctx.run.drive_id, details={"note": args.note})
@@ -390,6 +438,9 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("send_drive_invitations", "Email every eligible student a personal link to accept or decline this drive.", DriveInput, "NOTIFY", send_drive_invitations),
     Tool("request_missing_data", "Email students whose eligibility is UNKNOWN a link to supply the missing fields (officer verifies before applying).", DriveInput, "NOTIFY", request_missing_data),
     Tool("send_roster_notifications", "After a VERIFIED upload, email the employer the roster and tell each sent student.", UploadInput, "NOTIFY", send_roster_notifications),
+    Tool("read_company_email", "Read a company recruitment email (untrusted data) and extract the drive details.", InboundInput, "READ", read_company_email),
+    Tool("check_company_email", "Validate extracted drive details: dates, deadline, criteria, sender and duplicates.", InboundInput, "READ", check_company_email),
+    Tool("create_drive_from_email", "Create a drive with versioned criteria and the registration deadline from a checked email.", InboundInput, "WRITE", create_drive_from_email),
     Tool("record_audit_event", "Append a note to the audit ledger.", AuditNoteInput, "READ", record_audit_event),
 ]}
 
@@ -443,6 +494,14 @@ def summarize(name: str, out: dict[str, Any]) -> str:
     try:
         if name == "list_drives":
             return f"{len(out['drives'])} active drive(s) found"
+        if name == "read_company_email":
+            f = out["fields"]
+            return (f"{f.get('company') or '?'} — {f.get('role') or '?'} on {f.get('drive_date') or '?'}; "
+                    f"register by {f.get('registration_deadline') or '?'} ({out['mode']})")
+        if name == "check_company_email":
+            return f"{out['errors']} error(s), {out['needs_review']} item(s) needing review"
+        if name == "create_drive_from_email":
+            return f"Drive #{out['drive_id']} '{out['title']}' created; registration closes {out['registration_deadline_local']}"
         if name == "get_student_roster":
             return (f"{out['total_students']} students; {out['consent_granted']} consented; "
                     f"{out['missing_cgpa']} missing CGPA, {out['missing_backlogs']} missing backlogs")

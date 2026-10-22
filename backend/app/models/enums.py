@@ -7,6 +7,7 @@ class Role(StrEnum):
     OFFICER = "officer"  # placement officer: prepares drives, runs the agent
     APPROVER = "approver"  # placement head: approves external submissions
     VIEWER = "viewer"
+    COORDINATOR = "coordinator"  # drive upload officer: turns company emails into drives, invites students
 
 
 class ConsentScope(StrEnum):
@@ -141,6 +142,7 @@ class ExceptionKind(StrEnum):
     UPLOAD_FAILED = "UPLOAD_FAILED"
     WITHDRAWAL_REQUIRED = "WITHDRAWAL_REQUIRED"  # already sent to employer, no longer eligible
     DATA_SUBMITTED = "DATA_SUBMITTED"  # student sent missing details; officer must verify before applying
+    INTAKE_REVIEW = "INTAKE_REVIEW"  # a company email needs the drive upload officer's review
 
 
 class ExceptionStatus(StrEnum):
@@ -203,3 +205,18 @@ class DriveOutcome(StrEnum):
     NOT_SELECTED = "NOT_SELECTED"
     ABSENT = "ABSENT"
     WITHDRAWN = "WITHDRAWN"
+
+
+class InboundSource(StrEnum):
+    DEMO = "DEMO"  # synthetic company emails seeded for the demo
+    IMAP = "IMAP"  # fetched from the placement mailbox
+    MANUAL = "MANUAL"  # pasted by the drive upload officer
+
+
+class InboundStatus(StrEnum):
+    NEW = "NEW"
+    PROCESSING = "PROCESSING"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    DRIVE_CREATED = "DRIVE_CREATED"
+    PUBLISHED = "PUBLISHED"  # drive created and students invited
+    IGNORED = "IGNORED"

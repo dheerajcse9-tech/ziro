@@ -17,6 +17,7 @@ _CGPA_PATTERNS = [
     re.compile(r"(?:cgpa|cpi|gpa)\s*(?:of\s*)?(>=|≥|=>|at least|minimum(?: of)?|min\.?|above|>)\s*(\d+(?:\.\d+)?)", re.I),
     re.compile(r"(?:minimum|min\.?)\s*(?:cgpa|cpi|gpa)\s*(?:of|:)?\s*(\d+(?:\.\d+)?)", re.I),
     re.compile(r"(\d+(?:\.\d+)?)\s*(?:cgpa|cpi)\s*(?:and above|or above|\+)", re.I),
+    re.compile(r"(?:cgpa|cpi|gpa)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*(?:and above|or above|or more|&\s*above|\+)", re.I),
 ]
 _NO_BACKLOG = re.compile(r"\bno\s+(?:active\s+|current\s+|standing\s+)?backlogs?\b|\bzero\s+(?:active\s+)?backlogs?\b|\bbacklogs?\s*:\s*(?:none|0|not allowed)\b", re.I)
 _MAX_BACKLOG = re.compile(r"(?:max(?:imum)?|up to|upto|at most|<=)\s*(\d+)\s*(?:active\s+)?backlogs?", re.I)

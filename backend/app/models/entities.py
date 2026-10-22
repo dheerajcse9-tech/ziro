@@ -151,6 +151,8 @@ class Drive(TimestampMixin, Base):
     schedule_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     source_reference: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
+    registration_deadline: Mapped[datetime | None] = mapped_column(UTCDateTime)  # students must accept by this time
+    roster_due_at: Mapped[datetime | None] = mapped_column(UTCDateTime)  # employer wants the list by this time
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     employer: Mapped[Employer] = relationship(back_populates="drives")
@@ -508,3 +510,30 @@ class AppSetting(Base):
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[Any] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class InboundEmail(TimestampMixin, Base):
+    """A company email received by the placement mailbox. Its content is untrusted data."""
+
+    __tablename__ = "inbound_emails"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    message_id: Mapped[str] = mapped_column(String(300), unique=True, nullable=False)
+    from_address: Mapped[str] = mapped_column(String(255), nullable=False)
+    from_name: Mapped[str | None] = mapped_column(String(200))
+    to_address: Mapped[str | None] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    body_text: Mapped[str] = mapped_column(Text, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    extraction: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    overrides: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # corrections by the drive upload officer
+    issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    drive_id: Mapped[int | None] = mapped_column(ForeignKey("drives.id", ondelete="SET NULL"))
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("agent_runs.id", ondelete="SET NULL"))
+    processed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    processed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    note: Mapped[str | None] = mapped_column(Text)
+
+    drive: Mapped[Drive | None] = relationship()
