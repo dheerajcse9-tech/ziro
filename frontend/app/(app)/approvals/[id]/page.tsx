@@ -34,7 +34,7 @@ export default function ApprovalDetail() {
     onSuccess: (r) => {
       setMode(null); qc.invalidateQueries();
       if (r.run) {
-        toast.success(`Approved. Agent run #${r.run.id} executed the upload: ${r.run.status.replace(/_/g, " ").toLowerCase()}`);
+        toast.success(r.run.status === "VERIFIED" ? "Approved — the list was sent and checked" : `Approved — ${r.run.status.replace(/_/g, " ").toLowerCase()}`);
         router.push(`/agent/${r.run.id}`);
       } else toast.success("Approved");
     },
@@ -59,7 +59,7 @@ export default function ApprovalDetail() {
 
   return (
     <>
-      <PageHeader title={`Approval #${a.id} · ${a.drive_title}`} crumbs={[{ label: "Approvals", href: "/approvals" }, { label: `#${a.id}` }]}
+      <PageHeader title={a.drive_title} crumbs={[{ label: "Approvals", href: "/approvals" }, { label: a.drive_title }]}
         meta={<><StatusBadge status={a.status} label={a.status === "CONSUMED" ? "Sent" : undefined} />{p.kind === "SUPPLEMENT" && <Tag tone="info">Additional students only</Tag>}</>}
         actions={canApprove ? <>
           <Button variant="secondary" onClick={() => { setNote(""); setMode("reject"); }} icon={<XCircle className="size-4" />}>Reject</Button>
@@ -67,9 +67,9 @@ export default function ApprovalDetail() {
         </> : a.status === "APPROVED" && can(me.data, "runAgent") ? <Button variant="primary" loading={execute.isPending} onClick={() => execute.mutate()}>Execute approved upload</Button> : undefined} />
 
       {a.status === "PENDING" && !a.is_current && (
-        <div className="mb-4"><Banner tone="bad" title="This proposal is stale">The live roster no longer matches the reviewed proposal (live hash <span className="font-mono">{a.live_proposal_hash?.slice(0, 12) ?? a.live_error}</span>). Approving would be refused; ask the officer to re-run the agent.</Banner></div>)}
+        <div className="mb-4"><Banner tone="bad" title="This proposal is stale">Student details or consent changed after this list was prepared, so it can no longer be approved. Ask the placement officer to run the drive again.</Banner></div>)}
       {a.status === "PENDING" && !can(me.data, "approve") && (
-        <div className="mb-4"><Banner tone="info" title="Approver action required">Only an approver (Head of Placements) or admin can approve. The agent and placement officers cannot approve proposals.</Banner></div>)}
+        <div className="mb-4"><Banner tone="info" title="Approver action required">Only the Approver (Head of Placements) can approve or reject this list. Agents never approve.</Banner></div>)}
       {a.status === "INVALIDATED" && <div className="mb-4"><Banner title="Invalidated">{a.invalidated_reason}</Banner></div>}
 
       {p.kind === "SUPPLEMENT" && (
@@ -146,11 +146,11 @@ export default function ApprovalDetail() {
       </div>
 
       <ConfirmDialog open={mode === "approve"} onOpenChange={(o) => !o && setMode(null)} tone="success" loading={approve.isPending}
-        title={`Approve ${p.kind === "SUPPLEMENT" ? "supplementary upload" : "upload"} of ${p.included_roll_numbers.length} student(s)?`} confirmLabel="Approve and execute"
-        description="The backend re-computes the roster from live data. If it no longer matches this hash the approval is refused. On approval the Upload & Verification Agent uploads to the destination and independently verifies the result; the Employer Update Agent then emails the company this list from the placement mailbox, tells each student they are shortlisted, and tells consenting students who did not qualify why."
+        title={`Approve ${p.kind === "SUPPLEMENT" ? "supplementary upload" : "upload"} of ${p.included_roll_numbers.length} student(s)?`} confirmLabel="Approve and send"
+        description="After you approve, the agents send this list, check that it arrived correctly, email it to the company from the placement mailbox, tell each listed student they are shortlisted, and tell the others why they were not."
         onConfirm={() => ack ? approve.mutate() : toast.error("Confirm that you reviewed the roster")}>
         <div className="space-y-3">
-          <div className="rounded-md bg-subtle p-3 text-[12.5px]"><p>Destination: <strong>{p.destination.name}</strong></p><p>Hash: <span className="font-mono">{p.proposal_hash.slice(0, 24)}…</span></p></div>
+          <div className="rounded-md bg-subtle p-3 text-[12.5px]"><p>Destination: <strong>{p.destination.name}</strong></p></div>
           <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />I reviewed the roster, exclusions and destination for this exact proposal.</label>
           <Field label="Note (optional)" htmlFor="appr_note"><Textarea id="appr_note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
         </div>

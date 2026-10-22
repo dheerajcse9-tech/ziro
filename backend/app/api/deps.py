@@ -44,6 +44,6 @@ def require_roles(*roles: Role) -> Callable[[User], User]:
 
 
 OFFICER_ROLES = (Role.OFFICER, Role.ADMIN)
-APPROVER_ROLES = (Role.APPROVER, Role.ADMIN)
+APPROVER_ROLES = (Role.APPROVER,)  # only the approver signs off; admins set the system up
 DRIVE_ROLES = (Role.COORDINATOR, Role.OFFICER, Role.ADMIN)  # create drives, process company email, invite students
 ANY_ROLE = (Role.ADMIN, Role.OFFICER, Role.APPROVER, Role.VIEWER, Role.COORDINATOR)

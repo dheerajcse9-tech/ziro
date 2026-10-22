@@ -31,7 +31,7 @@ const NAV: NavItem[] = [
   { href: "/communications", label: "Emails sent", icon: Mail, roles: ["coordinator", "officer", "approver", "admin"] },
   { href: "/agents", label: "Agents", icon: Network, roles: ALL },
   { href: "/test-lab", label: "Test Lab", icon: FlaskConical, roles: ["admin"] },
-  { href: "/audit", label: "Audit log", icon: FileSearch, roles: ["admin", "approver"] },
+  { href: "/audit", label: "Audit log", icon: FileSearch, roles: ["admin"] },
   { href: "/settings", label: "Settings", icon: Settings, roles: ALL },
 ];
 

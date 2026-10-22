@@ -35,7 +35,7 @@ from app.models.enums import (
 from app.services import exceptions
 from app.services.roster import RosterEvaluation, evaluate_drive
 
-APPROVER_ROLES = {Role.APPROVER, Role.ADMIN}
+APPROVER_ROLES = {Role.APPROVER}
 OPEN_APPROVAL = (ApprovalStatus.PENDING, ApprovalStatus.APPROVED)
 
 

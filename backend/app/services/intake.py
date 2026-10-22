@@ -333,6 +333,26 @@ def _published_text(data: dict[str, Any]) -> str:
     return f"Eligibility: {', '.join(parts)}.\nBranches eligible: {branches}."
 
 
+def ensure_stand_in_form(db: Session, drive: Drive) -> bool:
+    """Create the stand-in upload form for an email drive whose form could not be registered at creation
+    (for example, the API was briefly unreachable). Returns True when the drive now has a destination."""
+    from app.services.roster import current_criteria
+
+    if drive.destination_id is not None:
+        return True
+    row = db.query(InboundEmail).filter_by(drive_id=drive.id).first()
+    crit = current_criteria(db, drive.id)
+    if row is None or crit is None:
+        return False
+    data = {"min_cgpa": crit.min_cgpa, "backlog_policy": crit.backlog_policy,
+            "max_active_backlogs": crit.max_active_backlogs, "allowed_branches": crit.allowed_branches}
+    db.commit()  # see create_drive: the mock portal may share this SQLite database
+    drive.destination_id = _stand_in_form(db, drive, data, row)
+    db.flush()
+    db.refresh(drive)
+    return drive.destination_id is not None
+
+
 def _stand_in_form(db: Session, drive: Drive, data: dict[str, Any], row: InboundEmail) -> int | None:
     """The company asked for the list by email, so there is no company web form to upload to. The LOCAL MOCK
     portal hosts a clearly labelled stand-in form, so the upload -> read-back verification -> receipt pipeline

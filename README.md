@@ -66,12 +66,12 @@ npm run build && npm start             # http://localhost:3000  (proxies /api to
 
 Sign in (password `Demo@2026`):
 
-| Login | Role | Does |
-|---|---|---|
-| `driveuploadtesting@gmail.com` | Drive upload officer | company emails, connect Gmail, drives, consent forms |
-| `officer@placementos.demo` | Placement officer | filter students, run drives, resolve issues |
-| `approver@placementos.demo` | Head of Placements | review and approve lists, send personal forms to students |
-| `admin@placementos.demo` | Admin | everything, settings, demo reset |
+| Step | Login | Role | Does |
+|---|---|---|---|
+| 1 | `driveuploadtesting@gmail.com` | Drive upload officer | Reads company emails, checks details and deadline, creates the drive, sends the consent form to all students |
+| 2 | `officer@placementos.demo` | Placement officer | After students answer, runs the drive (YES + criteria + clashes), fixes records, sends the list to the approver |
+| 3 | `approver@placementos.demo` | Approver (Head of Placements) | Checks the list, sends forms for missing details, approves or rejects; approval sends the list to the company |
+| Setup | `admin@placementos.demo` | Admin | Connects Gmail, AI key, trusted senders, students, Test Lab, audit log; can help with steps 1–2 but **cannot approve** |
 
 Students: [`backend/app/data/institute_students.csv`](backend/app/data/institute_students.csv) (120 students, 7 branches,
 batch 2026, a few with missing data). They have demo addresses (`…@students.example.edu`) that are **never emailed**;

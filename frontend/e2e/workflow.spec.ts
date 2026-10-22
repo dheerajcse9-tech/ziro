@@ -32,6 +32,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await page.getByLabel("Objective").fill("Prepare the eligible roster for the upcoming drive, identify unresolved records, and show me the proposal for approval.");
     await page.getByRole("button", { name: "Run agent" }).click();
     await expect(page.getByText("Waiting for human approval").first()).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel("Show technical details").check();
     await expect(page.getByText("create_approval_request").first()).toBeVisible();
     await shot(page, "02-agent-run-awaiting-approval");
     // Officers cannot approve: the approval page shows the approver-only notice.
@@ -47,8 +48,9 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await page.getByRole("button", { name: "Approve upload" }).click();
     await page.getByLabel("I reviewed the roster").check();
     await shot(page, "04-approval-confirm");
-    await page.getByRole("button", { name: "Approve and execute" }).click();
+    await page.getByRole("button", { name: "Approve and send" }).click();
     await expect(page.getByText("Roster uploaded and independently verified").first()).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel("Show technical details").check();
     await expect(page.getByText("verify_uploaded_roster").first()).toBeVisible();
     await shot(page, "05-agent-run-verified");
     await page.getByRole("link", { name: /Receipt/ }).click();
@@ -78,8 +80,9 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await shot(page, "16-supplement-approval");
     await page.getByRole("button", { name: "Approve upload" }).click();
     await page.getByLabel("I reviewed the roster").check();
-    await page.getByRole("button", { name: "Approve and execute" }).click();
+    await page.getByRole("button", { name: "Approve and send" }).click();
     await expect(page.getByText("Roster uploaded and independently verified").first()).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel("Show technical details").check();
     await expect(page.getByText(/verification VERIFIED \(15\/15\)/).first()).toBeVisible();
   });
 
@@ -259,7 +262,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
   test("viewer cannot act", async ({ page }) => {
     await login(page, "viewer@placementos.demo");
     await page.goto("/agent");
-    await expect(page.getByText("Your role can view runs but not start them.").first()).toBeVisible();
+    await expect(page.getByText("Only the Placement Officer runs drives.").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Run agent" })).toBeDisabled();
     await page.goto("/settings");
     await shot(page, "15-settings-viewer");

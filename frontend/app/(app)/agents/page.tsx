@@ -32,15 +32,11 @@ function AgentCard({ a }: { a: CrewAgent }) {
         <Tag>{TRIGGER[a.trigger].icon}<span className="ml-1">{TRIGGER[a.trigger].label}</span></Tag>
         <Tag tone="info">Works for: {ROLE_LABEL[a.owner]}</Tag>
       </div>
-      {a.tools.length > 0 && (
-        <p className="text-[11.5px] text-muted">Tools it may use: <span className="font-mono">{a.tools.join(", ")}</span></p>
-      )}
       {a.recent.length > 0 && (
         <ul className="mt-1 space-y-0.5 border-t border-line pt-2 text-[11.5px] text-muted">
           {a.recent.slice(0, 3).map((r, i) => (
             <li key={i} className="flex justify-between gap-2">
-              <span className="truncate">{r.run_id ? <Link className="text-accent hover:underline" href={`/agent/${r.run_id}`}>run #{r.run_id}</Link> : titleCase(r.action ?? "")}
-                {r.what ? ` · ${r.what}` : ""}</span>
+              <span className="truncate">{r.run_id ? <Link className="text-accent hover:underline" href={`/agent/${r.run_id}`}>{r.what || "View task"}</Link> : (r.what || titleCase(r.action ?? ""))}</span>
               <span className="shrink-0 text-faint">{relTime(r.at)}</span>
             </li>
           ))}
@@ -67,18 +63,18 @@ export default function AgentsPage() {
   return (
     <>
       <PageHeader title="Agents"
-        description="Each agent does one job, can use only its own tools, and works for one person. Agents never approve anything: a person approves every roster before it reaches a company."
+        description="The helpers that do the routine work for each person. They never approve anything: the Approver approves every list before it reaches a company."
         actions={can(me.data, "manageDrives") || can(me.data, "approve") ? <Button variant="primary" icon={<Play className="size-4" />} loading={tick.isPending} onClick={() => tick.mutate()}>Run background agents now</Button> : undefined} />
       {q.isError ? <ErrorState error={q.error} /> : !d ? <LoadingRows /> : (
         <>
           <div className="mb-4 grid gap-3 md:grid-cols-3">
-            <Banner tone={d.ai.provider === "none" ? "info" : "ok"} title={d.ai.provider === "none" ? "AI: rule-based fallback" : `AI: ${d.ai.provider === "gemini" ? "Gemini" : "Claude"} (${d.ai.model})`}>
-              {d.ai.provider === "none" ? "Add GEMINI_API_KEY to backend/.env to let the Email Reader and Goal Planner use Gemini." : "Used by the Email Reader and Goal Planner; every decision is still checked by rules."}
+            <Banner tone={d.ai.provider === "none" ? "info" : "ok"} title={d.ai.provider === "none" ? "AI: off (rules only)" : `AI: ${d.ai.provider === "gemini" ? "Gemini" : "Claude"}`}>
+              {d.ai.provider === "none" ? "Emails are read with built-in rules. An admin can add a Gemini key to use AI." : "Used to read company emails and requests; every decision is still checked by rules."}
             </Banner>
             <Banner tone={d.mailbox.source ? "ok" : "info"} title={d.mailbox.source ? `Mailbox: ${d.mailbox.address}` : "Mailbox: not connected"}>
-              {d.mailbox.source ? `Subject filter “${d.mailbox.filter || "none"}”` : "Connect Gmail in Settings."}
+              {d.mailbox.source ? `Reads emails whose subject contains “${d.mailbox.filter || "anything"}”` : "An admin connects Gmail in Settings."}
             </Banner>
-            <Banner tone={d.autopilot.enabled ? (d.autopilot.last_error ? "warn" : "ok") : "info"} title={d.autopilot.enabled ? `Autopilot: every ${Math.max(1, Math.round(d.autopilot.interval_seconds / 60))} min` : "Autopilot: off"}>
+            <Banner tone={d.autopilot.enabled ? (d.autopilot.last_error ? "warn" : "ok") : "info"} title={d.autopilot.enabled ? `Checks automatically every ${Math.max(1, Math.round(d.autopilot.interval_seconds / 60))} min` : "Automatic checks: off"}>
               {d.autopilot.last_error ?? (d.autopilot.last_tick_at ? `Last run ${relTime(d.autopilot.last_tick_at)}` : "Not run yet")}
             </Banner>
           </div>

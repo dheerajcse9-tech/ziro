@@ -16,7 +16,7 @@ import { PageHeader } from "@/components/ui/layout";
 import { Dialog } from "@/components/ui/overlay";
 import { Button, Card, CardHeader, Field, Input, Select } from "@/components/ui/primitives";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { MockBadge, StatusBadge, Tag } from "@/components/ui/status";
+import { StatusBadge, Tag } from "@/components/ui/status";
 import { api } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
 import { toastError } from "@/lib/errors";
@@ -41,18 +41,17 @@ const columns: ColumnDef<Drive>[] = [
   { accessorKey: "title", header: "Drive", cell: ({ row }) => (
     <div><Link href={`/drives/${row.original.id}`} className="font-medium text-ink hover:underline">{row.original.title}</Link>
       <div className="text-[12px] text-muted">{row.original.employer.name}{row.original.location ? ` · ${row.original.location}` : ""}</div></div>) },
-  { id: "slot", header: "Slot (drive-local)", accessorFn: (d) => d.starts_at, cell: ({ row }) => <span className="whitespace-nowrap text-[12.5px]">{fmtSlot(row.original.starts_at, row.original.ends_at, row.original.timezone)}</span> },
+  { id: "slot", header: "Date & time", accessorFn: (d) => d.starts_at, cell: ({ row }) => <span className="whitespace-nowrap text-[12.5px]">{fmtSlot(row.original.starts_at, row.original.ends_at, row.original.timezone)}</span> },
   { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge status={row.original.status} /> },
   { id: "criteria", header: "Criteria", enableSorting: false, cell: ({ row }) => {
     const c = row.original.criteria;
     if (!c) return <Tag tone="bad">Missing</Tag>;
-    return <span className="text-[12px] text-ink-2">v{c.version} · {c.min_cgpa !== null ? `CGPA ≥ ${c.min_cgpa}` : "No CGPA min"} · {c.backlog_policy === "NO_ACTIVE_BACKLOGS" ? "0 backlogs" : c.backlog_policy === "MAX_ALLOWED" ? `≤ ${c.max_active_backlogs} backlogs` : "backlogs n/a"} · {c.allowed_branches.length ? c.allowed_branches.join("/") : "all branches"}</span>;
+    return <span className="text-[12px] text-ink-2">{c.min_cgpa !== null ? `CGPA ≥ ${c.min_cgpa}` : "No CGPA min"} · {c.backlog_policy === "NO_ACTIVE_BACKLOGS" ? "0 backlogs" : c.backlog_policy === "MAX_ALLOWED" ? `≤ ${c.max_active_backlogs} backlogs` : "backlogs n/a"} · {c.allowed_branches.length ? c.allowed_branches.join("/") : "all branches"}</span>;
   } },
-  { id: "eval", header: "Latest evaluation", enableSorting: false, cell: ({ row }) => {
+  { id: "eval", header: "Students", enableSorting: false, cell: ({ row }) => {
     const e = row.original.latest_evaluation;
     return e ? <span className="tabular text-[12px]">{e.included} in · {e.held} held · {e.excluded} out</span> : <span className="text-[12px] text-faint">Not evaluated</span>;
   } },
-  { id: "dest", header: "Destination", enableSorting: false, cell: ({ row }) => row.original.destination ? (row.original.destination.is_local_mock ? <MockBadge /> : <Tag tone="info">Organiser form</Tag>) : <Tag tone="bad">None</Tag> },
 ];
 
 export default function DrivesPage() {
@@ -94,7 +93,7 @@ export default function DrivesPage() {
 
   return (
     <>
-      <PageHeader title="Drives" description="Drives, schedules (timezone-aware), versioned eligibility criteria and their upload destinations."
+      <PageHeader title="Drives" description="Every placement drive, created from company emails."
         actions={editable ? <>
           <Button onClick={() => setEmpOpen(true)} icon={<Building2 className="size-4" />}>Add employer</Button>
           <Button variant="primary" onClick={() => setCreateOpen(true)} icon={<Plus className="size-4" />}>New drive</Button>

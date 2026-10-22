@@ -12,12 +12,12 @@ import { toast } from "sonner";
 import { InvitationsPanel, ResultsPanel } from "@/components/drives/outreach-panels";
 import { BRANCHES, CriteriaFields, criteriaSchema, type CriteriaValues, toCriteriaPayload } from "@/components/drives/criteria-fields";
 import { DataTable } from "@/components/ui/data-table";
-import { HashValue, JsonView } from "@/components/ui/evidence";
+import { JsonView } from "@/components/ui/evidence";
 import { DefinitionList, KpiCard, PageHeader } from "@/components/ui/layout";
 import { Dialog, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Button, Card, CardHeader, Field, Input, Select } from "@/components/ui/primitives";
 import { Banner, EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { MockBadge, PlannerBadge, StatusBadge, Tag } from "@/components/ui/status";
+import { StatusBadge, Tag } from "@/components/ui/status";
 import { api } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
 import { toastError } from "@/lib/errors";
@@ -125,7 +125,7 @@ export default function DriveWorkspace() {
         actions={<>
           {editable && <Button onClick={openSchedule} icon={<CalendarClock className="size-4" />}>Edit schedule / status</Button>}
           {can(me.data, "runAgent") && <Button variant="primary" icon={<Bot className="size-4" />}
-            onClick={() => router.push(`/agent?objective=${encodeURIComponent(`Prepare the eligible roster for drive #${d.id} (${d.title}), identify unresolved records, and show me the proposal for approval.`)}`)}>Run this drive</Button>}
+            onClick={() => router.push(`/agent?drive=${d.id}`)}>Run this drive</Button>}
         </>} />
 
       <Tabs value={tab} onValueChange={setTab} tabs={[
@@ -177,12 +177,12 @@ export default function DriveWorkspace() {
                 {d.runs.length === 0 && d.approvals.length === 0 && d.uploads.length === 0 && <EmptyState title="No activity yet" />}
                 {d.runs.map((r) => (
                   <Link key={`r${r.id}`} href={`/agent/${r.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">
-                    <span className="text-[13px]">Agent run #{r.id} <span className="text-muted">· {relTime(r.created_at)}</span></span>
+                    <span className="text-[13px]">Agent task <span className="text-muted">· {relTime(r.created_at)}</span></span>
                     <StatusBadge status={r.status} />
                   </Link>))}
                 {d.approvals.map((a) => (
                   <Link key={`a${a.id}`} href={`/approvals/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">
-                    <span className="text-[13px]">Approval #{a.id} · {a.included_count} students</span><StatusBadge status={a.status} />
+                    <span className="text-[13px]">Approval · {a.included_count} students</span><StatusBadge status={a.status} />
                   </Link>))}
                 {d.uploads.map((u) => (
                   <Link key={`u${u.id}`} href={`/verification/${u.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">

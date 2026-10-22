@@ -8,11 +8,11 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { HashValue, JsonView, RollList } from "@/components/ui/evidence";
+import { JsonView, RollList } from "@/components/ui/evidence";
 import { DefinitionList, PageHeader } from "@/components/ui/layout";
 import { Button, ButtonLink, Card, CardHeader } from "@/components/ui/primitives";
 import { Banner, EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { PlannerBadge, StatusBadge, Tag } from "@/components/ui/status";
+import { StatusBadge, Tag } from "@/components/ui/status";
 import { api } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
 import { toastError } from "@/lib/errors";
@@ -52,7 +52,7 @@ export default function RunPage() {
   const { id } = useParams<{ id: string }>();
   const me = useMe();
   const qc = useQueryClient();
-  const [showTransitions, setShowTransitions] = useState(false);
+  const [tech, setTech] = useState(false);
   const run = useQuery({
     queryKey: ["run", id], queryFn: () => api.get<AgentRun>(`/api/agent/runs/${id}`),
     refetchInterval: (q) => (q.state.data && (TERMINAL.has(q.state.data.status) || WAITING.has(q.state.data.status)) ? false : 1000),
@@ -75,20 +75,19 @@ export default function RunPage() {
   const s = r.state ?? {};
   const q = r.pending_question;
   const live = !TERMINAL.has(r.status) && !WAITING.has(r.status);
-  const shown = (events.data ?? []).filter((e) => showTransitions || !["NODE_START", "TRANSITION"].includes(e.type));
-  const toolCalls = (events.data ?? []).filter((e) => e.type === "TOOL_CALL").length;
+  // By default only the plain-language steps are shown; tool inputs/outputs are behind "Show technical details".
+  const shown = (events.data ?? []).filter((e) => tech || !["NODE_START", "TRANSITION", "TOOL_CALL", "TOOL_RESULT"].includes(e.type));
   const src = s.requirements?.retrieved_source;
   const mayAnswer = can(me.data, "runAgent") || (r.intent === "PROCESS_COMPANY_EMAIL" && can(me.data, "manageDrives"))
     || (r.intent === "FOLLOW_UP" && can(me.data, "followUp"));
 
   return (
     <>
-      <PageHeader title={<span className="flex items-center gap-2">Agent run #{r.id}{live && <Loader2 className="size-4 animate-spin text-info" />}</span>}
-        crumbs={[{ label: "Run a drive", href: "/agent" }, { label: `Run #${r.id}` }]}
+      <PageHeader title={<span className="flex items-center gap-2">{r.drive_title ?? "Agent task"}{live && <Loader2 className="size-4 animate-spin text-info" />}</span>}
+        crumbs={[{ label: "Run a drive", href: "/agent" }, { label: "Details" }]}
         description={<span className="italic">“{r.objective}”</span>}
-        meta={<><StatusBadge status={r.status} /><PlannerBadge mode={r.planner_mode} />{r.intent && <Tag>{r.intent.replace(/_/g, " ").toLowerCase()}</Tag>}
-          {r.drive_id && <Link href={`/drives/${r.drive_id}`} className="text-[12px] text-accent hover:underline">{r.drive_title}</Link>}
-          {r.criteria_version && <Tag tone="accent">criteria v{r.criteria_version}</Tag>}</>} />
+        meta={<><StatusBadge status={r.status} />
+          {r.drive_id && <Link href={`/drives/${r.drive_id}`} className="text-[12px] text-accent hover:underline">Open drive</Link>}</>} />
 
       {q && WAITING.has(r.status) || (q && r.status === "FAILED") ? (
         <div className="mb-4">
@@ -117,7 +116,7 @@ export default function RunPage() {
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="space-y-4">
           <Card>
-            <CardHeader title="Execution plan" description={r.current_step ? `Current step: ${r.current_step}` : undefined} />
+            <CardHeader title="Steps" />
             {r.plan.length === 0 ? <EmptyState title="Planning…" /> : (
               <ol className="space-y-0.5 p-2">
                 {r.plan.map((p, i) => (
@@ -133,20 +132,17 @@ export default function RunPage() {
             )}
           </Card>
           <Card>
-            <CardHeader title="Run facts" />
+            <CardHeader title="Details" />
             <div className="p-4"><DefinitionList cols={1} items={[
-              { label: r.intent === "PROCESS_COMPANY_EMAIL" ? "Email reading" : "Planner", value: r.planner_mode === "LLM" ? `AI (${r.llm_model})` : r.planner_mode.replace(/_/g, " ").toLowerCase() },
-              { label: "Tool calls", value: toolCalls },
               { label: "Started", value: fmtDateTime(r.created_at) },
               { label: "Last update", value: fmtDateTime(r.updated_at) },
-              ...(s.proposal_hash ? [{ label: "Proposal hash", value: <HashValue value={s.proposal_hash} /> }] : []),
               ...(s.approval_id ? [{ label: "Approval", value: <Link className="text-accent hover:underline" href={`/approvals/${s.approval_id}`}>#{s.approval_id}</Link> }] : []),
               ...(s.upload_id ? [{ label: "Upload", value: <Link className="text-accent hover:underline" href={`/verification/${s.upload_id}`}>#{s.upload_id}</Link> }] : []),
             ]} /></div>
           </Card>
           {s.eligibility && (
             <Card>
-              <CardHeader title="Eligibility summary" description="From evaluate_eligibility" />
+              <CardHeader title="Who qualifies" />
               <div className="space-y-3 p-4">
                 <div className="grid grid-cols-3 gap-2 text-center">
                   {[["Included", s.eligibility.counts.included, "text-ok"], ["Held", s.eligibility.counts.held, "text-hold"], ["Excluded", s.eligibility.counts.excluded, "text-ink"]].map(([l, v, c]) => (
@@ -180,7 +176,7 @@ export default function RunPage() {
         <div className="space-y-4 xl:col-span-2">
           {src && (
             <Card>
-              <CardHeader title="Retrieved source evidence" description={<>Employer form · <span className="font-mono">{src.url}</span></>}
+              <CardHeader title="Company's criteria" description="What the company published, compared with the drive's criteria"
                 actions={src.discrepancies_vs_configured?.length ? <Tag tone="bad">Mismatch</Tag> : <Tag tone="ok">Consistent</Tag>} />
               <div className="grid gap-4 p-4 md:grid-cols-2">
                 <div>
@@ -190,12 +186,11 @@ export default function RunPage() {
                     <p className="mt-2 flex items-start gap-1.5 text-[12px] text-warn"><ShieldAlert className="mt-0.5 size-3.5 shrink-0" />Instruction-like text detected and ignored: {src.parsed_published_criteria.suspicious_phrases.join("; ")}</p>)}
                 </div>
                 <div className="space-y-2 text-[12.5px]">
-                  <p className="text-[12px] font-semibold text-muted">Deterministic extraction</p>
+                  <p className="text-[12px] font-semibold text-muted">Read from it</p>
                   <DefinitionList cols={1} items={[
                     { label: "CGPA minimum", value: src.parsed_published_criteria?.min_cgpa ?? "not stated" },
                     { label: "Backlog policy", value: src.parsed_published_criteria?.backlog_policy ?? "not stated" },
                     { label: "Branches", value: (src.parsed_published_criteria?.branches ?? []).join(", ") || "not stated / all" },
-                    { label: "Content SHA-256", value: <HashValue value={src.sha256} /> },
                   ]} />
                   {src.discrepancies_vs_configured?.length > 0 && <Banner tone="bad" title="Differs from configured criteria">{src.discrepancies_vs_configured.map((d: any) => `${d.field}: published ${JSON.stringify(d.published)} vs configured ${JSON.stringify(d.configured)}`).join("; ")}</Banner>}
                 </div>
@@ -203,8 +198,8 @@ export default function RunPage() {
             </Card>
           )}
           <Card>
-            <CardHeader title="Execution timeline" description="Persisted events: tool invocations with their real inputs and outputs, decisions, interrupts and errors."
-              actions={<label className="flex items-center gap-1.5 text-[12px] text-muted"><input type="checkbox" checked={showTransitions} onChange={(e) => setShowTransitions(e.target.checked)} />Show node transitions</label>} />
+            <CardHeader title="What the agents did"
+              actions={<label className="flex items-center gap-1.5 text-[12px] text-muted"><input type="checkbox" checked={tech} onChange={(e) => setTech(e.target.checked)} />Show technical details</label>} />
             {!events.data ? <LoadingRows /> : (
               <ol className="relative px-4 py-3">
                 {shown.map((e) => {
@@ -215,17 +210,17 @@ export default function RunPage() {
                       <div className={cn("mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-subtle ring-1 ring-line", st.tone)}>{st.icon}</div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{e.type.replace(/_/g, " ")}</span>
-                          {e.tool_name && <span className="font-mono text-[12px] text-ink">{e.tool_name}</span>}
-                          {e.payload?.agent_name ? <Tag tone="accent">{e.payload.agent_name}</Tag> : e.node && <Tag>{e.node}</Tag>}
+                          {tech && <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{e.type.replace(/_/g, " ")}</span>}
+                          {tech && e.tool_name && <span className="font-mono text-[12px] text-ink">{e.tool_name}</span>}
+                          {e.payload?.agent_name ? <Tag tone="accent">{e.payload.agent_name}</Tag> : tech && e.node && <Tag>{e.node}</Tag>}
                           {e.status && !["OK", "STARTED"].includes(e.status) && <StatusBadge status={e.status} />}
-                          {e.duration_ms !== null && <span className="text-[11px] text-faint tabular">{e.duration_ms} ms</span>}
-                          <span className="ml-auto text-[11px] text-faint tabular">#{e.seq} · {fmtDateTime(e.created_at, undefined, { year: undefined, day: undefined, month: undefined, second: "2-digit" })}</span>
+                          {tech && e.duration_ms !== null && <span className="text-[11px] text-faint tabular">{e.duration_ms} ms</span>}
+                          <span className="ml-auto text-[11px] text-faint tabular">{fmtDateTime(e.created_at, undefined, { year: undefined, day: undefined, month: undefined, second: "2-digit" })}</span>
                         </div>
                         {e.message && <p className={cn("mt-0.5 text-[13px]", e.type === "ERROR" || e.type === "TOOL_ERROR" ? "text-bad" : "text-ink-2")}>{e.message}</p>}
-                        {isTool && e.payload && Object.keys(e.payload).length > 0 && (
+                        {tech && isTool && e.payload && Object.keys(e.payload).length > 0 && (
                           <div className="mt-1.5"><JsonView value={e.type === "TOOL_CALL" ? e.payload.input : e.payload.output ?? e.payload} label={e.type === "TOOL_CALL" ? "Input" : e.type === "TOOL_RESULT" ? "Output" : "Details"} /></div>)}
-                        {!isTool && e.payload && Object.keys(e.payload).length > 0 && ["PLAN", "INTERRUPT", "DECISION", "GUARDRAIL", "HUMAN_INPUT", "ERROR"].includes(e.type) && (
+                        {tech && !isTool && e.payload && Object.keys(e.payload).length > 0 && ["PLAN", "INTERRUPT", "DECISION", "GUARDRAIL", "HUMAN_INPUT", "ERROR"].includes(e.type) && (
                           <div className="mt-1.5"><JsonView value={e.payload} label="Details" /></div>)}
                       </div>
                     </li>);

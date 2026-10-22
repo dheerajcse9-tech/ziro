@@ -197,6 +197,10 @@ def node_validate_scope(ctx: ToolContext) -> Step:
     if drive.status not in (DriveStatus.OPEN, DriveStatus.DRAFT, DriveStatus.ROSTER_SUBMITTED) and run.intent == "PREPARE_ROSTER":
         problems.append(f"Drive status is {drive.status}; roster preparation requires an open drive")
     if run.intent == "PREPARE_ROSTER" and drive.destination is None:
+        from app.services.intake import ensure_stand_in_form
+
+        ensure_stand_in_form(ctx.db, drive)
+    if run.intent == "PREPARE_ROSTER" and drive.destination is None:
         problems.append("No upload destination configured for this drive")
     elif run.intent == "PREPARE_ROSTER" and not drive.destination.is_enabled:
         problems.append("The drive's destination is disabled")

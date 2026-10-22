@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { DataTable } from "@/components/ui/data-table";
-import { HashValue } from "@/components/ui/evidence";
 import { PageHeader } from "@/components/ui/layout";
 import { Card, CardHeader, Select } from "@/components/ui/primitives";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
@@ -21,25 +20,22 @@ function ApprovalsInner() {
   return (
     <>
       <PageHeader title="Approvals"
-        description="Every external submission needs an explicit decision by an approver. Approvals bind to an exact proposal hash (roster, criteria version, schedule version, destination) and are invalidated automatically if anything changes." />
+        description="Student lists prepared by the placement officer's agents. The Approver checks each list and approves or rejects it. If anything changes after a list is prepared, it must be prepared again." />
       <Card>
         <CardHeader title="Approval queue" actions={
           <Select aria-label="Status" value={status} onChange={(e) => router.replace(`/approvals${e.target.value ? `?status=${e.target.value}` : ""}`)}>
-            <option value="">All</option><option value="PENDING">Pending</option><option value="APPROVED">Approved (not yet executed)</option>
-            <option value="CONSUMED">Executed</option><option value="REJECTED">Rejected</option><option value="INVALIDATED">Invalidated</option>
+            <option value="">All</option><option value="PENDING">Pending</option><option value="APPROVED">Approved (not yet sent)</option>
+            <option value="CONSUMED">Sent</option><option value="REJECTED">Rejected</option><option value="INVALIDATED">Invalidated</option>
           </Select>} />
         {q.isError ? <div className="p-4"><ErrorState error={q.error} onRetry={() => q.refetch()} /></div> : !q.data ? <LoadingRows /> : (
           <DataTable data={q.data} rowHref={(a) => `/approvals/${a.id}`}
-            empty={<EmptyState title={status === "PENDING" ? "Nothing waiting for approval" : "No approvals"} description="The agent creates approval requests when it prepares a roster." />}
+            empty={<EmptyState title={status === "PENDING" ? "Nothing waiting for approval" : "No approvals"} description="A list appears here after the placement officer runs a drive." />}
             columns={[
-              { accessorKey: "id", header: "#", cell: ({ row }) => <span className="font-mono text-[12px]">#{row.original.id}</span> },
               { accessorKey: "drive_title", header: "Drive", cell: ({ row }) => <span>{row.original.drive_title}{row.original.kind === "SUPPLEMENT" && <Tag tone="info" className="ml-1.5">Supplement</Tag>}</span> },
-              { id: "counts", header: "Upload / excluded / held", cell: ({ row }) => <span className="tabular">{row.original.included_count} / {row.original.excluded_count} / {row.original.held_count}</span> },
-              { accessorKey: "proposal_hash", header: "Proposal hash", enableSorting: false, cell: ({ row }) => <HashValue value={row.original.proposal_hash} n={10} /> },
-              { accessorKey: "requested_by", header: "Requested by", cell: ({ row }) => <span className="font-mono text-[11.5px] text-muted">{row.original.requested_by}</span> },
-              { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge status={row.original.status} label={row.original.status === "CONSUMED" ? "Executed" : undefined} /> },
+              { id: "counts", header: "Students in list", cell: ({ row }) => <span className="tabular">{row.original.included_count}{row.original.held_count > 0 && <span className="text-muted"> · {row.original.held_count} on hold</span>}</span> },
+              { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge status={row.original.status} label={row.original.status === "CONSUMED" ? "Sent" : row.original.status === "INVALIDATED" ? "Out of date" : undefined} /> },
               { id: "decided", header: "Decision", cell: ({ row }) => row.original.decided_by ? <span className="text-[12px]">{row.original.decided_by.name} · {relTime(row.original.decided_at)}</span> : row.original.invalidated_reason ? <span className="text-[12px] text-warn">{row.original.invalidated_reason}</span> : <span className="text-faint">—</span> },
-              { accessorKey: "created_at", header: "Requested", cell: ({ row }) => <span className="text-[12px] text-muted">{relTime(row.original.created_at)}</span> },
+              { accessorKey: "created_at", header: "Prepared", cell: ({ row }) => <span className="text-[12px] text-muted">{relTime(row.original.created_at)}</span> },
             ]} />
         )}
       </Card>

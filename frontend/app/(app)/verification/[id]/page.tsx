@@ -5,7 +5,7 @@ import { Download, ExternalLink, FileCheck2, RefreshCw, RotateCcw } from "lucide
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
-import { HashValue, JsonView, RollList } from "@/components/ui/evidence";
+import { JsonView, RollList } from "@/components/ui/evidence";
 import { DefinitionList, PageHeader } from "@/components/ui/layout";
 import { Button, Card, CardHeader } from "@/components/ui/primitives";
 import { Banner, EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
@@ -41,22 +41,22 @@ export default function UploadDetailPage() {
 
   return (
     <>
-      <PageHeader title={`Upload #${u.id} · ${u.drive_title}`} crumbs={[{ label: "Sent to companies", href: "/verification" }, { label: `Upload #${u.id}` }]}
+      <PageHeader title={u.drive_title} crumbs={[{ label: "Sent to companies", href: "/verification" }, { label: u.drive_title }]}
         meta={<><StatusBadge status={u.status} />{v && <StatusBadge status={v.status} />}{u.destination.is_local_mock && <MockBadge />}</>}
         actions={officer ? <>
           {u.status === "SUBMITTED" && <Button onClick={() => verify.mutate()} loading={verify.isPending} icon={<RefreshCw className="size-4" />}>Re-read destination &amp; verify</Button>}
           {(u.status === "UNCERTAIN" || u.status === "FAILED") && <Button variant="primary" onClick={() => retry.mutate()} loading={retry.isPending} icon={<RotateCcw className="size-4" />}>Reconcile, then retry if absent</Button>}
         </> : undefined} />
 
-      {u.status === "UNCERTAIN" && <div className="mb-4"><Banner title="Outcome uncertain">The destination did not confirm the submission. Reconciliation looks up operation key <span className="font-mono">{u.operation_key.slice(0, 12)}…</span> at the destination before any resubmission, so a retry can never create a duplicate.</Banner></div>}
+      {u.status === "UNCERTAIN" && <div className="mb-4"><Banner title="Outcome uncertain">The destination did not confirm the submission. Before sending again, the agents check whether it actually arrived, so a retry never sends the list twice.</Banner></div>}
       {v?.status === "FAILED_VERIFICATION" && <div className="mb-4"><Banner tone="bad" title="Verification failed — destination does not match the approved roster">{v.detail}</Banner></div>}
       {v?.status === "PENDING_VERIFICATION" && <div className="mb-4"><Banner title="Destination could not be read back">{v.detail}. The run is not marked verified until a read-back succeeds.</Banner></div>}
-      {v?.status === "VERIFIED" && <div className="mb-4"><Banner tone="ok" title={`Verified: ${v.observed_count} of ${v.expected_count} approved IDs observed, no missing, unexpected or duplicate records`} /></div>}
+      {v?.status === "VERIFIED" && <div className="mb-4"><Banner tone="ok" title={`Checked: all ${v.observed_count} of ${v.expected_count} approved students arrived — no missing, unexpected or duplicate records`} /></div>}
 
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="space-y-4 xl:col-span-2">
           <Card>
-            <CardHeader title="Independent read-back comparison" description={v ? `${v.method} · ${fmtDateTime(v.created_at)}` : "Not verified yet"} />
+            <CardHeader title="Sent vs. received" description={v ? `Checked ${fmtDateTime(v.created_at)}` : "Not checked yet"} />
             {!v ? <EmptyState title="No verification yet" /> : (
               <div className="grid gap-4 p-4 md:grid-cols-2">
                 <div><p className="mb-1 text-[12px] font-semibold text-muted">Sent in this upload ({u.submitted_roll_numbers.length}) · expected at destination across all uploads for this drive: {v.expected_count}</p><RollList rolls={u.submitted_roll_numbers} /></div>
@@ -65,12 +65,12 @@ export default function UploadDetailPage() {
                 <div><p className="mb-1 text-[12px] font-semibold text-muted">Missing at destination</p><RollList rolls={v.missing_roll_numbers} tone="bad" /></div>
                 <div><p className="mb-1 text-[12px] font-semibold text-muted">Unexpected at destination</p><RollList rolls={v.unexpected_roll_numbers} tone="bad" /></div>
                 <div><p className="mb-1 text-[12px] font-semibold text-muted">Duplicated at destination</p><RollList rolls={v.duplicate_roll_numbers} tone="bad" /></div>
-                <div><p className="mb-1 text-[12px] font-semibold text-muted">Receipt hash</p><HashValue value={v.receipt_hash} /></div>
               </div>
             )}
           </Card>
           <Card>
-            <CardHeader title="Attempt log" description="Recorded before and after every external call." />
+            <details>
+            <summary className="cursor-pointer px-4 py-3 text-[13px] text-muted">Technical log</summary>
             <table className="data-table w-full"><thead><tr><th>Time</th><th>Step</th><th>Details</th></tr></thead>
               <tbody>{u.attempt_log.map((l, i) => {
                 const { at, step, ...rest } = l;
@@ -78,6 +78,7 @@ export default function UploadDetailPage() {
                   <td><Tag tone={step === "receipt" || step === "reconciled" ? "ok" : step === "uncertain" || step === "rejected" ? "warn" : "neutral"}>{step}</Tag></td>
                   <td className="font-mono text-[11.5px] text-muted">{Object.entries(rest).map(([k, val]) => `${k}=${typeof val === "object" ? JSON.stringify(val) : String(val)}`).join("  ")}</td></tr>;
               })}</tbody></table>
+            </details>
           </Card>
           {u.verifications.length > 1 && (
             <Card>
@@ -89,26 +90,23 @@ export default function UploadDetailPage() {
         </div>
         <div className="space-y-4">
           <Card>
-            <CardHeader title="Operation" />
+            <CardHeader title="Details" />
             <div className="p-4"><DefinitionList cols={1} items={[
-              { label: "Operation key (idempotency)", value: <HashValue value={u.operation_key} /> },
               { label: "Destination", value: <span>{u.destination.name}<br /><a className="inline-flex items-center gap-1 text-[12px] text-accent hover:underline" target="_blank" rel="noreferrer" href={`/mock-portal/forms/${u.destination.form_ref}/roster`}>View destination roster <ExternalLink className="size-3" /></a></span> },
               { label: "Destination receipt", value: u.destination_receipt?.receipt_no ? <span className="font-mono">{u.destination_receipt.receipt_no}{u.destination_receipt.reconciled ? " (reconciled)" : ""}</span> : "—" },
               { label: "Attempts", value: u.attempts },
-              { label: "Approval", value: <Link className="text-accent hover:underline" href={`/approvals/${u.approval_id}`}>#{u.approval_id}</Link> },
-              { label: "Executed by", value: <span className="font-mono text-[12px]">{u.executed_by}</span> },
+              { label: "Approval", value: <Link className="text-accent hover:underline" href={`/approvals/${u.approval_id}`}>Open approval</Link> },
               { label: "Completed", value: fmtDateTime(u.completed_at) },
               ...(u.error ? [{ label: "Error", value: <span className="text-bad">{u.error}</span> }] : []),
             ]} /></div>
           </Card>
           <Card>
-            <CardHeader title="Attendance sheets" description="Generated only from a VERIFIED upload; consent re-checked at generation." />
+            <CardHeader title="Attendance sheets" description="Created after the list is checked." />
             {u.attendance_sheets.length === 0 ? <EmptyState icon={<FileCheck2 className="size-5" />} title="No sheet yet" description={v?.status === "VERIFIED" ? "Use Re-read & verify to generate." : "Available after successful verification."} /> : (
               <ul className="divide-y divide-line">{u.attendance_sheets.map((s) => (
                 <li key={s.id} className="space-y-1 px-4 py-3 text-[12.5px]">
                   <p className="font-medium">{s.file_name}</p>
                   <p className="text-muted">{s.row_count} rows · {fmtDateTime(s.created_at)}{s.excluded_at_generation.length ? ` · ${s.excluded_at_generation.length} excluded (consent)` : ""}</p>
-                  <HashValue value={s.sha256} />
                   {s.purged ? <Tag>Content purged (retention)</Tag> : can(me.data, "download") && (
                     <div className="flex gap-3 pt-1">
                       <a className="inline-flex items-center gap-1 text-accent hover:underline" href={`/api/attendance/${s.id}/download?format=csv`}><Download className="size-3.5" />CSV</a>

@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/layout";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status";
 import { api } from "@/lib/api";
-import { ROLE_LABEL, useMe } from "@/lib/auth";
+import { ROLE_INFO, ROLE_LABEL, useMe } from "@/lib/auth";
 import { cn, fmtDateTime, relTime } from "@/lib/format";
 import type { Dashboard, Role } from "@/lib/types";
 
@@ -47,7 +47,7 @@ export default function HomePage() {
 
   return (
     <>
-      <PageHeader title={`Hello, ${me.data?.name.split(" (")[0] ?? ""}`} description={role ? `Signed in as ${ROLE_LABEL[role]}` : undefined} />
+      <PageHeader title={`Hello, ${me.data?.name.split(" (")[0] ?? ""}`} description={role ? `${ROLE_LABEL[role]} — ${ROLE_INFO[role].job}` : undefined} />
 
       <div className="grid gap-3 md:grid-cols-3">
         {STEPS.map((s) => {

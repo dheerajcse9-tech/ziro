@@ -93,7 +93,7 @@ export default function ImportPage() {
 
           <Card className="mb-4">
             <CardHeader title="3 · Validation preview"
-              description={<span>SHA-256 <span className="font-mono">{preview.file_sha256.slice(0, 16)}…</span> · {preview.total_rows} rows</span>}
+              description={`${preview.total_rows} rows`}
               actions={<>
                 {preview.issue_count > 0 && <a className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 text-[13px] font-medium hover:bg-subtle" href={`/api/roster-imports/${preview.id}/errors.csv`}><Download className="size-3.5" />Issues CSV</a>}
                 <Button size="sm" onClick={() => discard.mutate(preview.id)} loading={discard.isPending}>Discard</Button>

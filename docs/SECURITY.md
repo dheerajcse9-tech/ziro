@@ -3,7 +3,7 @@
 | Threat / failure | Control | Where |
 |---|---|---|
 | Unauthenticated access | JWT (HS256) in httpOnly SameSite=Lax cookie (Secure in production); Bearer also accepted for API clients | `api/deps.py`, `core/security.py` |
-| Privilege misuse | Role checks on every mutating route; approve/reject require approver/admin; settings, fault injection, reset require admin | `api/routes_*.py`, `services/approvals.py` |
+| Privilege misuse | Role checks on every mutating route; approve/reject require the approver role only (admins cannot approve); settings, fault injection, reset require admin | `api/routes_*.py`, `services/approvals.py` |
 | Agent self-approval | No approval tool exists; approval needs a human JWT + approver role; LLM may only call 4 READ tools (others return TOOL_DENIED) | `agent/tools.py` `LLM_ALLOWED_TOOLS` |
 | Approving something different from what was reviewed | Approver must submit the hash they reviewed; backend recomputes the live hash and refuses on mismatch | `approvals.approve` |
 | Change after approval | Criteria/schedule/destination/student/consent/settings changes re-validate open approvals and invalidate mismatches; execution recomputes again | `revalidate_open_approvals`, `uploads.execute` |

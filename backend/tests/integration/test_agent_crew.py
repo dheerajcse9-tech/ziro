@@ -450,6 +450,8 @@ def test_followup_forms_response_reader_recheck_and_shortlist_emails(sb, crew_pe
 
     with pytest.raises(PermissionDenied):
         approvals.approve(sb.db, approval.id, crew_people["coordinator"], expected_hash=approval.proposal_hash)
+    with pytest.raises(PermissionDenied):  # admins set the system up; only the approver signs off
+        approvals.approve(sb.db, approval.id, sb.user(Role.ADMIN), expected_hash=approval.proposal_hash)
     approvals.approve(sb.db, approval.id, crew_people["approver"], expected_hash=approval.proposal_hash)
     sb.db.commit()
     run = graph.resume_after_approval(sb.db, approval)
