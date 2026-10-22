@@ -3,12 +3,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Bot, CalendarClock, ExternalLink, FlaskConical, ListChecks } from "lucide-react";
+import { CalendarClock, FlaskConical, ListChecks } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { DriveProgress } from "@/components/drives/drive-progress";
 import { InvitationsPanel, ResultsPanel } from "@/components/drives/outreach-panels";
 import { BRANCHES, CriteriaFields, criteriaSchema, type CriteriaValues, toCriteriaPayload } from "@/components/drives/criteria-fields";
 import { DataTable } from "@/components/ui/data-table";
@@ -21,8 +22,8 @@ import { StatusBadge, Tag } from "@/components/ui/status";
 import { api } from "@/lib/api";
 import { can, useMe } from "@/lib/auth";
 import { toastError } from "@/lib/errors";
-import { cn, fmtDateTime, fmtSlot, fmtTime, relTime } from "@/lib/format";
-import type { Criteria, DriveDetail, DrivePair, EligibilityResponse, StudentOutcome } from "@/lib/types";
+import { cn, fmtDateTime, fmtSlot } from "@/lib/format";
+import type { Criteria, DriveDetail, EligibilityResponse, StudentOutcome } from "@/lib/types";
 
 function ruleCell(o: StudentOutcome, rule: string) {
   const r = o.rule_results.find((x) => x.rule === rule);
@@ -55,14 +56,12 @@ const eligibilityColumns: ColumnDef<StudentOutcome>[] = [
 
 export default function DriveWorkspace() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const me = useMe();
   const qc = useQueryClient();
   const [tab, setTab] = useState("overview");
   const [rosterFilter, setRosterFilter] = useState("ALL");
   const drive = useQuery({ queryKey: ["drive", id], queryFn: () => api.get<DriveDetail>(`/api/drives/${id}`) });
   const elig = useQuery({ queryKey: ["eligibility", id], queryFn: () => api.get<EligibilityResponse>(`/api/drives/${id}/eligibility`), enabled: tab === "eligibility" || tab === "overview" });
-  const conflicts = useQuery({ queryKey: ["drive-conflicts", id], queryFn: () => api.get<{ overlapping_drives: DrivePair[]; students: (StudentOutcome & { conflicts: any[] })[] }>(`/api/drives/${id}/conflicts`), enabled: tab === "conflicts" });
   const versions = useQuery({ queryKey: ["criteria", id], queryFn: () => api.get<Criteria[]>(`/api/drives/${id}/criteria`), enabled: tab === "criteria" });
 
   const [critOpen, setCritOpen] = useState(false);
@@ -123,15 +122,15 @@ export default function DriveWorkspace() {
         description={<>{fmtSlot(d.starts_at, d.ends_at, d.timezone)}{d.location ? ` · ${d.location}` : ""}</>}
         meta={<StatusBadge status={d.status} />}
         actions={<>
-          {editable && <Button onClick={openSchedule} icon={<CalendarClock className="size-4" />}>Edit schedule / status</Button>}
-          {can(me.data, "runAgent") && <Button variant="primary" icon={<Bot className="size-4" />}
-            onClick={() => router.push(`/agent?drive=${d.id}`)}>Run this drive</Button>}
+          {editable && <Button onClick={openSchedule} icon={<CalendarClock className="size-4" />}>Change date / time</Button>}
         </>} />
 
+      <DriveProgress drive={d} />
+
       <Tabs value={tab} onValueChange={setTab} tabs={[
-        { value: "overview", label: "Overview" }, { value: "invitations", label: "Consent form" },
-        { value: "eligibility", label: "Who qualifies" }, { value: "conflicts", label: "Clashes" },
-        { value: "results", label: "Results" }, { value: "criteria", label: "Criteria" },
+        { value: "overview", label: "Overview" }, { value: "eligibility", label: "Who qualifies" },
+        { value: "invitations", label: "Consent form" }, { value: "criteria", label: "Criteria" },
+        ...(d.uploads.length > 0 ? [{ value: "results", label: "Results" }] : []),
       ]}>
         <TabPanel value="overview">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -140,21 +139,7 @@ export default function DriveWorkspace() {
             <KpiCard label="Missing details" value={counts?.unknown ?? "—"} tone={counts?.unknown ? "warn" : "neutral"} />
             <KpiCard label="Do not qualify" value={counts?.ineligible ?? "—"} hint={counts?.held ? `${counts.held} held for a schedule clash` : undefined} />
           </div>
-            {d.consent_form && (
-              <Card className="mt-4">
-                <CardHeader title={d.consent_form.title}
-                  description={`${d.consent_form.audience === "ALL_STUDENTS" ? "Sent to every student" : "Sent to eligible students"} · ${d.consent_form.status === "OPEN" ? "closes" : "closed"} ${d.consent_form.closes_at_local.replace("T", " ")} · prepared by the Consent Form Agent`}
-                  actions={<StatusBadge status={d.consent_form.status} />} />
-                <div className="grid gap-3 p-4 sm:grid-cols-5">
-                  <KpiCard label="Sent" value={d.consent_form.sent} />
-                  <KpiCard label="Said YES" value={d.consent_form.accepted} tone="ok" />
-                  <KpiCard label="Said NO" value={d.consent_form.declined} />
-                  <KpiCard label="No answer yet" value={d.consent_form.pending} tone={d.consent_form.pending ? "warn" : "neutral"} />
-                  <KpiCard label="Closed unanswered" value={d.consent_form.expired} />
-                </div>
-              </Card>
-            )}
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="mt-4">
             <Card>
               <CardHeader title="Drive details" />
               <div className="p-4">
@@ -162,33 +147,10 @@ export default function DriveWorkspace() {
                   { label: "Employer", value: d.employer.name },
                   { label: "Role", value: d.role_title ?? "—" },
                   { label: "Criteria", value: c ? `CGPA ≥ ${c.min_cgpa ?? "—"} · ${c.backlog_policy.replace(/_/g, " ").toLowerCase()}${c.max_active_backlogs ? ` (${c.max_active_backlogs})` : ""} · ${c.allowed_branches.join(", ") || "all branches"}` : <Tag tone="bad">Not configured</Tag> },
-                  { label: "Consent required", value: c?.required_consent_scope === "DRIVE_REGISTRATION" ? "YES on this drive's consent form" : c?.required_consent_scope.replace(/_/g, " ").toLowerCase() ?? "—" },
                   { label: "Students register by", value: d.registration_deadline_local ? d.registration_deadline_local.replace("T", " ") : "—" },
                   { label: "Company wants the list by", value: d.roster_due_at_local ? d.roster_due_at_local.replace("T", " ") : "—" },
                   ...(d.source_email ? [{ label: "Created from", value: <Link className="text-accent hover:underline" href="/inbox">{d.source_email.from_address}: {d.source_email.subject}</Link> }] : []),
-                  { label: "Destination", value: d.destination ? <span className="flex flex-wrap items-center gap-1.5">{d.destination.name}
-                    <a className="inline-flex items-center gap-0.5 text-accent hover:underline" target="_blank" rel="noreferrer" href={`/mock-portal/forms/${d.destination.form_ref}`}>open form <ExternalLink className="size-3" /></a></span> : <Tag tone="bad">None</Tag> },
                 ]} />
-              </div>
-            </Card>
-            <Card>
-              <CardHeader title="Activity on this drive" />
-              <div className="divide-y divide-line">
-                {d.runs.length === 0 && d.approvals.length === 0 && d.uploads.length === 0 && <EmptyState title="No activity yet" />}
-                {d.runs.map((r) => (
-                  <Link key={`r${r.id}`} href={`/agent/${r.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">
-                    <span className="text-[13px]">Agent task <span className="text-muted">· {relTime(r.created_at)}</span></span>
-                    <StatusBadge status={r.status} />
-                  </Link>))}
-                {d.approvals.map((a) => (
-                  <Link key={`a${a.id}`} href={`/approvals/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">
-                    <span className="text-[13px]">Approval · {a.included_count} students</span><StatusBadge status={a.status} />
-                  </Link>))}
-                {d.uploads.map((u) => (
-                  <Link key={`u${u.id}`} href={`/verification/${u.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-subtle">
-                    <span className="text-[13px]">Upload #{u.id} · {u.submitted_count} IDs</span>
-                    <span className="flex gap-1.5"><StatusBadge status={u.status} />{u.latest_verification && <StatusBadge status={u.latest_verification.status} />}</span>
-                  </Link>))}
               </div>
             </Card>
           </div>
@@ -197,7 +159,7 @@ export default function DriveWorkspace() {
         <TabPanel value="eligibility">
           <Card>
             <CardHeader title="Who qualifies"
-              description={elig.data ? `Criteria v${elig.data.criteria.version} applied to ${elig.data.counts.total} students at ${fmtDateTime(elig.data.evaluated_at)}. Hover a value for the rule explanation.` : undefined}
+              description={elig.data ? `Company's criteria applied to all ${elig.data.counts.total} students. Hover a value to see the rule.` : undefined}
               actions={<>{editable && (counts?.unknown ?? 0) > 0 && <Button size="sm" loading={requestData.isPending} onClick={() => requestData.mutate()}>Ask {counts?.unknown} student(s) for missing details</Button>}
               <Select aria-label="Filter" value={rosterFilter} onChange={(e) => setRosterFilter(e.target.value)}>
                 <option value="ALL">All students</option>
@@ -209,42 +171,10 @@ export default function DriveWorkspace() {
           </Card>
         </TabPanel>
 
-        <TabPanel value="conflicts">
-          {!conflicts.data ? <LoadingRows /> : (
-            <div className="space-y-4">
-              <Card>
-                <CardHeader title="Overlapping drives" description="Half-open intervals compared in UTC; touching slots do not clash." />
-                {conflicts.data.overlapping_drives.length === 0 ? <EmptyState title="No overlapping drives" /> : (
-                  <table className="data-table w-full"><thead><tr><th>Other drive</th><th>Its slot</th><th>Overlap</th><th>Students on both rosters</th></tr></thead>
-                    <tbody>{conflicts.data.overlapping_drives.map((p, i) => {
-                      const other = p.drive_a.id === d.id ? p.drive_b : p.drive_a;
-                      return <tr key={i}><td><Link className="hover:underline" href={`/drives/${other.id}`}>{other.title}</Link></td>
-                        <td>{fmtSlot(other.starts_at, other.ends_at, other.timezone)}</td>
-                        <td>{p.overlap_start ? `${fmtTime(p.overlap_start, d.timezone)}–${fmtTime(p.overlap_end, d.timezone)}` : "buffer only"}</td>
-                        <td className="tabular">{p.students_assigned_to_both.length}</td></tr>;
-                    })}</tbody></table>
-                )}
-              </Card>
-              <Card>
-                <CardHeader title="Students with clashing assignments" description="Eligible students reserved on an overlapping drive are HELD out of this roster until an officer resolves the clash in the Exception Inbox."
-                  actions={<Link href="/conflicts" className="text-[13px] text-accent hover:underline">Resolve clashes →</Link>} />
-                {conflicts.data.students.length === 0 ? <EmptyState title="No student clashes" /> : (
-                  <table className="data-table w-full"><thead><tr><th>Roll</th><th>Name</th><th>Status here</th><th>Clashes with</th><th>Resolution</th></tr></thead>
-                    <tbody>{conflicts.data.students.map((s) => (
-                      <tr key={s.roll_number}><td className="font-mono text-[12px]">{s.roll_number}</td><td>{s.full_name}</td><td><StatusBadge status={s.roster_status} /></td>
-                        <td className="text-[12px]">{s.conflicts.map((c: any) => `${c.other_drive_title} (${c.other_assignment_status.toLowerCase()})`).join(", ")}</td>
-                        <td className="text-[12px]">{s.conflicts.some((c: any) => c.resolution) ? <Tag tone="ok">Resolved</Tag> : <Tag tone="warn">Open</Tag>}</td></tr>))}
-                    </tbody></table>
-                )}
-              </Card>
-            </div>
-          )}
-        </TabPanel>
-
         <TabPanel value="criteria">
           <Card>
-            <CardHeader title="Eligibility criteria" description="Every change is kept as a new version; changing criteria cancels any approval in progress."
-              actions={editable ? <Button variant="primary" size="sm" onClick={openCriteria} icon={<ListChecks className="size-4" />}>New version</Button> : undefined} />
+            <CardHeader title="Eligibility criteria" description="Changing the criteria cancels any list waiting for approval; the old criteria stay in the history below."
+              actions={editable ? <Button variant="primary" size="sm" onClick={openCriteria} icon={<ListChecks className="size-4" />}>Change criteria</Button> : undefined} />
             {!versions.data ? <LoadingRows rows={3} /> : (
               <table className="data-table w-full"><thead><tr><th>Version</th><th>CGPA</th><th>Backlogs</th><th>Branches</th><th>Change note</th><th>Created</th></tr></thead>
                 <tbody>{versions.data.map((v) => (

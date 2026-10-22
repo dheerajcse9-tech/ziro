@@ -84,7 +84,7 @@ export default function RunPage() {
   return (
     <>
       <PageHeader title={<span className="flex items-center gap-2">{r.drive_title ?? "Agent task"}{live && <Loader2 className="size-4 animate-spin text-info" />}</span>}
-        crumbs={[{ label: "Run a drive", href: "/agent" }, { label: "Details" }]}
+        crumbs={r.drive_id ? [{ label: "Drives", href: "/drives" }, { label: r.drive_title ?? "Drive", href: `/drives/${r.drive_id}` }, { label: "Agent task" }] : [{ label: "Home", href: "/" }, { label: "Agent task" }]}
         description={<span className="italic">“{r.objective}”</span>}
         meta={<><StatusBadge status={r.status} />
           {r.drive_id && <Link href={`/drives/${r.drive_id}`} className="text-[12px] text-accent hover:underline">Open drive</Link>}</>} />

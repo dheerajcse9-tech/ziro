@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity, BadgeCheck, Bot, Building2, CalendarClock, ClipboardCheck, FileSearch, FlaskConical, Gauge,
+  Building2, ClipboardCheck, FileSearch, FlaskConical, Gauge,
   Inbox, LogOut, Mail, MailOpen, Menu, Network, Search, Settings, ShieldCheck, Users, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -17,22 +17,19 @@ import { Skeleton } from "../ui/primitives";
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; roles: Role[]; badge?: (d?: Dashboard) => number | undefined };
 
 const ALL: Role[] = ["admin", "coordinator", "officer", "approver", "viewer"];
-// Each role sees only the pages it works with.
+// Each role sees only the few pages it works with. Other pages (task details, clashes, sent lists) open from links.
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: Gauge, roles: ALL },
   { href: "/inbox", label: "Company emails", icon: MailOpen, roles: ["coordinator", "admin"], badge: (d) => d?.metrics.inbox_needs_review },
+  { href: "/approvals", label: "Approvals", icon: ClipboardCheck, roles: ["approver", "admin"], badge: (d) => d?.metrics.pending_approvals },
   { href: "/drives", label: "Drives", icon: Building2, roles: ALL },
-  { href: "/students", label: "Students", icon: Users, roles: ALL },
-  { href: "/agent", label: "Run a drive", icon: Bot, roles: ["officer", "admin"] },
-  { href: "/approvals", label: "Approvals", icon: ClipboardCheck, roles: ["approver", "officer", "admin"], badge: (d) => d?.metrics.pending_approvals },
-  { href: "/verification", label: "Sent to companies", icon: BadgeCheck, roles: ["approver", "officer", "admin"], badge: (d) => d?.metrics.verification_attention },
+  { href: "/students", label: "Students", icon: Users, roles: ["officer", "approver", "admin", "viewer"] },
   { href: "/exceptions", label: "Issues", icon: Inbox, roles: ["officer", "admin"], badge: (d) => d?.metrics.unresolved_exceptions },
-  { href: "/conflicts", label: "Schedule clashes", icon: CalendarClock, roles: ["officer", "admin"], badge: (d) => d?.metrics.open_clash_exceptions },
-  { href: "/communications", label: "Emails sent", icon: Mail, roles: ["coordinator", "officer", "approver", "admin"] },
-  { href: "/agents", label: "Agents", icon: Network, roles: ALL },
+  { href: "/communications", label: "Emails sent", icon: Mail, roles: ["coordinator", "admin"] },
+  { href: "/settings", label: "Settings", icon: Settings, roles: ["coordinator", "admin"] },
+  { href: "/agents", label: "Agents", icon: Network, roles: ["admin"] },
   { href: "/test-lab", label: "Test Lab", icon: FlaskConical, roles: ["admin"] },
   { href: "/audit", label: "Audit log", icon: FileSearch, roles: ["admin"] },
-  { href: "/settings", label: "Settings", icon: Settings, roles: ALL },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

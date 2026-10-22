@@ -28,7 +28,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
   test("officer delegates roster preparation to the agent", async ({ page }) => {
     await login(page, "officer@placementos.demo");
     await shot(page, "01-overview");
-    await page.getByRole("link", { name: "Run a drive" }).click();
+    await page.goto("/agent");
     await page.getByLabel("Objective").fill("Prepare the eligible roster for the upcoming drive, identify unresolved records, and show me the proposal for approval.");
     await page.getByRole("button", { name: "Run agent" }).click();
     await expect(page.getByText("Waiting for human approval").first()).toBeVisible({ timeout: 30_000 });
@@ -123,7 +123,7 @@ test.describe.serial("PlacementOS end-to-end", () => {
     await shot(page, "09-students-rahul");
     await page.goto("/drives/1");
     await page.getByRole("tab", { name: "Who qualifies" }).click();
-    await expect(page.getByText(/Criteria v\d+ applied to/).first()).toBeVisible();
+    await expect(page.getByText(/criteria applied to all/).first()).toBeVisible();
     await shot(page, "10-drive-eligibility");
     await page.getByRole("tab", { name: "Criteria" }).click();
     await page.getByLabel("Minimum CGPA").fill("6.5");

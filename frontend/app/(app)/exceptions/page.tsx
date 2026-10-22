@@ -7,7 +7,7 @@ import { Suspense, useState } from "react";
 import { ResolveDialog } from "@/components/exceptions/resolve-dialog";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/layout";
-import { Button, Card, CardHeader, Select } from "@/components/ui/primitives";
+import { Button, ButtonLink, Card, CardHeader, Select } from "@/components/ui/primitives";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { StatusBadge, Tag } from "@/components/ui/status";
 import { api, qs } from "@/lib/api";
@@ -31,7 +31,8 @@ function Inner() {
 
   return (
     <>
-      <PageHeader title="Issues" description="Everything the agent or the system could not decide alone: missing data, consent gaps, clashes, criteria disagreements, retrieval failures, invalidated approvals and upload discrepancies." />
+      <PageHeader title="Issues" description="Things the agents could not decide alone, such as missing student details or a student booked on two drives at the same time."
+        actions={<ButtonLink href="/conflicts">Schedule clashes</ButtonLink>} />
       {q.data && Object.keys(q.data.open_counts_by_kind).length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {Object.entries(q.data.open_counts_by_kind).map(([k, n]) => (
