@@ -143,3 +143,9 @@ def test_ai_check_is_admin_only_and_says_why(server):
     assert login("officer@placementos.demo").post("/api/integrations/ai-check").status_code == 403
     r = login("admin@placementos.demo").post("/api/integrations/ai-check")
     assert r.status_code == 200 and r.json()["ok"] is False and r.json()["error"]  # the test server has no Gemini key
+
+
+def test_ai_speed_is_admin_only(server):
+    assert login("approver@placementos.demo").post("/api/integrations/ai-speed").status_code == 403
+    r = login("admin@placementos.demo").post("/api/integrations/ai-speed")
+    assert r.status_code == 200 and r.json() == {"results": [], "error": "no Gemini key is configured"}

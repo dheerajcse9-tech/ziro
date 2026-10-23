@@ -499,6 +499,36 @@ def ai_check(_: User = Depends(require_roles(Role.ADMIN))):
                 "detail": str(exc)[:300], "fallbacks": client.fallbacks, "available": available[:12]}
 
 
+@router.post("/integrations/ai-speed", tags=["integrations"])
+def ai_speed(_: User = Depends(require_roles(Role.ADMIN))):
+    """Times one tiny request on each flash model this key can use (in parallel), fastest first."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.agent import gemini
+
+    if get_settings().active_llm != "gemini":
+        return {"results": [], "error": "no Gemini key is configured"}
+    names = [m for m in gemini.list_models(gemini.GeminiClient()) if "flash" in m and "image" not in m and "tts" not in m
+             and "audio" not in m and "live" not in m][:10]
+
+    def timed(name: str) -> dict:
+        client = gemini.GeminiClient(model=name, timeout=30)
+        client.fallbacks = []
+        started = time.monotonic()
+        try:
+            gemini.generate_text(client, "Answer in one word.", "Reply with OK.")
+            return {"model": name, "ok": True, "seconds": round(time.monotonic() - started, 1), "error": None}
+        except Exception as exc:  # noqa: BLE001 - shown to the admin
+            return {"model": name, "ok": False, "seconds": round(time.monotonic() - started, 1),
+                    "error": gemini.friendly_error(exc)}
+
+    with ThreadPoolExecutor(max_workers=max(1, len(names))) as pool:
+        results = list(pool.map(timed, names))
+    results.sort(key=lambda r: (not r["ok"], r["seconds"]))
+    return {"results": results, "error": None if names else "could not list the models for this key"}
+
+
 @router.get("/integrations/mock-portal/faults", tags=["integrations"])
 def list_faults(_: User = Depends(require_roles(Role.ADMIN))):
     return mock_admin().list_faults()

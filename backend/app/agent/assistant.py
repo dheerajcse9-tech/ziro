@@ -7,6 +7,7 @@ working AI key the same tools are used by a small rule-based router, and the ans
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -267,6 +268,7 @@ def _run_tool(db: Session, name: str, args: dict[str, Any], steps: list[dict[str
 
 # The whole answer must fit inside the web proxy's limit (120 s); a slower AI falls back to the rules.
 ASK_BUDGET_SECONDS = float(os.getenv("ASSISTANT_TIMEOUT_SECONDS", "60"))
+MAX_TURNS = 3  # at most two rounds of lookups, then Gemini must answer
 
 
 def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: Any) -> dict[str, Any]:
@@ -281,15 +283,23 @@ def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: A
     contents.append({"role": "user", "parts": [{"text": question}]})
     steps: list[dict[str, Any]] = []
     proposals: list[dict[str, Any]] = []
-    for _turn in range(6):
+    for turn in range(MAX_TURNS):
         remaining = deadline - time.monotonic()
         if remaining < 2:
             raise gemini.GeminiError("Gemini timed out before finishing the answer")
         if hasattr(client, "timeout"):
             client.timeout = min(client.timeout, remaining)
-        content = gemini.first_content(client.generate(system=SYSTEM_PROMPT, contents=contents, declarations=declarations,
-                                                       mode="AUTO"))
-        calls = gemini.function_calls(content)
+        last_turn = turn == MAX_TURNS - 1
+        try:
+            content = gemini.first_content(client.generate(system=SYSTEM_PROMPT, contents=contents, declarations=declarations,
+                                                           mode="NONE" if last_turn else "AUTO"))
+        except Exception:
+            if not steps:
+                raise
+            # The lookups are done: let Gemini write the answer from their results in one plain request.
+            content = {"parts": [{"text": _write_answer(client, question, contents)}]}
+            last_turn = True
+        calls = [] if last_turn else gemini.function_calls(content)
         if not calls:
             return {"answer": gemini.text_of(content) or "I could not find an answer.", "steps": steps, "proposals": proposals,
                     "model": getattr(client, "used_model", None)}
@@ -300,8 +310,17 @@ def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: A
             out = _run_tool(db, name, args, steps, proposals) if name in TOOLS else {"error": "Unknown tool"}
             responses.append(gemini.function_response(call, out))
         contents.append({"role": "user", "parts": responses})  # tool results go back as a user turn
-    return {"answer": "I looked this up but could not finish; please ask a narrower question.", "steps": steps,
-            "proposals": proposals}
+    raise AssertionError("unreachable: the last turn always answers")
+
+
+def _write_answer(client: Any, question: str, contents: list[dict[str, Any]]) -> str:
+    from app.agent import gemini
+
+    results = [p["functionResponse"] for c in contents for p in c.get("parts", []) if "functionResponse" in p]
+    prompt = (f"Question: {question}\n\nWhat the lookups returned (JSON):\n"
+              f"{json.dumps([{'tool': r['name'], 'result': r['response']} for r in results], default=str)[:12000]}\n\n"
+              "Answer the question from these results only, in plain words, in 2-5 sentences.")
+    return gemini.generate_text(client, SYSTEM_PROMPT, prompt)
 
 
 # --------------------------------------------------------------------------- rule-based fallback

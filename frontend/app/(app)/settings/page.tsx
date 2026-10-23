@@ -187,12 +187,31 @@ interface AiCheckResult {
   fallbacks: string[]; available: string[];
 }
 
+interface SpeedResult { results: { model: string; ok: boolean; seconds: number; error: string | null }[]; error: string | null }
+
 function AiCheck() {
   const check = useMutation({ mutationFn: () => api.post<AiCheckResult>("/api/integrations/ai-check") });
+  const speed = useMutation({ mutationFn: () => api.post<SpeedResult>("/api/integrations/ai-speed") });
   const r = check.data;
+  const fastest = speed.data?.results.find((x) => x.ok);
   return (
     <div className="space-y-2 border-t border-line p-4">
-      <Button icon={<Zap className="size-4" />} loading={check.isPending} onClick={() => check.mutate()}>Test the AI</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button icon={<Zap className="size-4" />} loading={check.isPending} onClick={() => check.mutate()}>Test the AI</Button>
+        <Button loading={speed.isPending} onClick={() => speed.mutate()}>Find the fastest model</Button>
+      </div>
+      {speed.isPending && <p className="text-[12.5px] text-muted">Asking each Gemini flash model one tiny question (up to 30 s)…</p>}
+      {speed.data && (speed.data.error ? <Banner tone="warn" title={speed.data.error} /> : (
+        <div className="space-y-2">
+          <table className="data-table w-full"><thead><tr><th>Model</th><th>Answer time</th></tr></thead>
+            <tbody>{speed.data.results.map((x) => (
+              <tr key={x.model}><td className="font-mono text-[12px]">{x.model}</td>
+                <td>{x.ok ? `${x.seconds} s` : <span className="text-muted">{x.error}</span>}</td></tr>))}</tbody>
+          </table>
+          {fastest && <Banner tone="ok" title={`Fastest: ${fastest.model} (${fastest.seconds} s)`}>
+            To use it, set <span className="font-mono">GEMINI_MODEL={fastest.model}</span> in backend/.env and restart the backend.
+          </Banner>}
+        </div>))}
       {r && (r.ok
         ? <Banner tone="ok" title={`Gemini answered in ${r.seconds} s`}>{r.model} is working. Ask PlaceCrew and the Email Reader will use it.</Banner>
         : <Banner tone="warn" title={`AI not working: ${r.error}`}>

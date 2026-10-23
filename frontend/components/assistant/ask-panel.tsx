@@ -78,7 +78,7 @@ function AssistantMessage({ a, thinking, aiNote }: { a: Answer; thinking?: boole
           {a.mode === "AI" ? <><Sparkles className="size-3" />Gemini</> : "Built-in rules"}
         </span>
         {aiNote && <span>{aiNote}</span>}
-        {a.mode === "RULES" && a.ai_error && <span title={a.ai_error_detail ?? undefined}>AI not used: {a.ai_error}{a.ai_error_detail ? " (hover for details)" : ""}</span>}
+        {!aiNote && a.mode === "RULES" && a.ai_error && <span>AI not used: {a.ai_error}{a.ai_error_detail ? ` — ${a.ai_error_detail}` : ""}</span>}
         {a.steps.length > 0 && (
           <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-0.5 hover:text-ink">
             {a.steps.length} lookup{a.steps.length === 1 ? "" : "s"}<ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} />
@@ -127,7 +127,7 @@ export function AskPanel() {
     ai.then((reply) => {
       aiDone = true;
       if (reply.mode === "AI") update({ text: reply.answer, reply, thinking: false, aiNote: undefined });
-      else update({ thinking: false, aiNote: `Gemini not used: ${reply.ai_error ?? "unavailable"}` });
+      else update({ thinking: false, aiNote: `Gemini not used: ${reply.ai_error ?? "unavailable"}${reply.ai_error_detail ? ` — ${reply.ai_error_detail}` : ""}` });
     }).catch(() => { aiDone = true; update({ thinking: false, aiNote: "Gemini did not answer" }); });
     try {
       const quick = await ask("rules");

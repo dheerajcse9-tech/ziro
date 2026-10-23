@@ -163,3 +163,24 @@ def test_instant_rules_answer_is_not_logged():
     finally:
         t.sb.deactivate()
         t.sb.close()
+
+
+def test_failed_follow_up_call_still_answers_from_the_lookups():
+    t = _sandbox_with_lists()
+    try:
+        class Flaky(FakeGemini):
+            def generate(self, **kw):
+                if self.calls:
+                    raise RuntimeError("Gemini API returned HTTP 500: internal error")
+                return super().generate(**kw)
+
+            def generate_text(self, *, system, prompt):
+                assert "CGPA 6.40 below minimum 7.00" in prompt
+                return "Farah's CGPA of 6.4 is below the 7.0 minimum."
+
+        fake = Flaky([{"role": "model", "parts": [{"functionCall": {"name": "explain_student", "args": {"student": "Farah"}}}]}])
+        r = assistant.ask(t.sb.db, t.state["people"][Role.APPROVER], "Why isn't Farah on the list?", client=fake)
+        assert r["mode"] == "AI" and "6.4" in r["answer"] and [s["tool"] for s in r["steps"]] == ["explain_student"]
+    finally:
+        t.sb.deactivate()
+        t.sb.close()
