@@ -3,7 +3,7 @@
 **Ziro Digital Agentic AI Hackathon 2026 · Problem statement: Placement Drive Coordinator**
 
 > **Evaluators:** open the app and click **"Guided walkthrough"** on the login page (or go to `/tour`). No login; you
-> press "Yes, continue" and the real agents run a whole drive in 11 steps, ending with every test scenario.
+> press "Yes, continue" and the real agents run a whole drive in 12 steps, ending with every test scenario.
 > See [docs/EVALUATOR_GUIDE.md](docs/EVALUATOR_GUIDE.md). Staff pages also have **Ask PlaceCrew**, a conversational
 > agent (Gemini function calling over read-only tools) that answers from live data and only proposes actions.
 

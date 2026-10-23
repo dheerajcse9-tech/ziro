@@ -66,7 +66,7 @@ function LoginForm() {
           <Link href="/tour" className="group block rounded-[var(--radius-card)] border-2 border-accent bg-accent-soft/60 p-4 transition-colors hover:bg-accent-soft">
             <p className="text-[12px] font-semibold uppercase tracking-wide text-accent">Hackathon evaluators — start here</p>
             <p className="mt-1 flex items-center gap-2 text-[16px] font-semibold text-ink">
-              <PlayCircle className="size-5 text-accent" />Guided walkthrough: a whole drive in 11 steps
+              <PlayCircle className="size-5 text-accent" />Guided walkthrough: a whole drive in 12 steps
               <ArrowRight className="size-4 text-accent transition-transform group-hover:translate-x-0.5" /></p>
             <p className="mt-1 text-[12.5px] text-ink-2">No login. You press &quot;Yes, continue&quot;; the real agents run each step in a private sandbox, show the
               emails they write, and prove every test case.</p>

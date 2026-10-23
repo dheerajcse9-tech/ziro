@@ -21,3 +21,15 @@ def test_walkthrough_runs_every_step_without_login_and_without_real_email(monkey
             break
     assert len(steps) == start["total"]
     assert client.post(f"/api/tour/steps/{start['total']}").status_code == 404
+
+
+def test_guide_maps_every_step_and_feature():
+    from app.services import tour
+
+    assert set(tour.STEP_INFO) == {key for key, _fn in tour.STEPS} and len(tour.OUTLINE) == len(tour.STEPS)
+    ids = {f["id"] for f in tour.FEATURES}
+    assert all(set(info["features"]) <= ids for info in tour.STEP_INFO.values())
+    start = tour.start()
+    assert all(tc["steps"] for tc in start["test_cases"])  # every test case is shown in some step
+    shown = {f["id"] for f in start["features"] if f["steps"]}
+    assert ids - shown == {"settings"}  # everything but Settings is shown in the walkthrough itself

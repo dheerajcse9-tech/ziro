@@ -20,7 +20,7 @@ from app.api import serializers as S
 from app.db.base import utcnow
 from app.models.entities import Drive, EmailMessage, ExceptionItem, Student, StudentRequest, User
 from app.models.enums import ExceptionKind, InboundSource, RequestKind, Role, RunStatus
-from app.services import approval_review, approvals, intake, mailer, outreach, roster_refresh, test_lab
+from app.services import app_settings, approval_review, approvals, intake, mailer, outreach, reminders, roster_refresh, test_lab
 from app.services.sandbox import Sandbox
 
 
@@ -186,13 +186,26 @@ def step_students_answer(t: Tour) -> dict[str, Any]:
         rows.append([s.roll_number, s.full_name, "YES" if a else "NO" if a is False else "no answer",
                      "YES" if b else "no answer"])
     yes = sum(1 for r in db.scalars(select(StudentRequest).where(StudentRequest.drive_id == A.id)) if r.status == "ACCEPTED")
+    # The forms close in 12 days; to show the Reminder Agent now, the reminder window (Settings) is set to 13 days.
+    app_settings.set_value(db, "reminder_hours_before_deadline", 13 * 24)
+    reminders.run(db)
+    app_settings.set_value(db, "reminder_hours_before_deadline", 24)
+    db.commit()
+    sent = _mails(db, "REMINDER")
+    charan = [m for m in sent if m.to_address.startswith("22it001")]
+    answered = [m for m in sent if m.request_id and db.get(StudentRequest, m.request_id).status != "SENT"]
     return {
-        "role": "Students", "title": "Students answer the consent forms",
+        "role": "Students · Reminder Agent", "title": "Students answer the consent forms; the rest get a reminder",
         "explain": "Each student opens their personal link and answers YES or NO. Only a YES lets the agents put a student "
                    "on a company's list. Charan and Manav do not answer; Bhavya says NO; Ishaan says YES to both "
-                   "overlapping drives.",
-        "blocks": [{"type": "table", "columns": ["Roll", "Name", "Nimbus (A)", "Orion (B)"], "rows": rows}],
-        "checks": [_check("YES answers recorded for Nimbus", 12, yes)],
+                   "overlapping drives. The Reminder Agent then emails only the students who have not answered yet. "
+                   "(The forms close in 12 days; to show the reminder now, this walkthrough sets the reminder time in "
+                   "Settings to 13 days before closing. Normally it is 24 hours.)",
+        "blocks": [{"type": "table", "columns": ["Roll", "Name", "Nimbus (A)", "Orion (B)"], "rows": rows},
+                   {"type": "heading", "text": f"The reminder Charan received (one of {len(sent)} reminders)"}, _email(charan[0])],
+        "checks": [_check("YES answers recorded for Nimbus", 12, yes),
+                   _check("Charan (no answer) gets a reminder", True, bool(charan)),
+                   _check("Nobody who already answered is reminded", 0, len(answered))],
     }
 
 
@@ -373,6 +386,65 @@ def step_clash(t: Tour) -> dict[str, Any]:
     }
 
 
+CATEGORY = {"DRIVE_INVITATION": "Consent forms", "REMINDER": "Reminders", "DATA_REQUEST": "Personal forms (missing details)",
+            "EMPLOYER_ROSTER": "Lists sent to companies", "PROFILE_SUBMITTED": "Shortlisted", "NOT_SHORTLISTED": "Not shortlisted (with reason)"}
+
+
+ACTION_WORDS = {"EMAIL_DELIVERED_LOCAL": "Email written (kept in the app: the walkthrough sends no real email)",
+                "VERIFICATION_VERIFIED": "Upload read back and verified", "AGENT_RUN_VERIFIED": "Task finished and verified",
+                "ROSTER_REFRESH_REQUESTED": "List re-prepared after new data"}
+
+
+def step_records(t: Tour) -> dict[str, Any]:
+    from app.audit import ledger
+    from app.models.entities import AuditEvent
+
+    db = t.sb.db
+    A, B = db.get(Drive, t.state["A"]), db.get(Drive, t.state["B"])
+    counts: dict[str, int] = {}
+    for m in db.scalars(select(EmailMessage)):
+        counts[m.category] = counts.get(m.category, 0) + 1
+    chain = ledger.verify_chain(db)
+    names = {Role.ADMIN: "Admin", Role.OFFICER: "Placement officer", Role.APPROVER: "Approver",
+             Role.COORDINATOR: "Drive upload officer", Role.VIEWER: "Viewer"}
+    role_of = {f"user:{u.id}": names.get(r, str(r)) for r, u in t.state["people"].items()}
+
+    def who(actor: str) -> str:
+        person = next((name for uid, name in role_of.items() if actor == uid or actor.endswith(" " + uid)), None)
+        if actor.startswith("agent:"):
+            return "Agent" + (f" (for the {person})" if person else "")
+        return person or actor.split(":")[0].title()
+
+    events, seen = [], set()
+    for e in db.scalars(select(AuditEvent).order_by(AuditEvent.seq.desc())):
+        if e.action not in seen:
+            seen.add(e.action)
+            events.append(e)
+        if len(events) == 12:
+            break
+    lists = {d.employer.name: test_lab._portal_roster(t.sb, d.destination.form_ref) for d in (A, B)}
+    return {
+        "role": "Records", "title": "Everything is on record: emails, audit log and the dashboard",
+        "explain": "Nothing happens off the record. Every email an agent wrote is kept in Emails sent, every action (by a "
+                   "person or an agent) is written to an audit log where each entry is chained to the one before it with a "
+                   "hash, so any change to history is detected, and the dashboard shows how many students reached each company.",
+        "blocks": [{"type": "heading", "text": "Emails sent (the Emails sent page)"},
+                   {"type": "table", "columns": ["Kind of email", "How many"],
+                    "rows": [[CATEGORY.get(k, k), str(v)] for k, v in sorted(counts.items(), key=lambda kv: -kv[1])]},
+                   {"type": "heading", "text": "Shortlisted per company (the dashboard)"},
+                   {"type": "table", "columns": ["Company", "Students on the verified list"],
+                    "rows": [[name, f"{len(rolls)}: {', '.join(rolls)}"] for name, rolls in lists.items()]},
+                   {"type": "heading", "text": f"Audit log: {chain['checked']} entries; the latest of each kind (the Audit log page)"},
+                   {"type": "table", "columns": ["#", "Who", "What"],
+                    "rows": [[str(e.seq), who(e.actor_id), ACTION_WORDS.get(e.action, e.action.replace("_", " ").capitalize())]
+                             for e in events]}],
+        "checks": [_check("Audit log chain intact (no entry changed or removed)", True, chain["valid"]),
+                   _check("Every company list is on record as an email", 2, counts.get("EMPLOYER_ROSTER", 0)),
+                   _check("Lists that reached the companies", {A.employer.name: 5, B.employer.name: 3},
+                          {k: len(v) for k, v in lists.items()})],
+    }
+
+
 def step_test_lab(t: Tour) -> dict[str, Any]:
     rows, checks = [], []
     for test_id, (title, _desc, fn) in test_lab.SCENARIOS.items():
@@ -401,17 +473,162 @@ def step_test_lab(t: Tour) -> dict[str, Any]:
 STEPS: list[tuple[str, Callable[[Tour], dict[str, Any]]]] = [
     ("setup", step_setup), ("company_emails", step_company_emails), ("bad_emails", step_bad_emails),
     ("students_answer", step_students_answer), ("officer_runs", step_officer_runs), ("ask", step_ask), ("approver_forms", step_approver_forms),
-    ("students_reply", step_students_reply), ("approve", step_approve), ("clash", step_clash), ("test_lab", step_test_lab),
+    ("students_reply", step_students_reply), ("approve", step_approve), ("clash", step_clash), ("records", step_records),
+    ("test_lab", step_test_lab),
 ]
-OUTLINE = ["Institute data", "Companies email the mailbox", "Problem emails stopped", "Students answer consent forms",
+OUTLINE = ["Institute data", "Companies email the mailbox", "Problem emails stopped", "Students answer; reminders",
            "Officer runs the drives", "Ask the crew", "Approver sends forms", "Students reply; list updates", "Approval and company email",
-           "Schedule clash settled", "All test scenarios"]
+           "Schedule clash settled", "Emails, audit log, dashboard", "All test scenarios"]
+
+
+# --------------------------------------------------------------------------- the guide shown around the steps
+
+# Every feature of the app, where evaluators see it in the walkthrough and where it lives in the app.
+FEATURES: list[dict[str, str]] = [
+    {"id": "roles", "group": "People", "name": "Four roles, each with one job",
+     "what": "Drive upload officer, placement officer, approver and admin. Every button checks the role.",
+     "where": "Login page (click a role to fill it in)"},
+    {"id": "mailbox", "group": "Stage 1 · company email → drive", "name": "Reads the placement Gmail",
+     "what": "The Mailbox Agent reads new company emails from the placement Gmail (Google sign-in, read-only), only from the time window set in Settings.",
+     "where": "Company emails → Check mailbox now · Settings → Gmail"},
+    {"id": "ai_reading", "group": "Stage 1 · company email → drive", "name": "Gemini reads each email; rules double-check it",
+     "what": "The Email Reader Agent pulls out company, role, date, time, venue, deadline and criteria with Gemini function calling; rules read it too and every field is compared.",
+     "where": "Company emails → open an email (\"Read by Gemini, checked by rules\")"},
+    {"id": "email_checks", "group": "Stage 1 · company email → drive", "name": "Stops bad company emails",
+     "what": "Duplicates, a missing deadline, a deadline after the drive, unknown senders and instruction-like text are stopped for a person.",
+     "where": "Company emails (status of each email)"},
+    {"id": "overlap", "group": "Stage 1 · company email → drive", "name": "Spots overlapping drives",
+     "what": "Drives at the same time are flagged as soon as the email arrives (time-zone aware).",
+     "where": "Company emails · Issues"},
+    {"id": "drives", "group": "Stage 1 · company email → drive", "name": "Creates drives (or a person adds one)",
+     "what": "The Drive Builder creates the drive with versioned criteria. Staff can also add a drive with the New drive form; it goes through the same checks.",
+     "where": "Drives · Drives → New drive"},
+    {"id": "consent", "group": "Stage 1 · company email → drive", "name": "A consent form for every student",
+     "what": "Each student gets a personal YES/NO link by email, sent from the placement Gmail.",
+     "where": "Emails sent · the student's inbox"},
+    {"id": "reminders", "group": "Stage 1 · company email → drive", "name": "Reminds students who haven't answered",
+     "what": "The Reminder Agent emails only students who have not answered, before the form closes (time set in Settings).",
+     "where": "Settings → Agent rules · Agents → Run background agents now"},
+    {"id": "eligibility", "group": "Stage 2 · run the drive", "name": "Exact eligibility rules",
+     "what": "CGPA, backlogs, branch and batch. 7.00 passes and 6.99 fails; missing data is UNKNOWN, never guessed.",
+     "where": "Drives → a drive → Prepare the student list → Who qualifies"},
+    {"id": "duplicates", "group": "Stage 2 · run the drive", "name": "Never mixes up students with the same name",
+     "what": "Students are matched by roll number everywhere, so two Rahul Kumars stay apart.",
+     "where": "Students · Who qualifies"},
+    {"id": "consent_only", "group": "Stage 2 · run the drive", "name": "Shares only students who said YES",
+     "what": "No consent, no sharing: not in the list, not in the upload, not in the company email.",
+     "where": "Who qualifies"},
+    {"id": "clash", "group": "Stage 2 · run the drive", "name": "Clashes are held for a person",
+     "what": "A student booked on two overlapping drives is held, never guessed; a person picks the drive.",
+     "where": "Issues → Schedule clashes → Resolve"},
+    {"id": "agent_chain", "group": "Agents", "name": "Every hand-over between agents is shown",
+     "what": "Each task shows one card per agent with arrows, and a person card wherever a human decides.",
+     "where": "Drive pages · Agents · every task"},
+    {"id": "ask", "group": "Agents", "name": "Ask PlaceCrew (chat agent)",
+     "what": "Ask in plain words. Gemini picks its own read-only tools, answers from live data with the real reasons, runs what-ifs without changing anything, and only proposes actions.",
+     "where": "Ask PlaceCrew button (bottom right, every page)"},
+    {"id": "review", "group": "Stage 3 · approve and send", "name": "Approval review, summarised by Gemini",
+     "what": "Before approving, the Approval Review Agent re-checks every student and lists who could still qualify.",
+     "where": "Approvals → open a list"},
+    {"id": "followup", "group": "Stage 3 · approve and send", "name": "Personal forms for missing details",
+     "what": "One click emails each student a form asking only for what is missing, with a closing time.",
+     "where": "Approvals → Email N student(s) a personal form"},
+    {"id": "recheck", "group": "Stage 3 · approve and send", "name": "The list updates itself",
+     "what": "When a student replies, they are re-checked; the old list is cancelled and a new one prepared.",
+     "where": "Approvals"},
+    {"id": "approval", "group": "Stage 3 · approve and send", "name": "Only the approver can approve",
+     "what": "No agent has an approve tool; the admin and officer are refused. An approval is bound to a hash of the exact list.",
+     "where": "Approvals → Approve upload"},
+    {"id": "verify", "group": "Stage 3 · approve and send", "name": "Upload checked by reading it back",
+     "what": "The approved list is submitted, read back from the company's form and compared roll number by roll number.",
+     "where": "Drive page → upload status"},
+    {"id": "results", "group": "Stage 3 · approve and send", "name": "Company and students are told",
+     "what": "The company gets the verified list by email; students get shortlisted or not-shortlisted emails with the reason.",
+     "where": "Emails sent · the inboxes"},
+    {"id": "emails_log", "group": "Records", "name": "Every email kept",
+     "what": "Every email the agents wrote is listed with its status and can be opened.", "where": "Emails sent"},
+    {"id": "audit", "group": "Records", "name": "Tamper-proof audit log",
+     "what": "Every action by a person or an agent, hash-chained so any change is detected.", "where": "Audit log"},
+    {"id": "dashboard", "group": "Records", "name": "Dashboard",
+     "what": "Students, upcoming drives, consent answers, your to-do list, shortlisted per company, agents at work.", "where": "Home"},
+    {"id": "test_lab", "group": "Proof", "name": "Test Lab",
+     "what": "Re-runs every scenario on the real code in a sandbox and explains why each check passed; evidence CSV.",
+     "where": "Test Lab → Run all scenarios → Details"},
+    {"id": "settings", "group": "Setup", "name": "Settings",
+     "what": "Gmail connection, which company emails to read, trusted senders, agent rules and reminder times, Test the AI, demo reset.",
+     "where": "Settings (admin)"},
+]
+
+STEP_INFO: dict[str, dict[str, Any]] = {
+    "setup": {"why": "Each test student stands for one case, so every rule in the system is exercised.",
+              "in_app": "Students page · the login page lists the roles", "features": ["roles"], "proves": []},
+    "company_emails": {"why": "Today someone copies every company email into a sheet and mails students by hand.",
+                       "in_app": "Company emails → Check mailbox now (drive upload officer)",
+                       "features": ["mailbox", "ai_reading", "drives", "overlap", "consent", "agent_chain"], "proves": ["TC4", "TC5"]},
+    "bad_emails": {"why": "A wrong deadline or a fake sender would otherwise reach every student.",
+                   "in_app": "Company emails (status of each email)", "features": ["email_checks"], "proves": ["TC5"]},
+    "students_answer": {"why": "Sharing a student's details without consent is the most serious mistake a placement cell can make.",
+                        "in_app": "The student's personal link · Emails sent", "features": ["consent", "reminders"], "proves": ["TC3"]},
+    "officer_runs": {"why": "Checking CGPA, backlogs and branches in a spreadsheet is slow and error-prone.",
+                     "in_app": "Drives → open a drive → Prepare the student list → Who qualifies",
+                     "features": ["eligibility", "duplicates", "consent_only", "clash", "agent_chain"],
+                     "proves": ["TC1", "TC2", "TC3", "TC4"]},
+    "ask": {"why": "Staff get answers in seconds instead of digging through pages.",
+            "in_app": "Ask PlaceCrew button (bottom right of every page)", "features": ["ask"], "proves": []},
+    "approver_forms": {"why": "Good students are often dropped only because one detail is missing.",
+                       "in_app": "Approvals → open the list → Email N student(s) a personal form",
+                       "features": ["review", "followup", "agent_chain"], "proves": ["TC6"]},
+    "students_reply": {"why": "The approver must always approve exactly what is true now.",
+                       "in_app": "Approvals (the new list appears by itself)", "features": ["recheck", "agent_chain"], "proves": ["TC6"]},
+    "approve": {"why": "A wrong list sent to a company cannot be taken back.",
+                "in_app": "Approvals → Approve upload → Approve and send",
+                "features": ["approval", "verify", "results", "agent_chain"], "proves": ["TC1", "TC3", "TC6"]},
+    "clash": {"why": "A student cannot attend two interviews at once; only a person should choose.",
+              "in_app": "Issues → Schedule clashes → Resolve", "features": ["clash", "approval", "results"], "proves": ["TC4"]},
+    "records": {"why": "Placement decisions affect careers; every step must be traceable.",
+                "in_app": "Emails sent · Audit log · Home", "features": ["emails_log", "audit", "dashboard"], "proves": []},
+    "test_lab": {"why": "Proof, not promises: every scenario runs again on the real code.",
+                 "in_app": "Test Lab → Run all scenarios → Details", "features": ["test_lab"],
+                 "proves": ["TC1", "TC2", "TC3", "TC4", "TC5", "TC6"]},
+}
+
+TEST_CASES = [
+    {"id": "TC1", "name": "CGPA cutoff and backlogs", "what": "7.00 passes, 6.99 fails, any backlog fails, missing data is UNKNOWN"},
+    {"id": "TC2", "name": "Duplicate names", "what": "Two students called Rahul Kumar never mixed up"},
+    {"id": "TC3", "name": "Missing consent", "what": "No YES means never shared, even after approval"},
+    {"id": "TC4", "name": "Conflicting drives", "what": "Overlapping drives caught; a person decides"},
+    {"id": "TC5", "name": "Company emails", "what": "Bad emails stopped, good ones become drives"},
+    {"id": "TC6", "name": "Every student's journey", "what": "Missing details asked before approval; late qualifiers added"},
+]
+
+ROLES = [
+    {"role": "Drive upload officer", "login": "driveuploadtesting@gmail.com", "job": "Company email → drive → consent forms (stage 1)"},
+    {"role": "Placement officer", "login": "officer@placementos.demo", "job": "Runs the drive and settles clashes (stage 2)"},
+    {"role": "Approver", "login": "approver@placementos.demo", "job": "Asks for missing details and approves (stage 3)"},
+    {"role": "Admin", "login": "admin@placementos.demo", "job": "Setup, Test Lab, audit log. Cannot approve."},
+]
+
+BUILT_WITH = [
+    ["Agents", "21 named agents, each allowed only its own tools; a durable agent graph that pauses for people"],
+    ["AI", "Gemini with function calling (email reading, the planner, Ask PlaceCrew, review summaries), always checked by rules"],
+    ["Email", "Gmail API with Google sign-in (read + send), SMTP as a backup"],
+    ["Safety", "Hash-bound approvals, read-back verification, hash-chained audit log, email text treated as data"],
+    ["Backend", "FastAPI, SQLAlchemy, PostgreSQL"],
+    ["Frontend", "Next.js, Tailwind"],
+    ["Tests", "pytest and Playwright, plus the Test Lab (walkthrough step 12)"],
+]
 
 
 # --------------------------------------------------------------------------- API helpers
 
 def start() -> dict[str, Any]:
-    return {"outline": OUTLINE, "total": len(STEPS), "agents": crew.describe()}
+    steps_of = {f["id"]: [i + 1 for i, (key, _fn) in enumerate(STEPS) if f["id"] in STEP_INFO[key]["features"]]
+                for f in FEATURES}
+    return {"outline": OUTLINE, "total": len(STEPS), "agents": crew.describe(),
+            "features": [{**f, "steps": steps_of[f["id"]]} for f in FEATURES],
+            "test_cases": [{**tc, "steps": [i + 1 for i, (key, _fn) in enumerate(STEPS) if tc["id"] in STEP_INFO[key]["proves"]]}
+                           for tc in TEST_CASES],
+            "roles": ROLES, "built_with": BUILT_WITH}
 
 
 def run_step(index: int) -> dict[str, Any]:
@@ -436,6 +653,7 @@ def run_step(index: int) -> dict[str, Any]:
         tour.sb.deactivate()
         mailer.LOCAL_ONLY.reset(local)
         tour.sb.close()
+    out.update(STEP_INFO[STEPS[index][0]])
     out.update({"index": index, "key": STEPS[index][0], "ms": int((time.perf_counter() - started) * 1000),
                 "passed": all(c["passed"] for c in out["checks"]), "finished": index + 1 >= len(STEPS)})
     return out

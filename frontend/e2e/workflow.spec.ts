@@ -283,13 +283,17 @@ test.describe.serial("PlaceCrew end-to-end", () => {
     await page.context().clearCookies();
     await page.goto("/login");
     await page.getByRole("link", { name: /Guided walkthrough/ }).click();
-    await page.getByRole("button", { name: "Start the walkthrough" }).click();
-    await expect(page.getByText("Step 1 of 11")).toBeVisible({ timeout: 30_000 });
-    for (let i = 2; i <= 11; i++) {
+    await expect(page.getByRole("heading", { name: /Every feature \(\d+\)/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Test cases proved" })).toBeVisible();
+    await page.getByRole("button", { name: "Start the walkthrough" }).first().click();
+    await expect(page.getByText("Step 1 of 12")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Why it matters:").first()).toBeVisible();
+    for (let i = 2; i <= 12; i++) {
       await page.getByRole("button", { name: "Yes, continue" }).click();
-      await expect(page.getByText(`Step ${i} of 11`)).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(`Step ${i} of 12`)).toBeVisible({ timeout: 60_000 });
     }
     await expect(page.getByRole("heading", { name: "Every check passed" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Features: \d+ of \d+ shown/ })).toBeVisible();
     await shot(page, "18-evaluator-walkthrough");
   });
 

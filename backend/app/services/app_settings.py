@@ -51,3 +51,4 @@ def set_value(db: Session, key: str, value: Any) -> None:
         row.value = value
     else:
         db.add(AppSetting(key=key, value=value))
+    db.flush()  # later reads in the same transaction see the new value

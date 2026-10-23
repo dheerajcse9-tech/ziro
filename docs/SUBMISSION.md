@@ -71,7 +71,7 @@ labelled. Stack: FastAPI + SQLAlchemy + PostgreSQL, Next.js 15, Gemini API, Goog
 ## Test cases / proof of working agent
 ```
 Live proof, no login: <demo-url>/tour. Each "Yes, continue" runs the next step of a full drive on the real code in a
-private sandbox (46 checks, read back from the database), ending by re-running all scenarios. The Test Lab (admin)
+private sandbox (51 checks, read back from the database), ending by re-running all scenarios. The Test Lab (admin)
 re-runs them on demand and explains why each check passes, with an evidence CSV.
 
 TC1 CGPA threshold & backlogs – CGPA 7.00 passes (≥ inclusive), 6.99 fails, any backlog fails, missing CGPA/backlogs →
@@ -90,6 +90,6 @@ TC6 Student journey (16 test students) – YES, NO, no answer, missing CGPA, mis
 
 Ask PlaceCrew – the conversational agent answers from live data with the real reasons, runs what-ifs without changing
     anything, and only proposes actions (tested with a Gemini fake and with the rule fallback).
-Automated: 124 backend tests (pytest) and 13 browser end-to-end tests (Playwright), all passing.
+Automated: 125 backend tests (pytest) and 13 browser end-to-end tests (Playwright), all passing.
 Evidence: docs/TEST_EVIDENCE.md, docs/TEST_SCENARIOS.md, docs/EVALUATOR_GUIDE.md.
 ```
