@@ -2,122 +2,94 @@
 
 **Ziro Digital Agentic AI Hackathon 2026 · Problem statement: Placement Drive Coordinator**
 
-> **Evaluators:** open the app and click **"Guided walkthrough"** on the login page (or go to `/tour`). No login; you
-> press "Yes, continue" and the real agents run a whole drive in 12 steps, ending with every test scenario.
-> See [docs/EVALUATOR_GUIDE.md](docs/EVALUATOR_GUIDE.md). Staff pages also have **Ask PlaceCrew**, a conversational
-> agent (Gemini function calling over read-only tools) that answers from live data and only proposes actions.
+**Live demo: https://placecrew.vercel.app**
+
+> **Evaluators:** click **"Guided walkthrough"** on the login page (or open `/tour`). No login: press
+> **Play it automatically** (or "Yes, continue") and the real agents run a whole drive in 12 steps, ending with every
+> test scenario. See [docs/EVALUATOR_GUIDE.md](docs/EVALUATOR_GUIDE.md).
 
 A crew of 21 named agents runs the placement process in three stages, each owned by a person:
 
 1. **Drive upload officer:** a company emails the placement Gmail. Agents read the email (Gemini + rules), check every
    detail and the deadline, create the drive, prepare its consent form and email it to every student.
-2. **Placement officer:** filters the student registry and runs the drive. Agents apply the criteria, keep only students
-   who said YES, detect clashes and propose the roster.
-3. **Approver:** an agent re-checks the proposal. Students missing details or consent get a personal form with a
-   closing time; their answers are applied, re-checked and added. After human approval the exact roster is uploaded,
-   **independently verified**, and emailed to the company. Shortlisted and not-shortlisted students are told, and
-   reminders go out before deadlines and the drive.
+2. **Placement officer:** runs the drive. Agents apply CGPA, backlog, branch and batch rules, keep only students who
+   said YES, detect schedule clashes and propose the roster.
+3. **Approver:** an agent re-checks the proposal; students missing details or consent get a personal form, and their
+   answers are re-checked and added. After human approval the exact roster is uploaded, **read back and verified**, an
+   attendance sheet is created, and the verified list is emailed to the company.
 
-See [docs/AGENT_CREW.md](docs/AGENT_CREW.md) for every agent, and [docs/SETUP_GMAIL_GEMINI.md](docs/SETUP_GMAIL_GEMINI.md) to connect
-Gmail and Gemini.
+Staff pages also have **Ask PlaceCrew**, a conversational agent (Gemini function calling over read-only tools) that
+answers from live data, runs what-ifs and only proposes actions.
 
 ```
-"Prepare the eligible roster for the upcoming drive, identify unresolved records,
- and show me the proposal for approval."
-        │
-        ▼
- plan → validate scope → retrieve employer form (evidence) → cross-check criteria
-      → deterministic eligibility + consent → schedule-clash detection
-      → hashed proposal ──► HUMAN APPROVAL (approver role, bound to hash)
-      → idempotent upload → re-read destination → exact ID comparison
-      → receipt + attendance sheet → VERIFIED
+company email ─► read (Gemini + rules) ─► checks ─► drive + consent forms ─► students answer
+   ─► eligibility + consent + clash detection ─► hashed proposal ─► HUMAN APPROVAL (approver only)
+   ─► upload ─► read back ─► exact ID comparison ─► receipt + attendance sheet ─► company emailed
 ```
 
 | | |
 |---|---|
-| Agents | 21 named agents in 3 stages; each may call only its own tools; durable workflow graph; Gemini (or Claude) reads goals and company emails, with a labelled rule-based fallback; autopilot runs the mailbox, deadline and reminder agents |
-| Decisions | Deterministic rules engine (CGPA ≥ inclusive, backlog policy, branch, batch) → ELIGIBLE / INELIGIBLE / UNKNOWN with per-rule evidence |
-| Safety | Consent enforced and re-checked before upload · approvals bound to a SHA-256 proposal hash · stale approvals auto-invalidated · destination allowlist · prompt-injection flagging · hash-chained append-only audit ledger |
-| Integration | Replaceable `DriveFormAdapter`; demo target is a **LOCAL MOCK** employer drive portal (HTML form + read-back pages, fault injection) |
-| Mail | Google sign-in to the placement Gmail: company emails are read (read-only) and all email is sent from it; SMTP or an in-app local mailbox as alternatives |
-| Outreach | One consent form per drive to every student; personal forms for missing details/consent with closing times; reminders; shortlisted / not-shortlisted emails; selection results and placement history |
-| Evidence | 99 backend tests, 4 official scenarios (TC1–TC4), 10 browser end-to-end tests — see [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md) |
+| Agents | 21 named agents in 3 stages; each may call only its own tools; durable workflow graph that pauses for people; no agent can approve |
+| AI | Gemini function calling for email reading, planning, Ask PlaceCrew and review summaries; always cross-checked by rules, with a labelled rule-based fallback |
+| Decisions | Deterministic rules (CGPA ≥ inclusive, backlogs, branch, batch) → ELIGIBLE / INELIGIBLE / UNKNOWN, with the reason for every decision |
+| Safety | Consent enforced before upload · approvals bound to a SHA-256 hash of the exact list · stale approvals cancelled · hash-chained audit log · email text treated as data, never instructions |
+| Mail | Gmail API with Google sign-in (read company emails, send from the placement mailbox); SMTP as a backup |
+| Upload target | The organiser's mock form was not provided, so uploads go to a clearly labelled **LOCAL MOCK** drive form (`/mock-portal`) behind a replaceable adapter |
+| Tests | 125 backend tests (pytest), 13 browser end-to-end tests (Playwright), and the in-app Test Lab (TC1–TC6) |
 
-> **Honesty notes.** The organiser's official mock drive form URL/credentials were not available to this build, so
-> every upload in this repository goes to the clearly labelled LOCAL MOCK portal served by the backend at
-> `/mock-portal`. No Gemini or Anthropic key and no Google OAuth client were available in the build environment, so
-> recorded runs used the rule-based fallbacks. The Gemini and Gmail paths follow Google's documented REST shapes
-> and are tested against faithful stand-ins (a fake Gemini client and an httpx mock of the OAuth/Gmail endpoints),
-> not against the live services. All people and employers in the data are synthetic.
+## Official test cases
 
-## Quick start (local)
+| Test | Scenario | Result in PlaceCrew |
+|---|---|---|
+| TC1 | CGPA ≥ 7 and no backlogs | 7.00 passes, 6.99 fails, any backlog fails, missing data → UNKNOWN |
+| TC2 | Two students named Rahul Kumar | Matched by roll number everywhere |
+| TC3 | Student without consent | Excluded from the upload (also after approval, if consent is withdrawn) |
+| TC4 | Two drives in the same slot | Clash flagged and held for a person before assignment |
 
-Requirements: Python 3.12+, Node 22+.
+Extra: **TC5** company-email cases and **TC6** every student's journey. Details: [docs/TEST_SCENARIOS.md](docs/TEST_SCENARIOS.md).
+
+## Accounts (password `Demo@2026`)
+
+| Login | Role | Does |
+|---|---|---|
+| `driveuploadtesting@gmail.com` | Drive upload officer | Company emails → drives → consent forms |
+| `officer@placementos.demo` | Placement officer | Runs the drive, settles clashes, adds drives |
+| `approver@placementos.demo` | Approver | Sends forms for missing details, approves (the only role that can) |
+| `admin@placementos.demo` | Admin | Setup, Gmail, Test Lab, audit log; cannot approve |
+
+## Run locally
+
+Requirements: Python 3.12+, Node 22+. Copy `.env.example` to `backend/.env` and fill in what you need.
 
 ```bash
-# Backend (SQLite by default; for PostgreSQL put DATABASE_URL=postgresql://... in backend/.env)
 cd backend
 pip install -r requirements-dev.txt
 alembic upgrade head
-python -m app.cli seed                 # institute data: 16 test students, 4 staff logins, no drives
-                                       # (SEED_PROFILE=demo for the synthetic dataset with sample drives)
-uvicorn app.main:app --port 8000       # API + LOCAL MOCK portal at /mock-portal
+python -m app.cli seed                 # 16 test students, 4 staff logins
+uvicorn app.main:app --port 8000       # API + LOCAL MOCK form at /mock-portal
 
-# Frontend (separate terminal)
-cd frontend
-npm ci
-npm run build && npm start             # http://localhost:3000  (proxies /api to :8000)
+cd frontend                            # separate terminal
+npm ci && npm run dev                  # http://localhost:3000 (proxies /api to :8000)
 ```
 
-Sign in (password `Demo@2026`):
-
-| Step | Login | Role | Does |
-|---|---|---|---|
-| 1 | `driveuploadtesting@gmail.com` | Drive upload officer | Reads company emails, checks details and deadline, creates the drive, sends the consent form to all students |
-| 2 | `officer@placementos.demo` | Placement officer | After students answer, runs the drive (YES + criteria + clashes), fixes records, sends the list to the approver; can also add a drive with **New drive** (same agents and checks as a company email) |
-| 3 | `approver@placementos.demo` | Approver (Head of Placements) | Checks the list, sends forms for missing details, approves or rejects; approval sends the list to the company |
-| Setup | `admin@placementos.demo` | Admin | Connects Gmail, AI key, trusted senders, students, Test Lab, audit log; can help with steps 1–2 but **cannot approve** |
-
-Students: [`backend/app/data/institute_students.csv`](backend/app/data/institute_students.csv) (16 students, one per test case — see [docs/TEST_SCENARIOS.md](docs/TEST_SCENARIOS.md)). They have demo addresses (`…@students.example.edu`) that are **never emailed**;
-those messages stay in the app. Give 2–3 students real addresses with `REAL_STUDENT_EMAILS` in `backend/.env`. All
-real email goes out from the connected Gmail (`driveuploadtesting@gmail.com`).
-
-Full stack with PostgreSQL: `docker compose up --build` (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); the compose file
-was not executed in the build environment, which has no Docker daemon).
+Gmail and Gemini setup: [docs/SETUP_GMAIL_GEMINI.md](docs/SETUP_GMAIL_GEMINI.md). The agents: [docs/AGENT_CREW.md](docs/AGENT_CREW.md).
 
 ## Tests
 
 ```bash
-cd backend && python -m pytest                    # unit + reliability + TC1–TC4 + live HTTP API
-cd backend && python -m app.cli run-tests         # official scenarios, results stored for the Test Lab
-cd frontend && CHROMIUM_PATH=... npx playwright test   # browser e2e against running servers
+cd backend && python -m pytest            # unit, reliability, TC1–TC6, live HTTP API
+cd frontend && npx playwright test        # browser end-to-end (needs both servers running)
 ```
 
-## Documentation
+## Tech stack
 
-| Document | Contents |
-|---|---|
-| [EVALUATOR_GUIDE](docs/EVALUATOR_GUIDE.md) | For evaluators: the guided walkthrough, test cases, accounts, what is simulated on the deployed link |
-| [TEST_SCENARIOS](docs/TEST_SCENARIOS.md) | The 16 test students and 6 company emails, with the expected result of each |
-| [AGENT_CREW](docs/AGENT_CREW.md) | The 21 agents, the three stages, who each agent works for |
-| [SETUP_GMAIL_GEMINI](docs/SETUP_GMAIL_GEMINI.md) | Step-by-step: Gemini key, Google sign-in for Gmail, trusted senders |
-| [PRODUCT_SPEC](docs/PRODUCT_SPEC.md) | Users, problems, MVP scope, features |
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | System diagram, modules, request flows |
-| [AGENT_WORKFLOW](docs/AGENT_WORKFLOW.md) | Graph, states, tools & permissions, interrupts, recovery |
-| [DATA_MODEL](docs/DATA_MODEL.md) | Tables, keys, versioning and traceability |
-| [SECURITY](docs/SECURITY.md) | Threats and controls |
-| [API](docs/API.md) | Endpoint reference (OpenAPI at `/docs`, snapshot in `docs/evidence/openapi.json`) |
-| [TEST_PLAN](docs/TEST_PLAN.md) · [ACCEPTANCE_CRITERIA](docs/ACCEPTANCE_CRITERIA.md) | What is tested and how |
-| [TEST_EVIDENCE](docs/TEST_EVIDENCE.md) | Actual results, logs and screenshots |
-| [DEPLOYMENT](docs/DEPLOYMENT.md) | Environment variables, Vercel/Docker instructions, current status |
-| [PRESENTATION](docs/PRESENTATION.md) | Pitch outline, 2–3 minute demo script, limitations |
-| [BUILD_STATUS](docs/BUILD_STATUS.md) | Progress log and open items |
+FastAPI · SQLAlchemy · PostgreSQL (Neon) · Next.js · Tailwind · Gemini API · Gmail API (Google OAuth) · pytest · Playwright · deployed on Vercel
 
 ## Repository layout
 
 ```
-backend/   FastAPI app: domain/ (pure rules) · services/ · agent/ (graph, tools, planner) · integrations/ (adapters)
-           mock_portal/ (LOCAL MOCK destination) · audit/ (hash-chained ledger) · api/ · migrations/ · tests/
-frontend/  Next.js App Router + TypeScript + Tailwind: officer workspace & Agent Control Room · e2e/ (Playwright)
-docs/      Specifications, evidence (logs, OpenAPI snapshot, screenshots)
+backend/   FastAPI: domain/ (rules) · agent/ (graph, crew, Ask PlaceCrew) · services/ · integrations/ · mock_portal/
+           audit/ (hash-chained log) · api/ · migrations/ · tests/
+frontend/  Next.js app: staff workspace, guided walkthrough (/tour), Test Lab · e2e/ (Playwright)
+docs/      Evaluator guide, test scenarios, agent crew, Gmail/Gemini setup
 ```
