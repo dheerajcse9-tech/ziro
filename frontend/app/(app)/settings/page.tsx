@@ -94,6 +94,7 @@ export default function SettingsPage() {
             { label: "Server time", value: fmtDateTime(health.data.time, undefined, { second: "2-digit" }) },
             { label: "Allowed destination hosts", value: integ.data?.allowed_destination_hosts.join(", ") ?? "—" },
           ]} /></div>}
+          <AiCheck />
         </Card>
         <Card>
           <CardHeader title="Official organiser target" />
@@ -178,5 +179,23 @@ export default function SettingsPage() {
         <p className="flex items-center gap-2 text-[13px] text-bad"><AlertTriangle className="size-4" />All runs, approvals, uploads and audit history will be removed.</p>
       </ConfirmDialog>
     </>
+  );
+}
+
+interface AiCheckResult { ok: boolean; model: string | null; seconds: number | null; error: string | null; detail: string }
+
+function AiCheck() {
+  const check = useMutation({ mutationFn: () => api.post<AiCheckResult>("/api/integrations/ai-check") });
+  const r = check.data;
+  return (
+    <div className="space-y-2 border-t border-line p-4">
+      <Button icon={<Zap className="size-4" />} loading={check.isPending} onClick={() => check.mutate()}>Test the AI</Button>
+      {r && (r.ok
+        ? <Banner tone="ok" title={`Gemini answered in ${r.seconds} s`}>{r.model} is working. Ask PlaceCrew and the Email Reader will use it.</Banner>
+        : <Banner tone="warn" title={`AI not working: ${r.error}`}>
+            {r.seconds != null && <>Took {r.seconds} s{r.model ? ` with ${r.model}` : ""}. </>}
+            {r.detail && <span className="font-mono text-[11.5px]">{r.detail}</span>}
+          </Banner>)}
+    </div>
   );
 }

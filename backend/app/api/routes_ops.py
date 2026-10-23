@@ -472,6 +472,26 @@ class FaultIn(BaseModel):
     extra: dict = Field(default_factory=dict)
 
 
+@router.post("/integrations/ai-check", tags=["integrations"])
+def ai_check(_: User = Depends(require_roles(Role.ADMIN))):
+    """Sends Gemini one tiny prompt and times it, so a slow model or a bad key shows up in plain words."""
+    import time
+
+    from app.agent import gemini
+
+    settings = get_settings()
+    if settings.active_llm != "gemini":
+        return {"ok": False, "model": None, "seconds": None, "error": "no Gemini key is configured", "detail": ""}
+    started = time.monotonic()
+    try:
+        gemini.generate_text(gemini.GeminiClient(), "Answer in one word.", "Reply with OK.")
+        return {"ok": True, "model": settings.gemini_model, "seconds": round(time.monotonic() - started, 1),
+                "error": None, "detail": ""}
+    except Exception as exc:  # noqa: BLE001 - shown to the admin
+        return {"ok": False, "model": settings.gemini_model, "seconds": round(time.monotonic() - started, 1),
+                "error": gemini.friendly_error(exc), "detail": str(exc)[:300]}
+
+
 @router.get("/integrations/mock-portal/faults", tags=["integrations"])
 def list_faults(_: User = Depends(require_roles(Role.ADMIN))):
     return mock_admin().list_faults()

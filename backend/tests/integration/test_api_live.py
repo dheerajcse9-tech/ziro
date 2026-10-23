@@ -137,3 +137,9 @@ def test_company_inbox_and_crew_over_http(server):
     assert viewer.get(f"/api/approvals/{run['state']['approval_id']}/review").status_code == 403
     students = officer.get(f"/api/students?drive_id={drive['id']}&drive_status=consent_pending&page_size=200").json()
     assert students["total"] == 34 and students["items"][0]["drive"]["consent"] is None
+
+
+def test_ai_check_is_admin_only_and_says_why(server):
+    assert login("officer@placementos.demo").post("/api/integrations/ai-check").status_code == 403
+    r = login("admin@placementos.demo").post("/api/integrations/ai-check")
+    assert r.status_code == 200 and r.json()["ok"] is False and r.json()["error"]  # the test server has no Gemini key

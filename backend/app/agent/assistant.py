@@ -7,6 +7,7 @@ working AI key the same tools are used by a small rule-based router, and the ans
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 from datetime import timedelta
@@ -260,8 +261,8 @@ def _run_tool(db: Session, name: str, args: dict[str, Any], steps: list[dict[str
 
 # --------------------------------------------------------------------------- AI loop
 
-# The whole answer must fit well inside the web proxy's limit; a slower AI falls back to the rules.
-ASK_BUDGET_SECONDS = 25
+# The whole answer must fit inside the web proxy's limit (120 s); a slower AI falls back to the rules.
+ASK_BUDGET_SECONDS = float(os.getenv("ASSISTANT_TIMEOUT_SECONDS", "60"))
 
 
 def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: Any) -> dict[str, Any]:
@@ -308,6 +309,8 @@ def _ask_rules(db: Session, question: str) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     proposals: list[dict[str, Any]] = []
     drive = next((d for d in _drives(db) if d.employer.name.lower().split()[0] in q or d.title.lower() in q), None)
+    if drive is None and re.search(r"\b(next|upcoming|first) drive\b", q):
+        drive = next((d for d in _drives(db) if d.starts_at > utcnow()), None)
     m = ROLL.search(question)
     student = find_student(db, m.group(0)) if m else next(
         (s for s in db.scalars(select(Student)) if re.search(rf"\b{re.escape(s.full_name.lower().split()[0])}\b", q)), None)

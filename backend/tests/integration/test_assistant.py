@@ -56,6 +56,8 @@ def test_rules_answer_when_ai_is_unavailable():
         assert r["mode"] == "RULES" and r["ai_error"] and "Kabir Singh (22CSE006)" in r["answer"]
         r = assistant.ask(t.sb.db, user, "Who still needs attention for Nimbus?")
         assert "Diya Menon (22CSE003) (missing CGPA)" in r["answer"]
+        r = assistant.ask(t.sb.db, user, "Who still needs attention for the next drive?")
+        assert "Diya Menon (22CSE003)" in r["answer"]
         r = assistant.ask(t.sb.db, user, "prepare the list for Orion")
         assert r["proposals"][0]["action"] == "prepare_list" and "Orion" in r["proposals"][0]["drive"]
     finally:
