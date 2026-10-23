@@ -8,6 +8,8 @@ const backend = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Agent runs and the Test Lab can take longer than the default 30 s proxy limit.
+  experimental: { proxyTimeout: 120_000 },
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${backend}/api/:path*` },

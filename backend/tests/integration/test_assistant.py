@@ -63,6 +63,20 @@ def test_rules_answer_when_ai_is_unavailable():
         t.sb.close()
 
 
+def test_slow_ai_falls_back_to_rules_in_time(monkeypatch):
+    t = _sandbox_with_lists()
+    try:
+        monkeypatch.setattr(assistant, "ASK_BUDGET_SECONDS", 0)
+        fake = FakeGemini([{"role": "model", "parts": [{"text": "never reached"}]}])
+        user = t.state["people"][Role.OFFICER]
+        r = assistant.ask(t.sb.db, user, "Who still needs attention for Nimbus?", client=fake)
+        assert r["mode"] == "RULES" and r["ai_error"] == "the AI service did not answer in time"
+        assert "Diya Menon (22CSE003)" in r["answer"] and fake.calls == []
+    finally:
+        t.sb.deactivate()
+        t.sb.close()
+
+
 def test_approver_summary_is_written_by_gemini_or_from_the_checks():
     from app.services import approval_review, approvals
 

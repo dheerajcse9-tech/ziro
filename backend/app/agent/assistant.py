@@ -8,6 +8,7 @@ working AI key the same tools are used by a small rule-based router, and the ans
 from __future__ import annotations
 
 import re
+import time
 from datetime import timedelta
 from typing import Any, Callable
 
@@ -259,10 +260,15 @@ def _run_tool(db: Session, name: str, args: dict[str, Any], steps: list[dict[str
 
 # --------------------------------------------------------------------------- AI loop
 
+# The whole answer must fit well inside the web proxy's limit; a slower AI falls back to the rules.
+ASK_BUDGET_SECONDS = 25
+
+
 def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: Any) -> dict[str, Any]:
     from app.agent import gemini
 
     client = client or gemini.GeminiClient()
+    deadline = time.monotonic() + ASK_BUDGET_SECONDS
     declarations = [gemini.declaration(n, d, s) for n, (d, s, _) in TOOLS.items()]
     contents: list[dict[str, Any]] = []
     for h in history[-6:]:
@@ -271,6 +277,11 @@ def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: A
     steps: list[dict[str, Any]] = []
     proposals: list[dict[str, Any]] = []
     for _turn in range(6):
+        remaining = deadline - time.monotonic()
+        if remaining < 2:
+            raise gemini.GeminiError("Gemini timed out before finishing the answer")
+        if hasattr(client, "timeout"):
+            client.timeout = min(client.timeout, remaining)
         content = gemini.first_content(client.generate(system=SYSTEM_PROMPT, contents=contents, declarations=declarations,
                                                        mode="AUTO"))
         calls = gemini.function_calls(content)

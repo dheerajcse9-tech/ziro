@@ -90,6 +90,6 @@ TC6 Student journey (16 test students) – YES, NO, no answer, missing CGPA, mis
 
 Ask PlaceCrew – the conversational agent answers from live data with the real reasons, runs what-ifs without changing
     anything, and only proposes actions (tested with a Gemini fake and with the rule fallback).
-Automated: 117 backend tests (pytest) and 13 browser end-to-end tests (Playwright), all passing.
+Automated: 118 backend tests (pytest) and 13 browser end-to-end tests (Playwright), all passing.
 Evidence: docs/TEST_EVIDENCE.md, docs/TEST_SCENARIOS.md, docs/EVALUATOR_GUIDE.md.
 ```
