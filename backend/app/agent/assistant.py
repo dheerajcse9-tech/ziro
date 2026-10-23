@@ -384,13 +384,19 @@ def _ask_rules(db: Session, question: str) -> dict[str, Any]:
 # --------------------------------------------------------------------------- entry point
 
 def ask(db: Session, user: User, question: str, history: list[dict[str, str]] | None = None,
-        client: Any | None = None) -> dict[str, Any]:
+        client: Any | None = None, mode: str = "auto") -> dict[str, Any]:
+    """mode "rules" is the instant answer the panel shows while Gemini works ("auto"); only "auto" is logged."""
     from app.audit import ledger
     from app.models.enums import ActorType
 
     settings = get_settings()
     result: dict[str, Any]
     ai_error = ai_detail = None
+    if mode == "rules":
+        result = _ask_rules(db, question)
+        result.update(mode="RULES", ai_error=None, ai_error_detail=None)
+        db.rollback()
+        return result
     if client is not None or settings.active_llm == "gemini":
         try:
             result = _ask_ai(db, question, history or [], client)

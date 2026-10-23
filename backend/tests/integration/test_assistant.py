@@ -128,3 +128,38 @@ def test_busy_model_retries_then_uses_the_backup_model(monkeypatch):
         assert gemini.friendly_error(exc) == "the Gemini model is busy at Google right now (high demand)"
     else:
         raise AssertionError("expected the busy error")
+
+
+def test_low_thinking_is_requested_and_dropped_for_models_without_it(monkeypatch):
+    import json
+
+    import httpx
+
+    from app.agent import gemini
+
+    bodies = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "generationConfig" in body:
+            return httpx.Response(400, json={"error": {"message": "Thinking level is not supported for this model."}})
+        return httpx.Response(200, json={"candidates": [{"content": {"role": "model", "parts": [{"text": "OK"}]}}]})
+
+    monkeypatch.delenv("GEMINI_THINKING_LEVEL", raising=False)
+    client = gemini.GeminiClient(api_key="k", model="m", transport=httpx.MockTransport(handler))
+    assert gemini.generate_text(client, "s", "p") == "OK"
+    assert bodies[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
+    assert "generationConfig" not in bodies[1] and client.thinking_level == ""
+
+
+def test_instant_rules_answer_is_not_logged():
+    t = _sandbox_with_lists()
+    try:
+        user = t.state["people"][Role.OFFICER]
+        r = assistant.ask(t.sb.db, user, "Who still needs attention for the next drive?", mode="rules")
+        assert r["mode"] == "RULES" and r["ai_error"] is None and "Diya Menon (22CSE003)" in r["answer"]
+        assert t.sb.db.query(AuditEvent).filter(AuditEvent.action == "ASSISTANT_ASKED").count() == 0
+    finally:
+        t.sb.deactivate()
+        t.sb.close()

@@ -20,7 +20,8 @@ interface Proposal {
   drive_id?: number; drive?: string; closes_at_local?: string; students?: number; objective?: string;
 }
 interface Answer { answer: string; steps: Step[]; proposals: Proposal[]; mode: "AI" | "RULES"; model?: string; ai_error?: string; ai_error_detail?: string | null }
-interface Message { role: "user" | "assistant"; text: string; reply?: Answer }
+// The rules answer arrives at once; Gemini's answer replaces it when ready (`thinking` while it works).
+interface Message { id: number; role: "user" | "assistant"; text: string; reply?: Answer; thinking?: boolean; aiNote?: string }
 
 const PERMISSION: Record<Proposal["action"], string> = { prepare_list: "runAgent", send_personal_forms: "followUp", check_mailbox: "manageDrives" };
 
@@ -65,16 +66,18 @@ function ProposalCard({ p }: { p: Proposal }) {
   );
 }
 
-function AssistantMessage({ a }: { a: Answer }) {
+function AssistantMessage({ a, thinking, aiNote }: { a: Answer; thinking?: boolean; aiNote?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="space-y-2">
+      {thinking && <p className="flex items-center gap-1.5 text-[12px] text-accent"><Sparkles className="size-3 animate-pulse" />Instant answer · Gemini is checking it…</p>}
       <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-ink">{a.answer}</p>
       {a.proposals.map((p, i) => <ProposalCard key={i} p={p} />)}
       <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-muted">
         <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium", a.mode === "AI" ? "bg-accent-soft text-accent" : "bg-subtle text-muted")}>
           {a.mode === "AI" ? <><Sparkles className="size-3" />Gemini</> : "Built-in rules"}
         </span>
+        {aiNote && <span>{aiNote}</span>}
         {a.mode === "RULES" && a.ai_error && <span title={a.ai_error_detail ?? undefined}>AI not used: {a.ai_error}{a.ai_error_detail ? " (hover for details)" : ""}</span>}
         {a.steps.length > 0 && (
           <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-0.5 hover:text-ink">
@@ -101,17 +104,45 @@ export function AskPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const end = useRef<HTMLDivElement>(null);
   const drives = useQuery({ queryKey: ["drives", ""], queryFn: () => api.get<Drive[]>("/api/drives"), enabled: open });
-  const ask = useMutation({
-    mutationFn: (question: string) => api.post<Answer>("/api/assistant/ask", {
-      question, history: messages.slice(-8).map((m) => ({ role: m.role, text: m.role === "user" ? m.text : m.reply?.answer ?? "" })),
-    }),
-    onSuccess: (reply, question) => setMessages((m) => [...m, { role: "user", text: question }, { role: "assistant", text: reply.answer, reply }]),
-    onError: toastError,
-  });
-  useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length, ask.isPending]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length, busy]);
   if (!me.data || me.data.role === "viewer") return null;
   const firstDrive = drives.data?.find((d) => d.status === "OPEN")?.employer.name;
-  const send = (q: string) => { if (q.trim().length >= 2 && !ask.isPending) { ask.mutate(q.trim()); setText(""); } };
+  const send = async (raw: string) => {
+    const question = raw.trim();
+    if (question.length < 2 || busy) return;
+    setText("");
+    setBusy(true);
+    const id = Date.now();
+    const history = messages.slice(-8).map((m) => ({ role: m.role, text: m.role === "user" ? m.text : m.reply?.answer ?? "" }));
+    setMessages((all) => [...all, { id, role: "user", text: question }]);
+    const update = (patch: Partial<Message>) => setMessages((all) => {
+      const found = all.some((m) => m.id === id + 1);
+      return found ? all.map((m) => (m.id === id + 1 ? { ...m, ...patch } : m))
+        : [...all, { id: id + 1, role: "assistant", text: "", ...patch }];
+    });
+    const ask = (mode: "rules" | "auto") => api.post<Answer>("/api/assistant/ask", { question, history, mode });
+    const ai = ask("auto");  // Gemini, started at the same time as the instant answer
+    let aiDone = false;
+    ai.then((reply) => {
+      aiDone = true;
+      if (reply.mode === "AI") update({ text: reply.answer, reply, thinking: false, aiNote: undefined });
+      else update({ thinking: false, aiNote: `Gemini not used: ${reply.ai_error ?? "unavailable"}` });
+    }).catch(() => { aiDone = true; update({ thinking: false, aiNote: "Gemini did not answer" }); });
+    try {
+      const quick = await ask("rules");
+      setMessages((all) => {
+        const existing = all.find((m) => m.id === id + 1);
+        if (existing?.reply?.mode === "AI") return all;  // Gemini was faster
+        return existing ? all.map((m) => (m.id === id + 1 ? { ...m, text: quick.answer, reply: quick } : m))
+          : [...all, { id: id + 1, role: "assistant", text: quick.answer, reply: quick, thinking: !aiDone }];
+      });
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
@@ -143,10 +174,10 @@ export function AskPanel() {
                 </div>
               </div>
             )}
-            {messages.map((m, i) => m.role === "user"
-              ? <div key={i} className="ml-8 rounded-2xl rounded-br-sm bg-ink px-3 py-2 text-[13.5px] text-white">{m.text}</div>
-              : <div key={i} className="mr-4">{m.reply && <AssistantMessage a={m.reply} />}</div>)}
-            {ask.isPending && <p className="flex items-center gap-2 text-[13px] text-muted"><Sparkles className="size-3.5 animate-pulse text-accent" />Looking it up…</p>}
+            {messages.map((m) => m.role === "user"
+              ? <div key={m.id} className="ml-8 rounded-2xl rounded-br-sm bg-ink px-3 py-2 text-[13.5px] text-white">{m.text}</div>
+              : <div key={m.id} className="mr-4">{m.reply && <AssistantMessage a={m.reply} thinking={m.thinking} aiNote={m.aiNote} />}</div>)}
+            {busy && <p className="flex items-center gap-2 text-[13px] text-muted"><Sparkles className="size-3.5 animate-pulse text-accent" />Looking it up…</p>}
             <div ref={end} />
           </div>
           <form className="flex items-end gap-2 border-t border-line p-3" onSubmit={(e) => { e.preventDefault(); send(text); }}>
@@ -154,7 +185,7 @@ export function AskPanel() {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }}
               placeholder="e.g. Why isn’t Farah on the Nimbus list?"
               className="min-h-[44px] flex-1 resize-none rounded-lg border border-line bg-subtle px-3 py-2 text-[13.5px] placeholder:text-faint focus:border-accent focus:bg-surface focus:outline-none" />
-            <Button type="submit" variant="primary" aria-label="Send" loading={ask.isPending} disabled={text.trim().length < 2} icon={<ArrowUp className="size-4" />} />
+            <Button type="submit" variant="primary" aria-label="Send" loading={busy} disabled={text.trim().length < 2} icon={<ArrowUp className="size-4" />} />
           </form>
         </section>
       )}

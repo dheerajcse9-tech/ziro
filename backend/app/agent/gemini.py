@@ -112,12 +112,17 @@ class GeminiClient:
         # Backup models, tried in order when Google says the main one is busy (HTTP 503/429/500).
         self.fallbacks = [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS", "").split(",") if m.strip()]
         self.used_model = self.model
+        # "low" makes thinking models answer much faster; empty turns it off for models without the setting.
+        self.thinking_level = os.getenv("GEMINI_THINKING_LEVEL", "low").strip()
 
     def post(self, body: dict[str, Any]) -> dict[str, Any]:
         """generateContent with a short retry on a busy model, then the backup models."""
         last: GeminiError | None = None
         for model in [self.model, *[m for m in self.fallbacks if m != self.model]]:
-            for attempt in range(2):
+            for attempt in range(3):
+                if self.thinking_level:
+                    body = {**body, "generationConfig": {**body.get("generationConfig", {}),
+                                                         "thinkingConfig": {"thinkingLevel": self.thinking_level}}}
                 url = f"{self.base_url}/models/{model}:generateContent"
                 try:
                     with httpx.Client(timeout=self.timeout, transport=self.transport) as http:
@@ -132,10 +137,16 @@ class GeminiClient:
                 except ValueError:
                     detail = r.text
                 last = GeminiError(f"Gemini API returned HTTP {r.status_code} for {model}: {str(detail)[:300]}")
+                if r.status_code == 400 and self.thinking_level and "thinking" in str(detail).lower():
+                    self.thinking_level = ""  # this model has no thinking setting: ask again without it
+                    body = {k: v for k, v in body.items() if k != "generationConfig"}
+                    continue
                 if r.status_code not in BUSY:
                     raise last
                 if attempt == 0:
                     time.sleep(1.5)
+                else:
+                    break
         assert last is not None
         raise last
 

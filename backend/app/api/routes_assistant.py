@@ -23,8 +23,9 @@ class Turn(BaseModel):
 class AskIn(BaseModel):
     question: str = Field(min_length=2, max_length=1000)
     history: list[Turn] = Field(default_factory=list, max_length=12)
+    mode: Literal["auto", "rules"] = "auto"
 
 
 @router.post("/assistant/ask", tags=["assistant"])
 def ask(body: AskIn, db: Session = Depends(get_db), user: User = Depends(require_roles(*ANY_ROLE))):
-    return assistant.ask(db, user, body.question, [t.model_dump() for t in body.history])
+    return assistant.ask(db, user, body.question, [t.model_dump() for t in body.history], mode=body.mode)
