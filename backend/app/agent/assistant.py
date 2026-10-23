@@ -7,6 +7,7 @@ working AI key the same tools are used by a small rule-based router, and the ans
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -45,6 +46,9 @@ ACTIONS = {
 
 
 # --------------------------------------------------------------------------- lookups
+
+logger = logging.getLogger(__name__)
+
 
 def _drives(db: Session) -> list[Drive]:
     return list(db.scalars(select(Drive).where(Drive.status != DriveStatus.CANCELLED).order_by(Drive.starts_at)))
@@ -295,7 +299,7 @@ def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: A
             name, args = call.get("name"), dict(call.get("args") or {})
             out = _run_tool(db, name, args, steps, proposals) if name in TOOLS else {"error": "Unknown tool"}
             responses.append(gemini.function_response(call, out))
-        contents.append({"role": "function", "parts": responses})
+        contents.append({"role": "user", "parts": responses})  # tool results go back as a user turn
     return {"answer": "I looked this up but could not finish; please ask a narrower question.", "steps": steps,
             "proposals": proposals}
 
@@ -386,7 +390,7 @@ def ask(db: Session, user: User, question: str, history: list[dict[str, str]] | 
 
     settings = get_settings()
     result: dict[str, Any]
-    ai_error = None
+    ai_error = ai_detail = None
     if client is not None or settings.active_llm == "gemini":
         try:
             result = _ask_ai(db, question, history or [], client)
@@ -396,13 +400,15 @@ def ask(db: Session, user: User, question: str, history: list[dict[str, str]] | 
             from app.agent.gemini import friendly_error
 
             db.rollback()
-            ai_error = friendly_error(exc)
+            ai_error, ai_detail = friendly_error(exc), f"{type(exc).__name__}: {exc}"[:400]
+            logger.warning("Ask PlaceCrew fell back to rules: %s", ai_detail)
     else:
         ai_error = "no Gemini key is configured"
     if ai_error is not None:
         result = _ask_rules(db, question)
         result["mode"] = "RULES"
         result["ai_error"] = ai_error
+        result["ai_error_detail"] = ai_detail
     ledger.record(db, actor_type=ActorType.AGENT, actor_id=f"agent:assistant for user:{user.id}", action="ASSISTANT_ASKED",
                   details={"question": question[:500], "mode": result["mode"], "tools": [s["tool"] for s in result["steps"]],
                            "proposals": [p["action"] for p in result["proposals"]]})

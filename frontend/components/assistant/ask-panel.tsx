@@ -19,7 +19,7 @@ interface Proposal {
   action: "prepare_list" | "send_personal_forms" | "check_mailbox"; label: string; reason: string;
   drive_id?: number; drive?: string; closes_at_local?: string; students?: number; objective?: string;
 }
-interface Answer { answer: string; steps: Step[]; proposals: Proposal[]; mode: "AI" | "RULES"; model?: string; ai_error?: string }
+interface Answer { answer: string; steps: Step[]; proposals: Proposal[]; mode: "AI" | "RULES"; model?: string; ai_error?: string; ai_error_detail?: string | null }
 interface Message { role: "user" | "assistant"; text: string; reply?: Answer }
 
 const PERMISSION: Record<Proposal["action"], string> = { prepare_list: "runAgent", send_personal_forms: "followUp", check_mailbox: "manageDrives" };
@@ -75,7 +75,7 @@ function AssistantMessage({ a }: { a: Answer }) {
         <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium", a.mode === "AI" ? "bg-accent-soft text-accent" : "bg-subtle text-muted")}>
           {a.mode === "AI" ? <><Sparkles className="size-3" />Gemini</> : "Built-in rules"}
         </span>
-        {a.mode === "RULES" && a.ai_error && <span>AI not used: {a.ai_error}</span>}
+        {a.mode === "RULES" && a.ai_error && <span title={a.ai_error_detail ?? undefined}>AI not used: {a.ai_error}{a.ai_error_detail ? " (hover for details)" : ""}</span>}
         {a.steps.length > 0 && (
           <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-0.5 hover:text-ink">
             {a.steps.length} lookup{a.steps.length === 1 ? "" : "s"}<ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} />

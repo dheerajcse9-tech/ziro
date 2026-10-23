@@ -253,7 +253,7 @@ def gemini_plan(ctx: ToolContext, objective: str, client: Any | None = None) -> 
                 responses.append(gemini.function_response(call, {"result": json.loads(json.dumps(out, default=str))}))
             except ToolFailure as exc:
                 responses.append(gemini.function_response(call, {"error": exc.message}))
-        contents.append({"role": "function", "parts": responses})
+        contents.append({"role": "user", "parts": responses})  # tool results go back as a user turn
     raise RuntimeError("Planner exceeded its turn budget")
 
 

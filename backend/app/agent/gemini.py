@@ -40,6 +40,8 @@ def friendly_error(exc: Exception) -> str:
         return "the AI key was not accepted"
     if "timeout" in text or "timed out" in text:
         return "the AI service did not answer in time"
+    if "http 400" in text or "empty answer" in text or "no answer" in text:
+        return "Gemini could not handle this request"
     return "the AI service could not be reached"
 
 

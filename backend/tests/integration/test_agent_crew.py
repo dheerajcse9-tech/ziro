@@ -254,7 +254,7 @@ def test_gemini_planner_uses_function_calling_and_returns_signatures(sb, people,
     assert run.planner_mode == "LLM" and run.intent == "CHECK_CONFLICTS" and run.status == RunStatus.COMPLETED
     second = fake.calls[1]["contents"]
     assert second[1]["parts"][0]["thoughtSignature"] == "c2lnLTE="  # model turn returned unchanged
-    assert second[2]["role"] == "function" and "functionResponse" in second[2]["parts"][0]
+    assert second[2]["role"] == "user" and "functionResponse" in second[2]["parts"][0]
     names = {d["name"] for d in fake.calls[0]["declarations"]}
     assert names == {"list_drives", "get_student_roster", "get_drive_requirements", "simulate_roster_changes", "submit_plan"}
 
