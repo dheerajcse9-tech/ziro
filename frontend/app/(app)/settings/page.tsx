@@ -27,12 +27,6 @@ interface Integrations {
 }
 interface AppSettings { institution_name: string; timezone: string; schedule_buffer_minutes: number; attendance_retention_days: number; attendance_fields: string[] }
 
-const FAULTS = [
-  ["NONE", "No fault"], ["TIMEOUT_AFTER_COMMIT", "Timeout after commit (tests reconciliation)"], ["UNAVAILABLE", "503 before commit (tests safe retry)"],
-  ["DROP_LAST", "Silently drop last candidate (partial upload)"], ["DUPLICATE_FIRST", "Duplicate first candidate"],
-  ["INJECT_EXTRA", "Inject an unexpected record"], ["READBACK_UNAVAILABLE", "Roster page unavailable (read-back fails)"],
-];
-
 export default function SettingsPage() {
   const me = useMe();
   const qc = useQueryClient();
@@ -43,7 +37,6 @@ export default function SettingsPage() {
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.get<User[]>("/api/users"), enabled: !!me.data && me.data.role !== "viewer" });
   const [form, setForm] = useState<AppSettings | null>(null);
   useEffect(() => { if (settings.data) setForm(settings.data); }, [settings.data]);
-  const [fault, setFault] = useState({ form_ref: "", mode: "TIMEOUT_AFTER_COMMIT" });
   const [resetOpen, setResetOpen] = useState(false);
 
   const save = useMutation({
@@ -54,10 +47,6 @@ export default function SettingsPage() {
     mutationFn: (d: Destination) => api.patch<Destination>(`/api/destinations/${d.id}`, { is_enabled: !d.is_enabled }),
     onSuccess: (d) => { toast.success(`${d.name} ${d.is_enabled ? "enabled" : "disabled"} (config v${d.config_version}); open approvals re-validated`); qc.invalidateQueries(); },
     onError: toastError,
-  });
-  const arm = useMutation({
-    mutationFn: () => api.post<{ mode: string; form_ref: string }>("/api/integrations/mock-portal/faults", { ...fault, remaining: fault.mode === "NONE" ? 0 : 1 }),
-    onSuccess: (r) => toast.success(`Fault ${r.mode} armed on ${r.form_ref} for the next operation`), onError: toastError,
   });
   const reset = useMutation({
     mutationFn: () => api.post<{ students: number; drives: number }>("/api/admin/demo-reset"),
@@ -95,15 +84,6 @@ export default function SettingsPage() {
             { label: "Allowed destination hosts", value: integ.data?.allowed_destination_hosts.join(", ") ?? "—" },
           ]} /></div>}
           <AiCheck />
-        </Card>
-        <Card>
-          <CardHeader title="Official organiser target" />
-          <div className="space-y-3 p-4">
-            {integ.data && <Banner tone="warn" title="Organiser mock drive form not configured">{integ.data.official_organiser_target.note}</Banner>}
-            <p className="text-[12.5px] text-muted">The destination adapter interface (<span className="font-mono">DriveFormAdapter</span>) is the only integration point. Adding the organiser&apos;s form means configuring an allowlisted destination of kind ORGANISER_FORM — no domain code changes.</p>
-            {integ.data && <p className="text-[12.5px]">AI: <strong>{integ.data.llm.mode}</strong></p>}
-            {integ.data && <p className="text-[12.5px]">Email: <strong>{{ GMAIL_API: "Gmail", SMTP: "SMTP", LOCAL_MAILBOX: "Local mailbox" }[integ.data.email.transport] ?? integ.data.email.transport}</strong> — {integ.data.email.note}</p>}
-          </div>
         </Card>
       </div>}
 
@@ -155,16 +135,6 @@ export default function SettingsPage() {
 
       {isAdmin && integ.data?.demo_mode && (
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          <Card>
-            <CardHeader title="Mock portal fault injection" description="Arms a one-shot fault on the LOCAL MOCK portal to demonstrate recovery and verification." />
-            <div className="grid gap-3 p-4 sm:grid-cols-2">
-              <Field label="Form" htmlFor="f_ref"><Select id="f_ref" className="w-full" value={fault.form_ref} onChange={(e) => setFault({ ...fault, form_ref: e.target.value })}>
-                <option value="">Select…</option>{integ.data.destinations.map((d) => <option key={d.id} value={d.form_ref}>{d.form_ref}</option>)}</Select></Field>
-              <Field label="Fault" htmlFor="f_mode"><Select id="f_mode" className="w-full" value={fault.mode} onChange={(e) => setFault({ ...fault, mode: e.target.value })}>
-                {FAULTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
-              <div className="sm:col-span-2"><Button variant="primary" disabled={!fault.form_ref} loading={arm.isPending} onClick={() => arm.mutate()} icon={<Zap className="size-4" />}>Arm fault</Button></div>
-            </div>
-          </Card>
           <Card>
             <CardHeader title="Demo reset" />
             <div className="space-y-3 p-4">
