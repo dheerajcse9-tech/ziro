@@ -182,7 +182,10 @@ export default function SettingsPage() {
   );
 }
 
-interface AiCheckResult { ok: boolean; model: string | null; seconds: number | null; error: string | null; detail: string }
+interface AiCheckResult {
+  ok: boolean; model: string | null; seconds: number | null; error: string | null; detail: string;
+  fallbacks: string[]; available: string[];
+}
 
 function AiCheck() {
   const check = useMutation({ mutationFn: () => api.post<AiCheckResult>("/api/integrations/ai-check") });
@@ -195,6 +198,12 @@ function AiCheck() {
         : <Banner tone="warn" title={`AI not working: ${r.error}`}>
             {r.seconds != null && <>Took {r.seconds} s{r.model ? ` with ${r.model}` : ""}. </>}
             {r.detail && <span className="font-mono text-[11.5px]">{r.detail}</span>}
+            <p className="mt-2">
+              {r.fallbacks.length ? <>Backup models tried: <strong>{r.fallbacks.join(", ")}</strong>. </> : null}
+              To use a backup when the main model is busy, add <span className="font-mono">GEMINI_FALLBACK_MODELS=…</span> to
+              backend/.env (comma-separated) and restart the backend.
+            </p>
+            {r.available.length > 0 && <p className="mt-1">Flash models your key can use: <span className="font-mono">{r.available.join(", ")}</span></p>}
           </Banner>)}
     </div>
   );

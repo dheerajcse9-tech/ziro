@@ -13,6 +13,8 @@ not appear in logs.
 """
 from __future__ import annotations
 
+import os
+import time
 from typing import Any
 
 import httpx
@@ -24,9 +26,14 @@ class GeminiError(RuntimeError):
     pass
 
 
+BUSY = {429, 500, 503}  # worth one retry, then a backup model
+
+
 def friendly_error(exc: Exception) -> str:
     """One plain sentence for people; the full error stays in the run's technical details."""
     text = str(exc).lower()
+    if "503" in text or "high demand" in text or "overloaded" in text:
+        return "the Gemini model is busy at Google right now (high demand)"
     if "429" in text or "quota" in text or "rate" in text and "limit" in text:
         return "the AI key has used up its free quota for now"
     if "401" in text or "403" in text or "api key" in text or "permission" in text:
@@ -100,6 +107,35 @@ class GeminiClient:
         self.base_url = s.gemini_base_url.rstrip("/")
         self.timeout = timeout or s.llm_timeout_seconds
         self.transport = transport
+        # Backup models, tried in order when Google says the main one is busy (HTTP 503/429/500).
+        self.fallbacks = [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS", "").split(",") if m.strip()]
+        self.used_model = self.model
+
+    def post(self, body: dict[str, Any]) -> dict[str, Any]:
+        """generateContent with a short retry on a busy model, then the backup models."""
+        last: GeminiError | None = None
+        for model in [self.model, *[m for m in self.fallbacks if m != self.model]]:
+            for attempt in range(2):
+                url = f"{self.base_url}/models/{model}:generateContent"
+                try:
+                    with httpx.Client(timeout=self.timeout, transport=self.transport) as http:
+                        r = http.post(url, json=body, headers={"x-goog-api-key": self.api_key})
+                except httpx.HTTPError as exc:
+                    raise GeminiError(f"Could not reach the Gemini API: {type(exc).__name__}: {exc}") from exc
+                if r.status_code == 200:
+                    self.used_model = model
+                    return r.json()
+                try:
+                    detail = r.json().get("error", {}).get("message") or r.text
+                except ValueError:
+                    detail = r.text
+                last = GeminiError(f"Gemini API returned HTTP {r.status_code} for {model}: {str(detail)[:300]}")
+                if r.status_code not in BUSY:
+                    raise last
+                if attempt == 0:
+                    time.sleep(1.5)
+        assert last is not None
+        raise last
 
     def generate(self, *, system: str, contents: list[dict[str, Any]], declarations: list[dict[str, Any]],
                  mode: str = "ANY", allowed: list[str] | None = None) -> dict[str, Any]:
@@ -109,36 +145,25 @@ class GeminiClient:
             "tools": [{"functionDeclarations": declarations}],
             "toolConfig": {"functionCallingConfig": {"mode": mode, **({"allowedFunctionNames": allowed} if allowed else {})}},
         }
-        url = f"{self.base_url}/models/{self.model}:generateContent"
-        try:
-            with httpx.Client(timeout=self.timeout, transport=self.transport) as http:
-                r = http.post(url, json=body, headers={"x-goog-api-key": self.api_key})
-        except httpx.HTTPError as exc:
-            raise GeminiError(f"Could not reach the Gemini API: {type(exc).__name__}: {exc}") from exc
-        if r.status_code != 200:
-            try:
-                detail = r.json().get("error", {}).get("message") or r.text
-            except ValueError:
-                detail = r.text
-            raise GeminiError(f"Gemini API returned HTTP {r.status_code}: {str(detail)[:300]}")
-        return r.json()
+        return self.post(body)
+
+
+def list_models(client: GeminiClient) -> list[str]:
+    """Model names this key can call generateContent on (for the Settings check)."""
+    with httpx.Client(timeout=15, transport=client.transport) as http:
+        r = http.get(f"{client.base_url}/models", params={"pageSize": 200}, headers={"x-goog-api-key": client.api_key})
+    if r.status_code != 200:
+        return []
+    return [m["name"].removeprefix("models/") for m in r.json().get("models", [])
+            if "generateContent" in m.get("supportedGenerationMethods", [])]
 
 
 def generate_text(client: Any, system: str, prompt: str) -> str:
     """Plain text answer (no tools), for short summaries."""
     if hasattr(client, "generate_text"):
         return client.generate_text(system=system, prompt=prompt)
-    s = get_settings()
     body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": prompt}]}]}
-    url = f"{s.gemini_base_url.rstrip('/')}/models/{client.model}:generateContent"
-    try:
-        with httpx.Client(timeout=client.timeout, transport=client.transport) as http:
-            r = http.post(url, json=body, headers={"x-goog-api-key": client.api_key})
-    except httpx.HTTPError as exc:
-        raise GeminiError(f"Could not reach the Gemini API: {type(exc).__name__}: {exc}") from exc
-    if r.status_code != 200:
-        raise GeminiError(f"Gemini API returned HTTP {r.status_code}: {r.text[:300]}")
-    text = text_of(first_content(r.json()))
+    text = text_of(first_content(client.post(body)))
     if not text:
         raise GeminiError("Gemini returned an empty answer")
     return text

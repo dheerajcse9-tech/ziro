@@ -99,3 +99,32 @@ def test_approver_summary_is_written_by_gemini_or_from_the_checks():
     finally:
         t.sb.deactivate()
         t.sb.close()
+
+
+def test_busy_model_retries_then_uses_the_backup_model(monkeypatch):
+    import httpx
+
+    from app.agent import gemini
+
+    monkeypatch.setenv("GEMINI_FALLBACK_MODELS", "backup-flash")
+    monkeypatch.setattr(gemini.time, "sleep", lambda _s: None)
+    seen = []
+
+    def handler(request):
+        model = request.url.path.split("/models/")[1].split(":")[0]
+        seen.append(model)
+        if model == "main-flash":
+            return httpx.Response(503, json={"error": {"message": "This model is currently experiencing high demand."}})
+        return httpx.Response(200, json={"candidates": [{"content": {"role": "model", "parts": [{"text": "OK"}]}}]})
+
+    client = gemini.GeminiClient(api_key="k", model="main-flash", transport=httpx.MockTransport(handler))
+    assert gemini.generate_text(client, "s", "p") == "OK"
+    assert seen == ["main-flash", "main-flash", "backup-flash"] and client.used_model == "backup-flash"
+
+    monkeypatch.setenv("GEMINI_FALLBACK_MODELS", "")
+    try:
+        gemini.generate_text(gemini.GeminiClient(api_key="k", model="main-flash", transport=httpx.MockTransport(handler)), "s", "p")
+    except gemini.GeminiError as exc:
+        assert gemini.friendly_error(exc) == "the Gemini model is busy at Google right now (high demand)"
+    else:
+        raise AssertionError("expected the busy error")

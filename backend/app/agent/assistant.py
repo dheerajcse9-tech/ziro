@@ -287,7 +287,8 @@ def _ask_ai(db: Session, question: str, history: list[dict[str, str]], client: A
                                                        mode="AUTO"))
         calls = gemini.function_calls(content)
         if not calls:
-            return {"answer": gemini.text_of(content) or "I could not find an answer.", "steps": steps, "proposals": proposals}
+            return {"answer": gemini.text_of(content) or "I could not find an answer.", "steps": steps, "proposals": proposals,
+                    "model": getattr(client, "used_model", None)}
         contents.append(content)
         responses = []
         for call in calls:
@@ -390,7 +391,7 @@ def ask(db: Session, user: User, question: str, history: list[dict[str, str]] | 
         try:
             result = _ask_ai(db, question, history or [], client)
             result["mode"] = "AI"
-            result["model"] = settings.gemini_model
+            result["model"] = result.get("model") or settings.gemini_model
         except Exception as exc:  # noqa: BLE001 - falls back to rules, and says why
             from app.agent.gemini import friendly_error
 

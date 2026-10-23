@@ -481,15 +481,22 @@ def ai_check(_: User = Depends(require_roles(Role.ADMIN))):
 
     settings = get_settings()
     if settings.active_llm != "gemini":
-        return {"ok": False, "model": None, "seconds": None, "error": "no Gemini key is configured", "detail": ""}
+        return {"ok": False, "model": None, "seconds": None, "error": "no Gemini key is configured", "detail": "",
+                "fallbacks": [], "available": []}
+    client = gemini.GeminiClient()
     started = time.monotonic()
     try:
-        gemini.generate_text(gemini.GeminiClient(), "Answer in one word.", "Reply with OK.")
-        return {"ok": True, "model": settings.gemini_model, "seconds": round(time.monotonic() - started, 1),
-                "error": None, "detail": ""}
+        gemini.generate_text(client, "Answer in one word.", "Reply with OK.")
+        return {"ok": True, "model": client.used_model, "seconds": round(time.monotonic() - started, 1),
+                "error": None, "detail": "", "fallbacks": client.fallbacks, "available": []}
     except Exception as exc:  # noqa: BLE001 - shown to the admin
-        return {"ok": False, "model": settings.gemini_model, "seconds": round(time.monotonic() - started, 1),
-                "error": gemini.friendly_error(exc), "detail": str(exc)[:300]}
+        seconds = round(time.monotonic() - started, 1)
+        try:
+            available = [m for m in gemini.list_models(client) if "flash" in m]
+        except Exception:  # noqa: BLE001 - the list is only a hint
+            available = []
+        return {"ok": False, "model": settings.gemini_model, "seconds": seconds, "error": gemini.friendly_error(exc),
+                "detail": str(exc)[:300], "fallbacks": client.fallbacks, "available": available[:12]}
 
 
 @router.get("/integrations/mock-portal/faults", tags=["integrations"])
