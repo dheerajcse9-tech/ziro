@@ -9,10 +9,14 @@ and never returned by any API endpoint.
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
+
+# Extra hosts allowed while a test sandbox runs (its in-process mock form), whatever ALLOWED_DESTINATION_HOSTS says.
+SANDBOX_HOSTS: ContextVar[tuple[str, ...]] = ContextVar("sandbox_hosts", default=())
 
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
@@ -166,7 +170,8 @@ class Settings:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"}:
             return False
-        return (parsed.hostname or "") in self.allowed_destination_hosts
+        host = parsed.hostname or ""
+        return host in self.allowed_destination_hosts or host in SANDBOX_HOSTS.get()
 
 
 @lru_cache

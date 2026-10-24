@@ -24,6 +24,10 @@ from app.mock_portal.models import MockPortalForm
 from app.models.entities import ConsentRecord, Destination, Drive, DriveCriteria, Employer, Student, User
 from app.models.enums import BacklogPolicy, ConsentScope, ConsentStatus, DestinationKind, DriveStatus, Role
 
+from urllib.parse import urlparse  # noqa: E402
+
+from app.core.config import SANDBOX_HOSTS  # noqa: E402
+
 SANDBOX_BASE_URL = "http://127.0.0.1/sandbox-mock-portal"  # allowlisted host; routed in-process
 TOKEN = "sandbox-admin-token"
 TZ = "Asia/Kolkata"
@@ -53,6 +57,7 @@ class Sandbox:
             (_factory_override, _factory_override.set(lambda dest: HtmlDriveFormAdapter("http://mockportal", client=self.portal))),
             (_admin_override, _admin_override.set(lambda: MockPortalAdmin("http://mockportal", TOKEN, client=self.portal))),
             (FORCE_DETERMINISTIC, FORCE_DETERMINISTIC.set(True)),
+            (SANDBOX_HOSTS, SANDBOX_HOSTS.set((urlparse(SANDBOX_BASE_URL).hostname,))),
         ]
 
     def deactivate(self) -> None:
