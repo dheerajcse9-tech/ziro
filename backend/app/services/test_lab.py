@@ -495,6 +495,8 @@ def run_scenario(db: Session, test_id: str, user: User | None) -> TestRun:
     result: dict[str, Any] = {}
     failure = None
     local_only = mailer.LOCAL_ONLY.set(True)  # scenarios never deliver real email, whatever is configured
+    from app.agent.planner import FORCE_DETERMINISTIC
+    rules_planner = FORCE_DETERMINISTIC.set(True)  # same plan every run, whatever AI key is configured
     try:
         with Sandbox() as sb:
             result = fn(sb)
@@ -502,6 +504,7 @@ def run_scenario(db: Session, test_id: str, user: User | None) -> TestRun:
         failure = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[-4000:]}"
     finally:
         mailer.LOCAL_ONLY.reset(local_only)
+        FORCE_DETERMINISTIC.reset(rules_planner)
     checks: Checks | None = result.get("checks")
     passed = failure is None and checks is not None and checks.passed
     if failure is None and checks is not None and not checks.passed:

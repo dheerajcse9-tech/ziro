@@ -638,6 +638,8 @@ def run_step(index: int) -> dict[str, Any]:
         raise ValueError("No such step")
     tour = Tour()
     local = mailer.LOCAL_ONLY.set(True)
+    from app.agent.planner import FORCE_DETERMINISTIC
+    rules_planner = FORCE_DETERMINISTIC.set(True)  # same plan every run, whatever AI key is configured
     tour.sb.activate()
     started = time.perf_counter()
     try:
@@ -652,6 +654,7 @@ def run_step(index: int) -> dict[str, Any]:
     finally:
         tour.sb.deactivate()
         mailer.LOCAL_ONLY.reset(local)
+        FORCE_DETERMINISTIC.reset(rules_planner)
         tour.sb.close()
     out.update(STEP_INFO[STEPS[index][0]])
     out.update({"index": index, "key": STEPS[index][0], "ms": int((time.perf_counter() - started) * 1000),
