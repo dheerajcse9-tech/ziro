@@ -4,6 +4,9 @@
 
 **Live demo: https://placecrew.vercel.app**
 
+**Full test-case walkthrough video** (every test case explained end to end, with real Gmail inboxes):
+https://drive.google.com/file/d/1GqEleCjyqCPmh4v0_3tilIWNy3lcHaXG/view?usp=sharing
+
 > **Evaluators:** click **"Guided walkthrough"** on the login page (or open `/tour`). No login: press
 > **Play it automatically** (or "Yes, continue") and the real agents run a whole drive in 12 steps, ending with every
 > test scenario. See [docs/EVALUATOR_GUIDE.md](docs/EVALUATOR_GUIDE.md).
